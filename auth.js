@@ -1,0 +1,106 @@
+// auth.js
+import { auth, isConfigured } from "./firebase-config.js";
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+const isDashboard = window.location.pathname.endsWith("dashboard.html");
+
+const mockUser = {
+  uid: "demo-user-123",
+  displayName: "Demo Explorer",
+  photoURL: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150"
+};
+
+/**
+ * Initiates the Google Sign-In flow using a popup.
+ * If Firebase is unconfigured, enters Sandbox Mode.
+ * @returns {Promise<User>} The authenticated Firebase User.
+ */
+export async function loginWithGoogle() {
+  if (!isConfigured) {
+    // Enter local storage demo mode
+    localStorage.setItem("progress_shelf_demo", "true");
+    setTimeout(() => {
+      window.location.href = "dashboard.html";
+    }, 100);
+    return mockUser;
+  }
+  
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({
+    prompt: 'select_account'
+  });
+  
+  try {
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error) {
+    console.error("Google Sign-In Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Signs out the current user.
+ */
+export async function logout() {
+  if (!isConfigured) {
+    localStorage.removeItem("progress_shelf_demo");
+    window.location.href = "index.html";
+    return;
+  }
+  
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error("Sign-Out Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Initializes authentication listener and handles automatic routing redirects.
+ * @param {Function} onUserActive Callback invoked on the dashboard if user is authenticated.
+ */
+export function initAuthProtection(onUserActive) {
+  if (!isConfigured) {
+    const isDemo = localStorage.getItem("progress_shelf_demo") === "true";
+    if (isDemo) {
+      if (!isDashboard) {
+        window.location.href = "dashboard.html";
+      } else if (onUserActive) {
+        // Async callback to simulate network loading latency
+        setTimeout(() => onUserActive(mockUser), 100);
+      }
+    } else {
+      if (isDashboard) {
+        window.location.href = "index.html";
+      }
+    }
+    return;
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      if (!isDashboard) {
+        // Logged in user on landing page -> redirect to dashboard
+        window.location.href = "dashboard.html";
+      } else {
+        // Logged in user on dashboard -> execute callback
+        if (onUserActive) {
+          onUserActive(user);
+        }
+      }
+    } else {
+      if (isDashboard) {
+        // Logged out user on dashboard -> redirect to landing
+        window.location.href = "index.html";
+      }
+    }
+  });
+}
+
