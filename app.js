@@ -234,8 +234,8 @@ function renderDashboard(bars) {
   addCard.addEventListener("click", () => openCreateModal());
   cardsGrid.appendChild(addCard);
 
-  // THEN render bar cards
-  bars.forEach((bar) => {
+  // THEN render bar cards — newest first (reverse createdAt asc order)
+  [...bars].reverse().forEach((bar) => {
     const card = document.createElement("div");
     card.className = "card-progress";
     card.setAttribute("data-bar-id", bar.id);
