@@ -1,7 +1,8 @@
 // auth.js
 import { auth, isConfigured } from "./firebase-config.js";
 import { 
-  signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged 
@@ -22,22 +23,19 @@ const mockUser = {
  */
 export async function loginWithGoogle() {
   if (!isConfigured) {
-    // Enter local storage demo mode
     localStorage.setItem("progress_shelf_demo", "true");
     setTimeout(() => {
       window.location.href = "dashboard.html";
     }, 100);
     return mockUser;
   }
-  
+
   const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({
-    prompt: 'select_account'
-  });
-  
+  provider.setCustomParameters({ prompt: 'select_account' });
+
   try {
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
+    await signInWithRedirect(auth, provider);
+    // Page will redirect away — no return value needed
   } catch (error) {
     console.error("Google Sign-In Error:", error);
     throw error;
@@ -105,6 +103,17 @@ export function initAuthProtection(onUserActive) {
     }
     return;
   }
+
+  // Handle redirect result first (fires after returning from Google)
+  getRedirectResult(auth).then((result) => {
+    if (result?.user) {
+      // Redirect sign-in completed — onAuthStateChanged will
+      // also fire and handle the rest. Nothing extra needed here.
+      console.log("Redirect sign-in completed:", result.user.displayName);
+    }
+  }).catch((error) => {
+    console.error("Redirect result error:", error);
+  });
 
   onAuthStateChanged(auth, (user) => {
     if (user) {
