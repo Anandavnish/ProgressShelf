@@ -113,6 +113,7 @@ export function initAuthProtection(onUserActive) {
     }
   }).catch((error) => {
     console.error("Redirect result error:", error);
+    sessionStorage.setItem("auth_error", error.message || "Failed to sign in via redirect.");
   });
 
   onAuthStateChanged(auth, (user) => {

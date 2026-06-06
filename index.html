@@ -63,6 +63,14 @@
       configBanner.classList.remove("hidden");
     }
 
+    // Display any redirect errors
+    const savedError = sessionStorage.getItem("auth_error");
+    if (savedError) {
+      errorMsg.textContent = savedError;
+      errorMsg.classList.remove("hidden");
+      sessionStorage.removeItem("auth_error");
+    }
+
     // Handle Google Login Button Trigger
     googleLoginBtn.addEventListener("click", async () => {
       errorMsg.classList.add("hidden");
