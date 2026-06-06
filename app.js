@@ -1016,12 +1016,10 @@ initAuthProtection(async (user) => {
 
     await migrateGuestBarsToFirestore(user.uid);
     // exitGuestMode() already called inside migrateGuestBarsToFirestore
-    // Reset authInitialized so the next onAuthStateChanged fire
-    // (which will have isGuestMode()=false) runs the full init
-    authInitialized = false;
-    // Do NOT subscribe here — let the next onAuthStateChanged fire
-    // handle it cleanly through the normal path
-    return;
+    
+    // Instead of returning and getting stuck, let it fall through to 
+    // the normal dashboard initialization below, which will setup UI
+    // for the logged-in user and start the proper Firestore subscription.
   }
 
   currentUser = user;
