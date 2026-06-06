@@ -1,7 +1,7 @@
 // app.js
 import { isConfigured } from "./firebase-config.js";
-import { logout, initAuthProtection } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar } from "./db.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle } from "./auth.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars } from "./db.js";
 
 // Page elements
 const loadingScreen = document.getElementById("loading-screen");
@@ -37,6 +37,10 @@ const updateActionsStandard = document.getElementById("update-actions-standard")
 
 // Toast Container
 const toastContainer = document.getElementById("toast-container");
+
+// Guest Mode elements
+const guestBanner = document.getElementById("guest-banner");
+const btnBannerLogin = document.getElementById("btn-banner-login");
 
 // Application State
 let currentUser = null;
@@ -778,22 +782,86 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
 });
 
 // ==========================================
+// Guest Mode Migration
+// ==========================================
+async function migrateGuestBarsToFirestore(uid) {
+  const localBars = getLocalBars();
+  if (!localBars || localBars.length === 0) {
+    exitGuestMode();
+    return;
+  }
+
+  for (const bar of localBars) {
+    try {
+      await createBar(uid, {
+        title: bar.title,
+        preset: bar.preset,
+        levels: bar.levels,
+        targetSmallest: bar.targetSmallest,
+        currentSmallest: bar.currentSmallest
+      });
+    } catch (e) {
+      console.error('Migration failed for bar:', bar.title, e);
+    }
+  }
+
+  localStorage.removeItem('progress_shelf_bars');
+  exitGuestMode();
+}
+
+if (btnBannerLogin) {
+  btnBannerLogin.addEventListener("click", async () => {
+    try {
+      btnBannerLogin.style.pointerEvents = "none";
+      btnBannerLogin.textContent = "Signing in...";
+      await loginWithGoogle();
+    } catch (e) {
+      console.error("Login from banner failed:", e);
+      showToast("Authentication failed. Please try again.", "error");
+      btnBannerLogin.style.pointerEvents = "all";
+      btnBannerLogin.textContent = "Sign in to sync";
+    }
+  });
+}
+
+// ==========================================
 // Authentication Redirection
 // ==========================================
 btnLogout.addEventListener("click", async () => {
   try {
-    await logout();
+    if (isGuestMode()) {
+      exitGuestMode();
+      window.location.href = "index.html";
+    } else {
+      await logout();
+    }
   } catch (error) {
     showToast("Sign out failed. Please try again.", "error");
   }
 });
 
 // Initialize auth check
-initAuthProtection((user) => {
+initAuthProtection(async (user) => {
+  // Silent auto-migration if guest logs in
+  if (isGuestMode() && user && user.uid !== "guest") {
+    await migrateGuestBarsToFirestore(user.uid);
+    window.location.reload();
+    return;
+  }
+
   currentUser = user;
   
-  // Render sandbox warning banner on dashboard if unconfigured
-  if (!isConfigured) {
+  // Render guest banner on dashboard if in guest mode
+  if (guestBanner) {
+    if (isGuestMode()) {
+      guestBanner.style.display = "flex";
+    } else {
+      guestBanner.style.display = "none";
+    }
+  }
+  
+  // Render sandbox warning banner on dashboard if unconfigured and not in guest mode
+  if (!isConfigured && !isGuestMode()) {
     if (!document.getElementById("sandbox-banner")) {
       const banner = document.createElement("div");
       banner.id = "sandbox-banner";
@@ -807,8 +875,13 @@ initAuthProtection((user) => {
   }
   
   // Render profile info
-  userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
-  userName.textContent = user.displayName || "Tracker User";
+  if (isGuestMode()) {
+    userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+    userName.textContent = "Guest User";
+  } else {
+    userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+    userName.textContent = user.displayName || "Tracker User";
+  }
   
   // Show application content, hide splash screen
   loadingScreen.style.opacity = "0";
@@ -825,7 +898,6 @@ initAuthProtection((user) => {
     },
     (error) => {
       showToast("Error loading progress bars. You may be offline.", "error");
-      // Clear skeleton cards and show simple retry message if initial load fails
       if (cardsGrid.querySelectorAll(".card-skeleton").length > 0) {
         cardsGrid.innerHTML = `
           <div class="empty-state" style="border-color: var(--error);">

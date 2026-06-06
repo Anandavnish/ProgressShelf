@@ -62,19 +62,34 @@ export async function logout() {
   }
 }
 
+// Guest mode: set when user clicks "Continue without login"
+export function enterGuestMode() {
+  sessionStorage.setItem('guest_mode', 'true');
+  window.location.href = 'dashboard.html';
+}
+
+export function isGuestMode() {
+  return sessionStorage.getItem('guest_mode') === 'true';
+}
+
+export function exitGuestMode() {
+  sessionStorage.removeItem('guest_mode');
+}
+
 /**
  * Initializes authentication listener and handles automatic routing redirects.
- * @param {Function} onUserActive Callback invoked on the dashboard if user is authenticated.
+ * @param {Function} onUserActive Callback invoked on the dashboard if user is authenticated or in guest mode.
  */
 export function initAuthProtection(onUserActive) {
   if (!isConfigured) {
     const isDemo = localStorage.getItem("progress_shelf_demo") === "true";
-    if (isDemo) {
+    const isGuest = isGuestMode();
+    if (isDemo || isGuest) {
       if (!isDashboard) {
         window.location.href = "dashboard.html";
       } else if (onUserActive) {
         // Async callback to simulate network loading latency
-        setTimeout(() => onUserActive(mockUser), 100);
+        setTimeout(() => onUserActive(isDemo ? mockUser : { uid: "guest", displayName: "Guest" }), 100);
       }
     } else {
       if (isDashboard) {
@@ -96,9 +111,17 @@ export function initAuthProtection(onUserActive) {
         }
       }
     } else {
-      if (isDashboard) {
-        // Logged out user on dashboard -> redirect to landing
-        window.location.href = "index.html";
+      if (isGuestMode()) {
+        if (!isDashboard) {
+          window.location.href = "dashboard.html";
+        } else if (onUserActive) {
+          onUserActive({ uid: "guest", displayName: "Guest" });
+        }
+      } else {
+        if (isDashboard) {
+          // Logged out user on dashboard -> redirect to landing
+          window.location.href = "index.html";
+        }
       }
     }
   });

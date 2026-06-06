@@ -1,5 +1,6 @@
 // db.js
 import { db, isConfigured } from "./firebase-config.js";
+import { isGuestMode } from "./auth.js";
 import { 
   collection, 
   addDoc, 
@@ -13,7 +14,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Helper to get/set local storage bars for Sandbox mode
-function getLocalBars() {
+export function getLocalBars() {
   const data = localStorage.getItem("progress_shelf_bars");
   return data ? JSON.parse(data) : [];
 }
@@ -44,7 +45,7 @@ function triggerMockUpdate() {
  * @returns {Function} Unsubscribe function to stop listening.
  */
 export function subscribeToBars(uid, onUpdate, onError) {
-  if (!isConfigured) {
+  if (!isConfigured || isGuestMode()) {
     mockListeners.push(onUpdate);
     // Trigger initial load callback asynchronously
     setTimeout(() => {
@@ -88,7 +89,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @returns {Promise<string>} The auto-generated bar ID.
  */
 export async function createBar(uid, { title, preset, levels, targetSmallest, currentSmallest }) {
-  if (!isConfigured) {
+  if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const newBar = {
       id: "bar_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
@@ -131,7 +132,7 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
  * @param {number} currentSmallest The new current progress in the smallest unit.
  */
 export async function updateBarProgress(uid, barId, currentSmallest) {
-  if (!isConfigured) {
+  if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const barIndex = bars.findIndex(b => b.id === barId);
     if (barIndex !== -1) {
@@ -163,7 +164,7 @@ export async function updateBarProgress(uid, barId, currentSmallest) {
  * @param {string} barId The ID of the progress bar document.
  */
 export async function deleteBar(uid, barId) {
-  if (!isConfigured) {
+  if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars().filter(b => b.id !== barId);
     setLocalBars(bars);
     triggerMockUpdate();

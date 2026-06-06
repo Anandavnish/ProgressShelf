@@ -1048,3 +1048,72 @@ body {
   width: 70px;
   font-size: 1.2rem;
 }
+
+/* --- Guest Mode & Banner Styles --- */
+.btn-guest {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  color: #8B949E;
+  font-size: 15px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.btn-guest:hover {
+  border-color: #8B949E;
+  color: #E6EDF3;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #444C56;
+  font-size: 13px;
+  margin: 4px 0;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #30363D;
+}
+
+.auth-hint {
+  font-size: 12px;
+  color: #444C56;
+  text-align: center;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.guest-banner {
+  width: 100%;
+  background: #1C2128;
+  border-bottom: 1px solid #30363D;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #8B949E;
+  box-sizing: border-box;
+}
+
+.btn-banner-login {
+  background: #4A90D9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-banner-login:hover {
+  background: #357ABD;
+}
