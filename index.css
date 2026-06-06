@@ -362,32 +362,13 @@ body {
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 8px;
-  padding-right: 28px;
+  padding-right: 72px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.btn-card-delete {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-.btn-card-delete:hover {
-  color: var(--error);
-  background-color: rgba(255, 77, 77, 0.1);
-}
+
 
 .card-body {
   margin-top: auto;
@@ -1120,4 +1101,83 @@ body {
 }
 .btn-banner-login:hover {
   background: #357ABD;
+}
+
+/* --- Card Actions (Edit / Delete) --- */
+.card-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  align-items: center;
+  z-index: 10;
+}
+
+.btn-card-edit,
+.btn-card-delete {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8B949E;
+  transition: background 0.15s, color 0.15s;
+  /* Minimum touch target for mobile */
+  min-width: 30px;
+  min-height: 30px;
+}
+
+.btn-card-edit:hover {
+  background: rgba(74, 144, 217, 0.15);
+  color: #4A90D9;
+}
+
+.btn-card-delete:hover {
+  background: rgba(231, 76, 60, 0.15);
+  color: #E74C3C;
+}
+
+/* --- Inline Card Delete Confirmation Overlay --- */
+.card-delete-confirm {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 17, 23, 0.93);
+  backdrop-filter: blur(4px);
+  border-radius: var(--border-radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 20;
+  padding: 20px;
+  animation: fadeInScale 0.15s ease;
+}
+
+.card-delete-confirm.hidden {
+  display: none;
+}
+
+.card-delete-confirm-text {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.card-delete-confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }

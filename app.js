@@ -1,7 +1,7 @@
 // app.js
 import { isConfigured } from "./firebase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars } from "./db.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar } from "./db.js";
 
 // Page elements
 const loadingScreen = document.getElementById("loading-screen");
@@ -54,6 +54,7 @@ const PRESETS = {
   Tasks:    { levels: [{ name: 'Tasks',    conversionToNext: null }] },
   Pages:    { levels: [{ name: 'Pages',    conversionToNext: null }] },
   Books:    { levels: [{ name: 'Books',    conversionToNext: null }] },
+  Chapters: { levels: [{ name: 'Chapters', conversionToNext: null }] },
   Time: {
     levels: [
       { name: 'Seconds', conversionToNext: 60 },
@@ -104,6 +105,17 @@ function escapeHtml(str) {
   div.innerText = str;
   return div.innerHTML;
 }
+
+function formatNumber(value) {
+  // Returns integer string if whole number, else up to 2 decimal places
+  if (Number.isInteger(value) || value % 1 === 0) {
+    return Math.floor(value).toString();
+  }
+  // Strip trailing zeros after decimal
+  return parseFloat(value.toFixed(2)).toString();
+}
+
+
 
 // ==========================================
 // Unit Conversion & Formatting Mathematics
@@ -181,23 +193,23 @@ function formatCurrentProgress(current, levels) {
   
   // If all values are 0
   if (firstIdx === -1) {
-    return `0 ${levels[0].name}`;
+    return `${formatNumber(0)} ${levels[0].name}`;
   }
   
   const parts = [];
   for (let i = firstIdx; i <= lastIdx; i++) {
-    parts.push(`${vals[i]} ${reversedLevels[i].name}`);
+    parts.push(`${formatNumber(vals[i])} ${reversedLevels[i].name}`);
   }
   return parts.join(' ');
 }
 
 function formatCardLabel(current, target, levels) {
   if (levels.length === 1) {
-    return `${current} / ${target} ${levels[0].name}`;
+    return `${formatNumber(current)} / ${formatNumber(target)} ${levels[0].name}`;
   } else {
     const reversedLevels = [...levels].reverse();
     const targetVals = decodeFromSmallest(target, levels);
-    const targetStr = targetVals.map((val, idx) => `${val} ${reversedLevels[idx].name}`).join(' ');
+    const targetStr = targetVals.map((val, idx) => `${formatNumber(val)} ${reversedLevels[idx].name}`).join(' ');
     const currentStr = formatCurrentProgress(current, levels);
     return `${currentStr} / ${targetStr}`;
   }
@@ -211,75 +223,7 @@ function renderDashboard(bars) {
   currentBars = bars;
   cardsGrid.innerHTML = "";
   
-  if (bars.length === 0) {
-    // Just render the Add Card, empty state removed as requested
-  } else {
-    // Render cards
-    bars.forEach((bar) => {
-      const card = document.createElement("div");
-      card.className = "card-progress";
-      card.setAttribute("data-bar-id", bar.id);
-      
-      // Calculate completion percentage
-      const percent = bar.targetSmallest > 0 
-        ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-        : 0;
-      
-      // Get interpolated color
-      const barColor = getProgressColor(percent);
-      card.style.setProperty("--bar-color", barColor);
-      
-      // Set timestamp reference for the 5-minute background check
-      let lastUpdatedMs = Date.now();
-      if (bar.lastUpdated) {
-        // Handle firestore Timestamp vs client side local date
-        lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function' 
-          ? bar.lastUpdated.toDate().getTime() 
-          : bar.lastUpdated;
-      }
-      card.setAttribute("data-last-updated", lastUpdatedMs);
-      
-      // Add glowing pulse animation if updated in the last 5 minutes
-      const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
-      if (diffMinutes < 5) {
-        card.classList.add("pulse-glow");
-      }
-      
-      card.innerHTML = `
-        <button class="btn-card-delete" title="Delete">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
-        </button>
-        <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
-        <div class="card-body">
-          <div class="card-percent">${percent.toFixed(1)}%</div>
-          <div class="progressbar-track">
-            <div class="progressbar-fill" style="width: ${percent}%;"></div>
-          </div>
-        </div>
-        <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
-      `;
-      
-      // Add click handler to edit progress or delete
-      card.addEventListener("click", (e) => {
-        if (e.target.closest('.btn-card-delete')) {
-          e.stopPropagation();
-          if (confirm(`Are you sure you want to delete "${bar.title}"?`)) {
-            deleteBar(isGuestMode() ? null : currentUser.uid, bar.id).then(() => {
-              showToast(`Deleted progress bar "${bar.title}".`, "success");
-            }).catch(() => {
-              showToast("Failed to delete progress bar.", "error");
-            });
-          }
-        } else {
-          openUpdateModal(bar);
-        }
-      });
-      
-      cardsGrid.appendChild(card);
-    });
-  }
-  
-  // Always append the "+" Add card at the end
+  // ADD CARD ALWAYS FIRST
   const addCard = document.createElement("div");
   addCard.className = "card-add";
   addCard.id = "btn-add-card";
@@ -289,6 +233,109 @@ function renderDashboard(bars) {
   `;
   addCard.addEventListener("click", () => openCreateModal());
   cardsGrid.appendChild(addCard);
+
+  // THEN render bar cards
+  bars.forEach((bar) => {
+    const card = document.createElement("div");
+    card.className = "card-progress";
+    card.setAttribute("data-bar-id", bar.id);
+    
+    // Calculate completion percentage
+    const percent = bar.targetSmallest > 0 
+      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+      : 0;
+    
+    // Get interpolated color
+    const barColor = getProgressColor(percent);
+    card.style.setProperty("--bar-color", barColor);
+    
+    // Set timestamp reference for the 5-minute background check
+    let lastUpdatedMs = Date.now();
+    if (bar.lastUpdated) {
+      // Handle firestore Timestamp vs client side local date
+      lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function' 
+        ? bar.lastUpdated.toDate().getTime() 
+        : bar.lastUpdated;
+    }
+    card.setAttribute("data-last-updated", lastUpdatedMs);
+    
+    // Add glowing pulse animation if updated in the last 5 minutes
+    const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
+    if (diffMinutes < 5) {
+      card.classList.add("pulse-glow");
+    }
+    
+    card.innerHTML = `
+      <div class="card-actions">
+        <button class="btn-card-edit" title="Edit">
+          <svg width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2"
+            style="pointer-events:none;">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="btn-card-delete" title="Delete">
+          <svg width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2"
+            style="pointer-events:none;">
+            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+          </svg>
+        </button>
+      </div>
+      <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
+      <div class="card-body">
+        <div class="card-percent">${formatNumber(percent)}%</div>
+        <div class="progressbar-track">
+          <div class="progressbar-fill" style="width: ${percent}%;"></div>
+        </div>
+      </div>
+      <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
+
+      <!-- Inline delete confirmation overlay -->
+      <div class="card-delete-confirm hidden">
+        <p class="card-delete-confirm-text">Delete <strong>${escapeHtml(bar.title)}</strong>?</p>
+        <div class="card-delete-confirm-actions">
+          <button class="btn btn-secondary btn-delete-cancel-inline">Cancel</button>
+          <button class="btn btn-danger-confirm btn-delete-confirm-inline">Yes, Delete</button>
+        </div>
+      </div>
+    `;
+
+    // Wire up direct listeners on action buttons
+    const deleteConfirmPanel = card.querySelector('.card-delete-confirm');
+
+    card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteConfirmPanel.classList.remove('hidden');
+    });
+
+    card.querySelector('.btn-delete-cancel-inline').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteConfirmPanel.classList.add('hidden');
+    });
+
+    card.querySelector('.btn-delete-confirm-inline').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
+        .then(() => showToast(`Deleted "${bar.title}".`, "success"))
+        .catch(() => showToast("Failed to delete progress bar.", "error"));
+    });
+
+    card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(bar);
+    });
+
+    // Click on card body opens update modal (only if confirm panel not visible)
+    card.addEventListener("click", () => {
+      if (deleteConfirmPanel.classList.contains('hidden')) {
+        openUpdateModal(bar);
+      }
+    });
+
+    cardsGrid.appendChild(card);
+  });
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes
@@ -332,7 +379,11 @@ window.addEventListener("click", (e) => {
 // CREATE MODAL LOGIC:
 function openCreateModal() {
   formCreate.reset();
+  formCreate.dataset.mode = '';
+  formCreate.dataset.editId = '';
+  document.getElementById('modal-create-title').textContent = 'Create Progress Bar';
   barPresetSelect.value = "";
+  barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
   openModal(modalCreate);
 }
@@ -535,31 +586,43 @@ function renderTargetAndCurrentInputs() {
   
   const reversedLevels = [...levels].reverse();
   
+  const isTimePres = (barPresetSelect.value === 'Time');
+  const stepVal = isTimePres ? '1' : 'any';
+  
   reversedLevels.forEach((level) => {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="1" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createTargetDynamic.appendChild(targetCol);
     
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input current-val-input" type="number" step="1" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
 }
 
-function attachStepperListeners(inputEl, minusBtn, plusBtn) {
+function attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres) {
   plusBtn.addEventListener('click', () => {
-    inputEl.value = (parseInt(inputEl.value) || 0) + 1;
+    if (isTimePres) {
+      inputEl.value = (parseInt(inputEl.value) || 0) + 1;
+    } else {
+      inputEl.value = (parseFloat(inputEl.value) || 0) + 1;
+    }
   });
 
   minusBtn.addEventListener('click', () => {
-    const current = parseInt(inputEl.value) || 0;
-    inputEl.value = Math.max(0, current - 1);
+    if (isTimePres) {
+      const current = parseInt(inputEl.value) || 0;
+      inputEl.value = Math.max(0, current - 1);
+    } else {
+      const current = parseFloat(inputEl.value) || 0;
+      inputEl.value = Math.max(0, current - 1);
+    }
   });
 }
 
@@ -581,6 +644,9 @@ function openUpdateModal(bar) {
   // UI inputs are displayed largest-to-smallest (reversed levels array)
   const reversedLevels = [...bar.levels].reverse();
   
+  const isTimePres = bar.preset === 'Time';
+  const stepVal = isTimePres ? '1' : 'any';
+  
   if (bar.levels.length === 1) {
     const val = currentLevelVals[0] || 0;
     
@@ -588,7 +654,7 @@ function openUpdateModal(bar) {
     container.className = "stepper-horizontal";
     container.innerHTML = `
       <button type="button" class="stepper-btn" data-action="minus">−</button>
-      <input type="number" step="1" class="stepper-input update-val-input" min="0" value="${val}">
+      <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
       <button type="button" class="stepper-btn" data-action="plus">+</button>
     `;
     updateCurrentDynamic.appendChild(container);
@@ -597,7 +663,7 @@ function openUpdateModal(bar) {
     const minusBtn = container.querySelector('[data-action="minus"]');
     const plusBtn = container.querySelector('[data-action="plus"]');
     
-    attachStepperListeners(inputEl, minusBtn, plusBtn);
+    attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
   } else {
     const container = document.createElement("div");
     container.className = "stepper-multi-row";
@@ -611,7 +677,7 @@ function openUpdateModal(bar) {
         <div class="stepper-card-label">${escapeHtml(level.name)}</div>
         <div class="stepper-card-controls">
           <button type="button" class="stepper-btn" data-action="minus">−</button>
-          <input type="number" step="1" class="stepper-input update-val-input" min="0" value="${val}">
+          <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
           <button type="button" class="stepper-btn" data-action="plus">+</button>
         </div>
       `;
@@ -621,12 +687,47 @@ function openUpdateModal(bar) {
       const minusBtn = card.querySelector('[data-action="minus"]');
       const plusBtn = card.querySelector('[data-action="plus"]');
       
-      attachStepperListeners(inputEl, minusBtn, plusBtn);
+      attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
     });
     updateCurrentDynamic.appendChild(container);
   }
   
   openModal(modalUpdate);
+}
+
+function openEditModal(bar) {
+  selectedBar = bar;
+
+  // Reuse the Create modal but in edit mode
+  document.getElementById('modal-create-title').textContent = 'Edit Tracker';
+  document.getElementById('bar-title').value = bar.title;
+
+  // Lock preset — cannot change preset after creation
+  barPresetSelect.value = bar.preset;
+  barPresetSelect.disabled = true;
+
+  // Rebuild the dynamic inputs for target and current
+  rebuildCreateFormInputs();
+
+  // Pre-fill target (decode from smallest)
+  const targetVals = decodeFromSmallest(bar.targetSmallest, bar.levels);
+  const targetInputs = Array.from(createTargetDynamic.querySelectorAll('.target-val-input'));
+  targetInputs.forEach((input, i) => {
+    input.value = targetVals[i] ?? 0;
+  });
+
+  // Pre-fill current (decode from smallest)
+  const currentVals = decodeFromSmallest(bar.currentSmallest, bar.levels);
+  const currentInputs = Array.from(createCurrentDynamic.querySelectorAll('.current-val-input'));
+  currentInputs.forEach((input, i) => {
+    input.value = currentVals[i] ?? 0;
+  });
+
+  // Switch form submit to edit mode
+  formCreate.dataset.mode = 'edit';
+  formCreate.dataset.editId = bar.id;
+
+  openModal(modalCreate);
 }
 
 
@@ -640,12 +741,15 @@ formCreate.addEventListener("submit", async (e) => {
   
   if (!currentUser) return;
   
+  const isEditMode = formCreate.dataset.mode === 'edit';
+  const editBarId = formCreate.dataset.editId;
+  
   const title = document.getElementById("bar-title").value.trim();
-  const preset = barPresetSelect.value;
-  const levels = getLevelsFromForm();
+  const preset = isEditMode ? selectedBar.preset : barPresetSelect.value;
+  const levels = isEditMode ? selectedBar.levels : getLevelsFromForm();
   
   // Custom Validation
-  if (preset === "Custom") {
+  if (!isEditMode && preset === "Custom") {
     const countSelect = document.getElementById("custom-level-count");
     const count = parseInt(countSelect.value) || 1;
     const l1Name = document.getElementById("custom-l1-name")?.value.trim();
@@ -681,21 +785,46 @@ formCreate.addEventListener("submit", async (e) => {
   
   // Fetch form values in largest-to-smallest order
   const targetInputs = Array.from(createTargetDynamic.querySelectorAll(".target-val-input"));
-  const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
-  
-  // Extract number values
-  const targetValsReversed = targetInputs.map(input => parseInt(input.value) || 0);
-  const currentValsReversed = currentInputs.map(input => parseInt(input.value) || 0);
+  const isTimePres = (preset === 'Time');
+  const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
   
   // Compute smallest unit totals
   const targetSmallest = encodeToSmallest(targetValsReversed, levels);
-  const currentSmallest = encodeToSmallest(currentValsReversed, levels);
   
   // Simple validation
   if (targetSmallest <= 0) {
     showToast("Target goal must be greater than 0.", "error");
     return;
   }
+  
+  if (isEditMode) {
+    if (selectedBar.currentSmallest > targetSmallest) {
+      showToast("Target goal cannot be less than current progress.", "error");
+      return;
+    }
+    try {
+      closeModal(modalCreate);
+      await editBar(isGuestMode() ? null : currentUser.uid, editBarId, {
+        title,
+        levels: selectedBar.levels,
+        targetSmallest
+      });
+      // Reset form mode
+      formCreate.dataset.mode = '';
+      formCreate.dataset.editId = '';
+      barPresetSelect.disabled = false;
+      document.getElementById('modal-create-title').textContent = 'Create Progress Bar';
+      showToast(`Successfully updated tracker "${title}"!`, "success");
+    } catch (error) {
+      showToast("Failed to edit progress bar.", "error");
+    }
+    return;
+  }
+  
+  // NOT isEditMode (existing createBar flow)
+  const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
+  const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+  const currentSmallest = encodeToSmallest(currentValsReversed, levels);
   
   if (currentSmallest < 0) {
     showToast("Current progress must be at least 0.", "error");
@@ -740,7 +869,8 @@ formUpdate.addEventListener("submit", async (e) => {
   
   // Fetch input fields
   const updateInputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
-  const currentValsReversed = updateInputs.map(input => parseInt(input.value) || 0);
+  const isTimePres = (selectedBar.preset === 'Time');
+  const currentValsReversed = updateInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
   
   const currentSmallest = encodeToSmallest(currentValsReversed, selectedBar.levels);
   
@@ -865,7 +995,20 @@ initAuthProtection(async (user) => {
   // Silent auto-migration if guest logs in
   if (isGuestMode() && user && user.uid !== null) {
     await migrateGuestBarsToFirestore(user.uid);
-    window.location.reload();
+    // Do not reload — re-initialize dashboard directly
+    currentUser = user;
+    if (guestBanner) guestBanner.style.display = "none";
+    if (userAvatar) userAvatar.src = user.photoURL 
+      || "https://www.gravatar.com/avatar/?d=mp&f=y";
+    if (userName) userName.textContent = user.displayName || "Tracker User";
+    
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    subscribeToBars(
+      user.uid,
+      (bars) => renderDashboard(bars),
+      (error) => showToast("Error loading bars after sync.", "error")
+    );
     return;
   }
 

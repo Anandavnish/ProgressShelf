@@ -180,3 +180,37 @@ export async function deleteBar(uid, barId) {
   }
 }
 
+export async function editBar(uid, barId, {
+  title, levels, targetSmallest
+}) {
+  if (!isConfigured || isGuestMode()) {
+    const bars = getLocalBars();
+    const idx = bars.findIndex(b => b.id === barId);
+    if (idx !== -1) {
+      bars[idx] = {
+        ...bars[idx],
+        title,
+        levels,
+        targetSmallest: Number(targetSmallest),
+        lastUpdated: Date.now()
+      };
+      setLocalBars(bars);
+      triggerMockUpdate();
+    }
+    return;
+  }
+
+  try {
+    const barDocRef = doc(db, "users", uid, "bars", barId);
+    await updateDoc(barDocRef, {
+      title,
+      levels,
+      targetSmallest: Number(targetSmallest),
+      lastUpdated: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error editing bar:", error);
+    throw error;
+  }
+}
+
