@@ -46,6 +46,17 @@ const btnBannerLogin = document.getElementById("btn-banner-login");
 let currentUser = null;
 let currentBars = [];
 let selectedBar = null;
+let activeUnsubscribe = null;
+let authInitialized = false;
+
+function startSubscription(uid, onUpdate, onError) {
+  // Unsubscribe any existing listener before starting a new one
+  if (activeUnsubscribe) {
+    activeUnsubscribe();
+    activeUnsubscribe = null;
+  }
+  activeUnsubscribe = subscribeToBars(uid, onUpdate, onError);
+}
 
 const PRESETS = {
   Lectures: { levels: [{ name: 'Lectures', conversionToNext: null }] },
@@ -992,23 +1003,24 @@ btnLogout.addEventListener("click", async () => {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
+  if (authInitialized && !isGuestMode()) return;
+  authInitialized = true;
+
   // Silent auto-migration if guest logs in
   if (isGuestMode() && user && user.uid !== null) {
+    // Show migration status
+    if (loadingScreen) {
+      const loadingText = loadingScreen.querySelector('.loading-text');
+      if (loadingText) loadingText.textContent = 'Syncing your data...';
+    }
+
     await migrateGuestBarsToFirestore(user.uid);
-    // Do not reload — re-initialize dashboard directly
-    currentUser = user;
-    if (guestBanner) guestBanner.style.display = "none";
-    if (userAvatar) userAvatar.src = user.photoURL 
-      || "https://www.gravatar.com/avatar/?d=mp&f=y";
-    if (userName) userName.textContent = user.displayName || "Tracker User";
-    
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    subscribeToBars(
-      user.uid,
-      (bars) => renderDashboard(bars),
-      (error) => showToast("Error loading bars after sync.", "error")
-    );
+    // exitGuestMode() already called inside migrateGuestBarsToFirestore
+    // Reset authInitialized so the next onAuthStateChanged fire
+    // (which will have isGuestMode()=false) runs the full init
+    authInitialized = false;
+    // Do NOT subscribe here — let the next onAuthStateChanged fire
+    // handle it cleanly through the normal path
     return;
   }
 
@@ -1054,7 +1066,7 @@ initAuthProtection(async (user) => {
   appContent.classList.remove("hidden");
   
   // Subscribe to progress bars collection
-  subscribeToBars(
+  startSubscription(
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
