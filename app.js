@@ -50,7 +50,6 @@ let selectedBar = null;
 const PRESETS = {
   Lectures: { levels: [{ name: 'Lectures', conversionToNext: null }] },
   Videos:   { levels: [{ name: 'Videos',   conversionToNext: null }] },
-  Chapters: { levels: [{ name: 'Chapters', conversionToNext: null }] },
   Problems: { levels: [{ name: 'Problems', conversionToNext: null }] },
   Tasks:    { levels: [{ name: 'Tasks',    conversionToNext: null }] },
   Pages:    { levels: [{ name: 'Pages',    conversionToNext: null }] },
@@ -265,7 +264,7 @@ function renderDashboard(bars) {
         if (e.target.closest('.btn-card-delete')) {
           e.stopPropagation();
           if (confirm(`Are you sure you want to delete "${bar.title}"?`)) {
-            deleteBar(currentUser.uid, bar.id).then(() => {
+            deleteBar(isGuestMode() ? null : currentUser.uid, bar.id).then(() => {
               showToast(`Deleted progress bar "${bar.title}".`, "success");
             }).catch(() => {
               showToast("Failed to delete progress bar.", "error");
@@ -540,14 +539,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="any" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input target-val-input" type="number" step="1" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createTargetDynamic.appendChild(targetCol);
     
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input current-val-input" type="number" step="any" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input current-val-input" type="number" step="1" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -555,11 +554,11 @@ function renderTargetAndCurrentInputs() {
 
 function attachStepperListeners(inputEl, minusBtn, plusBtn) {
   plusBtn.addEventListener('click', () => {
-    inputEl.value = (parseFloat(inputEl.value) || 0) + 1;
+    inputEl.value = (parseInt(inputEl.value) || 0) + 1;
   });
 
   minusBtn.addEventListener('click', () => {
-    const current = parseFloat(inputEl.value) || 0;
+    const current = parseInt(inputEl.value) || 0;
     inputEl.value = Math.max(0, current - 1);
   });
 }
@@ -589,7 +588,7 @@ function openUpdateModal(bar) {
     container.className = "stepper-horizontal";
     container.innerHTML = `
       <button type="button" class="stepper-btn" data-action="minus">−</button>
-      <input type="number" step="any" class="stepper-input update-val-input" min="0" value="${val}">
+      <input type="number" step="1" class="stepper-input update-val-input" min="0" value="${val}">
       <button type="button" class="stepper-btn" data-action="plus">+</button>
     `;
     updateCurrentDynamic.appendChild(container);
@@ -612,7 +611,7 @@ function openUpdateModal(bar) {
         <div class="stepper-card-label">${escapeHtml(level.name)}</div>
         <div class="stepper-card-controls">
           <button type="button" class="stepper-btn" data-action="minus">−</button>
-          <input type="number" step="any" class="stepper-input update-val-input" min="0" value="${val}">
+          <input type="number" step="1" class="stepper-input update-val-input" min="0" value="${val}">
           <button type="button" class="stepper-btn" data-action="plus">+</button>
         </div>
       `;
@@ -685,8 +684,8 @@ formCreate.addEventListener("submit", async (e) => {
   const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
   
   // Extract number values
-  const targetValsReversed = targetInputs.map(input => parseFloat(input.value) || 0);
-  const currentValsReversed = currentInputs.map(input => parseFloat(input.value) || 0);
+  const targetValsReversed = targetInputs.map(input => parseInt(input.value) || 0);
+  const currentValsReversed = currentInputs.map(input => parseInt(input.value) || 0);
   
   // Compute smallest unit totals
   const targetSmallest = encodeToSmallest(targetValsReversed, levels);
@@ -707,10 +706,18 @@ formCreate.addEventListener("submit", async (e) => {
     showToast("Current progress cannot exceed target goal.", "error");
     return;
   }
+
+  if (currentBars.length >= 50) {
+    showToast(
+      "You've reached the maximum of 50 progress bars. Delete one to create a new one.",
+      "error"
+    );
+    return;
+  }
   
   try {
     closeModal(modalCreate);
-    await createBar(currentUser.uid, {
+    await createBar(isGuestMode() ? null : currentUser.uid, {
       title,
       preset,
       levels,
@@ -733,7 +740,7 @@ formUpdate.addEventListener("submit", async (e) => {
   
   // Fetch input fields
   const updateInputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
-  const currentValsReversed = updateInputs.map(input => parseFloat(input.value) || 0);
+  const currentValsReversed = updateInputs.map(input => parseInt(input.value) || 0);
   
   const currentSmallest = encodeToSmallest(currentValsReversed, selectedBar.levels);
   
@@ -749,7 +756,7 @@ formUpdate.addEventListener("submit", async (e) => {
   
   try {
     closeModal(modalUpdate);
-    await updateBarProgress(currentUser.uid, barId, currentSmallest);
+    await updateBarProgress(isGuestMode() ? null : currentUser.uid, barId, currentSmallest);
     showToast(`Progress for "${selectedBar.title}" updated.`, "success");
   } catch (error) {
     showToast("Failed to update progress.", "error");
@@ -774,7 +781,7 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
   
   try {
     closeModal(modalUpdate);
-    await deleteBar(currentUser.uid, barId);
+    await deleteBar(isGuestMode() ? null : currentUser.uid, barId);
     showToast(`Deleted progress bar "${title}".`, "success");
   } catch (error) {
     showToast("Failed to delete progress bar.", "error");
@@ -791,6 +798,8 @@ async function migrateGuestBarsToFirestore(uid) {
     return;
   }
 
+  let failCount = 0;
+
   for (const bar of localBars) {
     try {
       await createBar(uid, {
@@ -802,11 +811,22 @@ async function migrateGuestBarsToFirestore(uid) {
       });
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
+      failCount++;
     }
   }
 
-  localStorage.removeItem('progress_shelf_bars');
-  exitGuestMode();
+  if (failCount === 0) {
+    // All bars migrated successfully — safe to clear local data
+    localStorage.removeItem('progress_shelf_bars');
+    exitGuestMode();
+  } else {
+    // Partial failure — keep localStorage intact, warn user
+    showToast(
+      `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
+      "error"
+    );
+    // Do not exitGuestMode() — let user retry
+  }
 }
 
 if (btnBannerLogin) {
@@ -843,7 +863,7 @@ btnLogout.addEventListener("click", async () => {
 // Initialize auth check
 initAuthProtection(async (user) => {
   // Silent auto-migration if guest logs in
-  if (isGuestMode() && user && user.uid !== "guest") {
+  if (isGuestMode() && user && user.uid !== null) {
     await migrateGuestBarsToFirestore(user.uid);
     window.location.reload();
     return;
@@ -892,7 +912,7 @@ initAuthProtection(async (user) => {
   
   // Subscribe to progress bars collection
   subscribeToBars(
-    user.uid,
+    isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
     },

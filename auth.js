@@ -82,14 +82,21 @@ export function exitGuestMode() {
  */
 export function initAuthProtection(onUserActive) {
   if (!isConfigured) {
-    const isDemo = localStorage.getItem("progress_shelf_demo") === "true";
     const isGuest = isGuestMode();
-    if (isDemo || isGuest) {
+    const isDemo = localStorage.getItem("progress_shelf_demo") === "true";
+
+    if (isGuest) {
+      // Guest takes priority over demo flag
       if (!isDashboard) {
         window.location.href = "dashboard.html";
       } else if (onUserActive) {
-        // Async callback to simulate network loading latency
-        setTimeout(() => onUserActive(isDemo ? mockUser : { uid: "guest", displayName: "Guest" }), 100);
+        setTimeout(() => onUserActive({ uid: null, displayName: "Guest" }), 100);
+      }
+    } else if (isDemo) {
+      if (!isDashboard) {
+        window.location.href = "dashboard.html";
+      } else if (onUserActive) {
+        setTimeout(() => onUserActive(mockUser), 100);
       }
     } else {
       if (isDashboard) {
@@ -115,7 +122,7 @@ export function initAuthProtection(onUserActive) {
         if (!isDashboard) {
           window.location.href = "dashboard.html";
         } else if (onUserActive) {
-          onUserActive({ uid: "guest", displayName: "Guest" });
+          onUserActive({ uid: null, displayName: "Guest" });
         }
       } else {
         if (isDashboard) {
