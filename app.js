@@ -939,6 +939,10 @@ async function migrateGuestBarsToFirestore(uid) {
     return;
   }
 
+  // Temporarily clear guest mode so that createBar calls during the migration loop
+  // write to Firestore instead of writing back to localStorage
+  exitGuestMode();
+
   let failCount = 0;
 
   for (const bar of localBars) {
@@ -959,14 +963,13 @@ async function migrateGuestBarsToFirestore(uid) {
   if (failCount === 0) {
     // All bars migrated successfully — safe to clear local data
     localStorage.removeItem('progress_shelf_bars');
-    exitGuestMode();
   } else {
-    // Partial failure — keep localStorage intact, warn user
+    // Partial failure — restore guest mode so local data is not lost and user can retry
+    sessionStorage.setItem('guest_mode', 'true');
     showToast(
       `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
       "error"
     );
-    // Do not exitGuestMode() — let user retry
   }
 }
 
@@ -1003,11 +1006,14 @@ btnLogout.addEventListener("click", async () => {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
-  if (authInitialized && !isGuestMode()) return;
+  const localBars = getLocalBars();
+  const hasLocalBars = localBars && localBars.length > 0;
+
+  if (authInitialized && !isGuestMode() && !hasLocalBars) return;
   authInitialized = true;
 
-  // Silent auto-migration if guest logs in
-  if (isGuestMode() && user && user.uid !== null) {
+  // Silent auto-migration if guest logs in or has local bars
+  if ((isGuestMode() || hasLocalBars) && user && user.uid !== null) {
     // Show migration status
     if (loadingScreen) {
       const loadingText = loadingScreen.querySelector('.loading-text');
