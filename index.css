@@ -1112,7 +1112,8 @@ body {
   flex-direction: row;
   gap: 2px;
   align-items: center;
-  z-index: 10;
+  z-index: 2;
+  position: relative;
 }
 
 .btn-card-edit,
@@ -1180,4 +1181,75 @@ body {
 @keyframes fadeInScale {
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
+}
+
+/* Deadline label on card */
+.card-deadline-label {
+  font-size: 11px;
+  color: #8B949E;
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+
+/* Optional label text */
+.form-label-optional {
+  font-size: 11px;
+  color: #8B949E;
+  margin-left: 6px;
+}
+
+/* Deadline date+time inputs side by side */
+.deadline-inputs {
+  display: flex;
+  gap: 8px;
+}
+.deadline-inputs .form-input {
+  flex: 1;
+}
+
+/* Form hint text */
+.form-hint {
+  font-size: 11px;
+  color: #8B949E;
+  margin-top: 4px;
+}
+
+/* Overdue pulsing border */
+@keyframes deadline-overdue-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+.deadline-overdue {
+  animation: deadline-overdue-pulse 1.5s ease-in-out infinite;
+}
+
+/* Overdue warning overlay — blur fade in/out */
+@keyframes warning-breathe {
+  0%, 100% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+.deadline-warning {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.5rem;
+  pointer-events: none;
+  animation: warning-breathe 2.5s ease-in-out infinite;
+  z-index: 1;
+}
+
+/* Mobile: stack date and time inputs vertically on small screens */
+@media (max-width: 480px) {
+  .deadline-inputs {
+    flex-direction: column;
+  }
 }

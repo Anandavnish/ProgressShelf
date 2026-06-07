@@ -88,7 +88,11 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, preset, levels, targetSmallest, currentSmallest }) {
+export async function createBar(uid, {
+  title, preset, levels,
+  targetSmallest, currentSmallest,
+  deadlineTimestamp
+}) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const newBar = {
@@ -98,6 +102,7 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
       levels,
       targetSmallest: Number(targetSmallest),
       currentSmallest: Number(currentSmallest),
+      deadline: deadlineTimestamp || null,
       createdAt: Date.now(),
       lastUpdated: Date.now()
     };
@@ -115,6 +120,9 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
       levels,
       targetSmallest: Number(targetSmallest),
       currentSmallest: Number(currentSmallest),
+      deadline: deadlineTimestamp
+        ? new Date(deadlineTimestamp)
+        : null,
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp()
     });
@@ -181,7 +189,7 @@ export async function deleteBar(uid, barId) {
 }
 
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest
+  title, levels, targetSmallest, deadlineTimestamp
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -192,6 +200,7 @@ export async function editBar(uid, barId, {
         title,
         levels,
         targetSmallest: Number(targetSmallest),
+        deadline: deadlineTimestamp || null,
         lastUpdated: Date.now()
       };
       setLocalBars(bars);
@@ -206,6 +215,9 @@ export async function editBar(uid, barId, {
       title,
       levels,
       targetSmallest: Number(targetSmallest),
+      deadline: deadlineTimestamp
+        ? new Date(deadlineTimestamp)
+        : null,
       lastUpdated: serverTimestamp()
     });
   } catch (error) {

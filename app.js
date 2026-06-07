@@ -226,6 +226,166 @@ function formatCardLabel(current, target, levels) {
   }
 }
 
+function getDeadlineMs(bar) {
+  if (!bar.deadline) return null;
+  return typeof bar.deadline.toDate === 'function'
+    ? bar.deadline.toDate().getTime()
+    : bar.deadline;
+}
+
+function getDeadlinePercent(bar) {
+  const deadlineMs = getDeadlineMs(bar);
+  if (!deadlineMs) return null;
+
+  const createdMs = typeof bar.createdAt?.toDate === 'function'
+    ? bar.createdAt.toDate().getTime()
+    : (bar.createdAt || Date.now());
+
+  const totalDuration = deadlineMs - createdMs;
+  const timeLeft = deadlineMs - Date.now();
+
+  if (totalDuration <= 0) return 0;
+  return Math.max(0, Math.min(100, (timeLeft / totalDuration) * 100));
+}
+
+function formatTimeLeft(deadlineMs) {
+  const msLeft = deadlineMs - Date.now();
+  if (msLeft < 0) return "Overdue";
+  if (msLeft < 3600000)
+    return `${Math.floor(msLeft / 60000)} min left`;
+  if (msLeft < 86400000)
+    return `${Math.floor(msLeft / 3600000)} hrs left`;
+  if (msLeft < 604800000)
+    return `${Math.floor(msLeft / 86400000)} days left`;
+  return `${Math.floor(msLeft / 604800000)} weeks left`;
+}
+
+// Single ResizeObserver instance for all deadline cards
+const deadlineResizeObserver = new ResizeObserver((entries) => {
+  entries.forEach(entry => {
+    const card = entry.target;
+    const barEl = card.querySelector('.deadline-bar');
+    const trackEl = card.querySelector('.deadline-track');
+    if (!barEl || !trackEl) return;
+    const percentLeft = parseFloat(barEl.dataset.percentLeft || '0');
+    const isOverdue = barEl.dataset.overdue === 'true';
+    updateDeadlineSVG(card, barEl, trackEl, percentLeft, isOverdue);
+  });
+});
+
+function attachDeadlineBorder(card, bar) {
+  // Remove existing SVG if re-rendering
+  card.querySelector('.deadline-svg')?.remove();
+
+  const deadlineMs = getDeadlineMs(bar);
+  if (!deadlineMs) return;
+
+  const percentLeft = getDeadlinePercent(bar);
+  const isOverdue = deadlineMs < Date.now();
+
+  // Build SVG
+  const svg = document.createElementNS(
+    'http://www.w3.org/2000/svg', 'svg'
+  );
+  svg.classList.add('deadline-svg');
+
+  const track = document.createElementNS(
+    'http://www.w3.org/2000/svg', 'rect'
+  );
+  track.classList.add('deadline-track');
+
+  const barEl = document.createElementNS(
+    'http://www.w3.org/2000/svg', 'rect'
+  );
+  barEl.classList.add('deadline-bar');
+  barEl.dataset.percentLeft = percentLeft;
+  barEl.dataset.overdue = isOverdue ? 'true' : 'false';
+
+  svg.appendChild(track);
+  svg.appendChild(barEl);
+
+  // Card must be position:relative for SVG overlay
+  card.style.position = 'relative';
+  card.style.overflow = 'visible';
+  card.appendChild(svg);
+
+  updateDeadlineSVG(card, barEl, track, percentLeft, isOverdue);
+  deadlineResizeObserver.observe(card);
+
+  if (isOverdue) {
+    attachOverdueWarning(card);
+  }
+}
+
+function updateDeadlineSVG(card, barEl, trackEl, percentLeft, isOverdue) {
+  const w = card.offsetWidth;
+  const h = card.offsetHeight;
+  if (!w || !h) return;
+
+  const pad = 2;
+  const rx = 10;
+  // Perimeter calculated from actual card dimensions
+  const perimeter = 2 * ((w - pad * 2) + (h - pad * 2));
+
+  // Style the SVG element itself
+  Object.assign(card.querySelector('.deadline-svg').style, {
+    position: 'absolute',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    // Clockwise from top-left:
+    // Default SVG draws top-right clockwise, scaleX(-1) mirrors
+    // to start from top-left clockwise
+    transform: 'scaleX(-1)',
+    overflow: 'visible',
+    zIndex: '0'
+  });
+
+  [barEl, trackEl].forEach(el => {
+    el.setAttribute('x', pad);
+    el.setAttribute('y', pad);
+    el.setAttribute('width', w - pad * 2);
+    el.setAttribute('height', h - pad * 2);
+    el.setAttribute('rx', rx);
+    el.setAttribute('fill', 'none');
+  });
+
+  trackEl.setAttribute('stroke', 'rgba(255,255,255,0.06)');
+  trackEl.setAttribute('stroke-width', '3');
+
+  barEl.setAttribute('stroke-width', '3');
+  barEl.setAttribute('stroke-linecap', 'round');
+  barEl.setAttribute('stroke-dasharray', perimeter);
+  barEl.setAttribute(
+    'stroke-dashoffset',
+    perimeter - (perimeter * percentLeft / 100)
+  );
+
+  if (isOverdue) {
+    barEl.setAttribute('stroke', '#E74C3C');
+    barEl.classList.add('deadline-overdue');
+  } else {
+    // hsl: 120=green at 100%, 60=yellow at 50%, 0=red at 0%
+    const hue = percentLeft * 1.2;
+    barEl.setAttribute('stroke', `hsl(${hue}, 90%, 50%)`);
+    barEl.classList.remove('deadline-overdue');
+  }
+}
+
+function attachOverdueWarning(card) {
+  // Don't add twice
+  if (card.querySelector('.deadline-warning')) return;
+
+  const warning = document.createElement('div');
+  warning.className = 'deadline-warning';
+  warning.innerHTML = '⚠️';
+  // Must sit above SVG but below action buttons
+  warning.style.zIndex = '1';
+  card.appendChild(warning);
+}
+
 // ==========================================
 // Dashboard Card Rendering
 // ==========================================
@@ -302,6 +462,11 @@ function renderDashboard(bars) {
         </div>
       </div>
       <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
+      ${bar.deadline ? `
+        <div class="card-deadline-label" data-deadline="${getDeadlineMs(bar)}">
+          ${formatTimeLeft(getDeadlineMs(bar))}
+        </div>
+      ` : ''}
 
       <!-- Inline delete confirmation overlay -->
       <div class="card-delete-confirm hidden">
@@ -346,21 +511,55 @@ function renderDashboard(bars) {
     });
 
     cardsGrid.appendChild(card);
+    if (bar.deadline) {
+      attachDeadlineBorder(card, bar);
+    }
   });
 }
 
-// Background timer to remove .pulse-glow class after 5 minutes
+// Replace or extend the existing setInterval block
 setInterval(() => {
-  document.querySelectorAll(".card-progress.pulse-glow").forEach((card) => {
-    const lastUpdatedMs = Number(card.getAttribute("data-last-updated"));
-    if (lastUpdatedMs) {
-      const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
-      if (diffMinutes >= 5) {
-        card.classList.remove("pulse-glow");
+  // Existing pulse-glow cleanup
+  document.querySelectorAll('.card-progress.pulse-glow')
+    .forEach((card) => {
+      const lastUpdatedMs = Number(
+        card.getAttribute('data-last-updated')
+      );
+      if (lastUpdatedMs) {
+        const diffMinutes = (Date.now() - lastUpdatedMs) / 60000;
+        if (diffMinutes >= 5) card.classList.remove('pulse-glow');
       }
+    });
+
+  // Deadline label + border live update
+  document.querySelectorAll('.card-progress').forEach(card => {
+    const barId = card.getAttribute('data-bar-id');
+    const barData = currentBars.find(b => b.id === barId);
+    if (!barData?.deadline) return;
+
+    const deadlineMs = getDeadlineMs(barData);
+    const isOverdue = deadlineMs < Date.now();
+
+    // Update label text
+    const label = card.querySelector('.card-deadline-label');
+    if (label) label.textContent = formatTimeLeft(deadlineMs);
+
+    // Update SVG border
+    const barEl = card.querySelector('.deadline-bar');
+    const trackEl = card.querySelector('.deadline-track');
+    if (barEl && trackEl) {
+      const percentLeft = getDeadlinePercent(barData);
+      barEl.dataset.percentLeft = percentLeft;
+      barEl.dataset.overdue = isOverdue ? 'true' : 'false';
+      updateDeadlineSVG(
+        card, barEl, trackEl, percentLeft, isOverdue
+      );
     }
+
+    // Attach overdue warning if just became overdue
+    if (isOverdue) attachOverdueWarning(card);
   });
-}, 60000); // Check every minute
+}, 60000);
 
 // ==========================================
 // Modal Controllers & Form Interactions
@@ -387,6 +586,49 @@ window.addEventListener("click", (e) => {
   }
 });
 
+function initDeadlineInputs() {
+  const dateInput = document.getElementById('bar-deadline-date');
+  const timeInput = document.getElementById('bar-deadline-time');
+  if (!dateInput || !timeInput) return;
+
+  // Block past dates
+  const today = new Date().toISOString().split('T')[0];
+  dateInput.setAttribute('min', today);
+
+  function validateFutureTime() {
+    const selectedDate = dateInput.value;
+    const selectedTime = timeInput.value;
+    if (!selectedDate || !selectedTime) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    if (selectedDate === today) {
+      const now = new Date();
+      const hh = now.getHours().toString().padStart(2, '0');
+      const mm = now.getMinutes().toString().padStart(2, '0');
+      const currentTimeStr = `${hh}:${mm}`;
+      if (selectedTime <= currentTimeStr) {
+        showToast("Deadline time cannot be in the past.", "error");
+        timeInput.value = '';
+      }
+    }
+  }
+
+  dateInput.addEventListener('change', validateFutureTime);
+  timeInput.addEventListener('change', validateFutureTime);
+}
+
+function getDeadlineTimestamp() {
+  const dateInput = document.getElementById('bar-deadline-date');
+  const timeInput = document.getElementById('bar-deadline-time');
+  const dateVal = dateInput?.value;
+  const timeVal = timeInput?.value || '23:59';
+
+  if (!dateVal) return null;
+
+  const dt = new Date(`${dateVal}T${timeVal}:00`);
+  return isNaN(dt.getTime()) ? null : dt.getTime();
+}
+
 // CREATE MODAL LOGIC:
 function openCreateModal() {
   formCreate.reset();
@@ -397,6 +639,7 @@ function openCreateModal() {
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
   openModal(modalCreate);
+  initDeadlineInputs();
 }
 
 barPresetSelect.addEventListener("change", rebuildCreateFormInputs);
@@ -734,11 +977,31 @@ function openEditModal(bar) {
     input.value = currentVals[i] ?? 0;
   });
 
+  // Pre-fill deadline
+  const dateInput = document.getElementById('bar-deadline-date');
+  const timeInput = document.getElementById('bar-deadline-time');
+
+  if (bar.deadline) {
+    const deadlineMs = typeof bar.deadline.toDate === 'function'
+      ? bar.deadline.toDate().getTime()
+      : bar.deadline;
+    const d = new Date(deadlineMs);
+    const pad = n => String(n).padStart(2, '0');
+    dateInput.value =
+      `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    timeInput.value =
+      `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } else {
+    dateInput.value = '';
+    timeInput.value = '';
+  }
+
   // Switch form submit to edit mode
   formCreate.dataset.mode = 'edit';
   formCreate.dataset.editId = bar.id;
 
   openModal(modalCreate);
+  initDeadlineInputs();
 }
 
 
@@ -808,6 +1071,8 @@ formCreate.addEventListener("submit", async (e) => {
     return;
   }
   
+  const deadlineTimestamp = getDeadlineTimestamp();
+
   if (isEditMode) {
     if (selectedBar.currentSmallest > targetSmallest) {
       showToast("Target goal cannot be less than current progress.", "error");
@@ -818,7 +1083,8 @@ formCreate.addEventListener("submit", async (e) => {
       await editBar(isGuestMode() ? null : currentUser.uid, editBarId, {
         title,
         levels: selectedBar.levels,
-        targetSmallest
+        targetSmallest,
+        deadlineTimestamp
       });
       // Reset form mode
       formCreate.dataset.mode = '';
@@ -862,7 +1128,8 @@ formCreate.addEventListener("submit", async (e) => {
       preset,
       levels,
       targetSmallest,
-      currentSmallest
+      currentSmallest,
+      deadlineTimestamp
     });
     showToast(`Successfully created progress bar "${title}"!`, "success");
   } catch (error) {
@@ -952,7 +1219,8 @@ async function migrateGuestBarsToFirestore(uid) {
         preset: bar.preset,
         levels: bar.levels,
         targetSmallest: bar.targetSmallest,
-        currentSmallest: bar.currentSmallest
+        currentSmallest: bar.currentSmallest,
+        deadlineTimestamp: bar.deadline
       });
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
