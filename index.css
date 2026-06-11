@@ -345,7 +345,8 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 180px;
+  min-height: 180px;
+  height: auto;
   transition: transform var(--transition-speed) var(--transition-ease),
               border-color var(--transition-speed) var(--transition-ease),
               box-shadow var(--transition-speed) var(--transition-ease);
@@ -412,9 +413,8 @@ body {
   font-weight: 500;
   color: var(--text-muted);
   margin-top: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* Add Card Styles */
@@ -422,7 +422,8 @@ body {
   background-color: transparent;
   border: 2px dashed var(--card-border);
   border-radius: var(--border-radius);
-  height: 180px;
+  min-height: 180px;
+  height: auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1181,3 +1182,12 @@ body {
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+.card-divider {
+  border: 0;
+  height: 1px;
+  background: var(--card-border);
+  margin: 12px 0 0 0;
+  width: 100%;
+}
+

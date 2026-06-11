@@ -13,8 +13,10 @@ const userName = document.getElementById("user-name");
 
 // Modals
 const modalCreate = document.getElementById("modal-create");
+const modalEdit = document.getElementById("modal-edit");
 const modalUpdate = document.getElementById("modal-update");
 const formCreate = document.getElementById("form-create");
+const formEdit = document.getElementById("form-edit");
 const formUpdate = document.getElementById("form-update");
 
 // Dynamic containers (Create Modal)
@@ -22,6 +24,10 @@ const barPresetSelect = document.getElementById("bar-preset");
 const presetsDynamicContainer = document.getElementById("create-presets-dynamic");
 const createTargetDynamic = document.getElementById("create-target-dynamic");
 const createCurrentDynamic = document.getElementById("create-current-dynamic");
+
+// Dynamic containers (Edit Modal)
+const editBarPresetSelect = document.getElementById("edit-bar-preset");
+const editTargetDynamic = document.getElementById("edit-target-dynamic");
 
 // Dynamic containers (Update Modal)
 const updateModalTitle = document.getElementById("update-modal-title");
@@ -302,6 +308,7 @@ function renderDashboard(bars) {
         </div>
       </div>
       <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
+      <hr class="card-divider">
 
       <!-- Inline delete confirmation overlay -->
       <div class="card-delete-confirm hidden">
@@ -390,9 +397,6 @@ window.addEventListener("click", (e) => {
 // CREATE MODAL LOGIC:
 function openCreateModal() {
   formCreate.reset();
-  formCreate.dataset.mode = '';
-  formCreate.dataset.editId = '';
-  document.getElementById('modal-create-title').textContent = 'Create Progress Bar';
   barPresetSelect.value = "";
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
@@ -709,36 +713,32 @@ function openUpdateModal(bar) {
 function openEditModal(bar) {
   selectedBar = bar;
 
-  // Reuse the Create modal but in edit mode
-  document.getElementById('modal-create-title').textContent = 'Edit Tracker';
-  document.getElementById('bar-title').value = bar.title;
+  document.getElementById('edit-bar-title').value = bar.title;
+  editBarPresetSelect.value = bar.preset;
 
-  // Lock preset — cannot change preset after creation
-  barPresetSelect.value = bar.preset;
-  barPresetSelect.disabled = true;
+  // Render the target inputs for the edit modal dynamically
+  editTargetDynamic.innerHTML = "";
+  const reversedLevels = [...bar.levels].reverse();
+  const isTimePres = bar.preset === 'Time';
+  const stepVal = isTimePres ? '1' : 'any';
 
-  // Rebuild the dynamic inputs for target and current
-  rebuildCreateFormInputs();
+  reversedLevels.forEach((level) => {
+    const targetCol = document.createElement("div");
+    targetCol.innerHTML = `
+      <label class="form-row-label">${escapeHtml(level.name)}</label>
+      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+    `;
+    editTargetDynamic.appendChild(targetCol);
+  });
 
-  // Pre-fill target (decode from smallest)
+  // Pre-fill target values
   const targetVals = decodeFromSmallest(bar.targetSmallest, bar.levels);
-  const targetInputs = Array.from(createTargetDynamic.querySelectorAll('.target-val-input'));
+  const targetInputs = Array.from(editTargetDynamic.querySelectorAll('.target-val-input'));
   targetInputs.forEach((input, i) => {
     input.value = targetVals[i] ?? 0;
   });
 
-  // Pre-fill current (decode from smallest)
-  const currentVals = decodeFromSmallest(bar.currentSmallest, bar.levels);
-  const currentInputs = Array.from(createCurrentDynamic.querySelectorAll('.current-val-input'));
-  currentInputs.forEach((input, i) => {
-    input.value = currentVals[i] ?? 0;
-  });
-
-  // Switch form submit to edit mode
-  formCreate.dataset.mode = 'edit';
-  formCreate.dataset.editId = bar.id;
-
-  openModal(modalCreate);
+  openModal(modalEdit);
 }
 
 
@@ -752,15 +752,12 @@ formCreate.addEventListener("submit", async (e) => {
   
   if (!currentUser) return;
   
-  const isEditMode = formCreate.dataset.mode === 'edit';
-  const editBarId = formCreate.dataset.editId;
-  
   const title = document.getElementById("bar-title").value.trim();
-  const preset = isEditMode ? selectedBar.preset : barPresetSelect.value;
-  const levels = isEditMode ? selectedBar.levels : getLevelsFromForm();
+  const preset = barPresetSelect.value;
+  const levels = getLevelsFromForm();
   
   // Custom Validation
-  if (!isEditMode && preset === "Custom") {
+  if (preset === "Custom") {
     const countSelect = document.getElementById("custom-level-count");
     const count = parseInt(countSelect.value) || 1;
     const l1Name = document.getElementById("custom-l1-name")?.value.trim();
@@ -808,31 +805,6 @@ formCreate.addEventListener("submit", async (e) => {
     return;
   }
   
-  if (isEditMode) {
-    if (selectedBar.currentSmallest > targetSmallest) {
-      showToast("Target goal cannot be less than current progress.", "error");
-      return;
-    }
-    try {
-      closeModal(modalCreate);
-      await editBar(isGuestMode() ? null : currentUser.uid, editBarId, {
-        title,
-        levels: selectedBar.levels,
-        targetSmallest
-      });
-      // Reset form mode
-      formCreate.dataset.mode = '';
-      formCreate.dataset.editId = '';
-      barPresetSelect.disabled = false;
-      document.getElementById('modal-create-title').textContent = 'Create Progress Bar';
-      showToast(`Successfully updated tracker "${title}"!`, "success");
-    } catch (error) {
-      showToast("Failed to edit progress bar.", "error");
-    }
-    return;
-  }
-  
-  // NOT isEditMode (existing createBar flow)
   const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
   const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
   const currentSmallest = encodeToSmallest(currentValsReversed, levels);
@@ -867,6 +839,48 @@ formCreate.addEventListener("submit", async (e) => {
     showToast(`Successfully created progress bar "${title}"!`, "success");
   } catch (error) {
     showToast("Failed to create progress bar. Try again later.", "error");
+  }
+});
+
+// Edit Form Submit
+formEdit.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  
+  if (!currentUser || !selectedBar) return;
+  
+  const title = document.getElementById("edit-bar-title").value.trim();
+  const preset = selectedBar.preset;
+  const levels = selectedBar.levels;
+  
+  // Fetch form values in largest-to-smallest order
+  const targetInputs = Array.from(editTargetDynamic.querySelectorAll(".target-val-input"));
+  const isTimePres = (preset === 'Time');
+  const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+  
+  // Compute smallest unit totals
+  const targetSmallest = encodeToSmallest(targetValsReversed, levels);
+  
+  // Simple validation
+  if (targetSmallest <= 0) {
+    showToast("Target goal must be greater than 0.", "error");
+    return;
+  }
+  
+  if (selectedBar.currentSmallest > targetSmallest) {
+    showToast("Target goal cannot be less than current progress.", "error");
+    return;
+  }
+  
+  try {
+    closeModal(modalEdit);
+    await editBar(isGuestMode() ? null : currentUser.uid, selectedBar.id, {
+      title,
+      levels: selectedBar.levels,
+      targetSmallest
+    });
+    showToast(`Successfully updated tracker "${title}"!`, "success");
+  } catch (error) {
+    showToast("Failed to edit progress bar.", "error");
   }
 });
 
