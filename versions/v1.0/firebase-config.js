@@ -1,4 +1,4 @@
-// firebase-config.template.js
+// firebase-config.js
 // Copy this file to "firebase-config.js" and fill in your own Firebase project configuration details.
 
 const firebaseConfig = {
@@ -15,8 +15,21 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+let app, auth, db;
 
-export { auth, db };
+const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+if (isConfigured) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (error) {
+    console.error("Firebase initialization failed:", error);
+  }
+} else {
+  console.warn("Firebase is not configured yet. Please update firebase-config.js with your keys.");
+}
+
+export { auth, db, isConfigured };
+
