@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProgressShelf - Track everything. One bar at a time.</title>
+  <meta name="description" content="ProgressShelf is your personal progress tracking dashboard. Track your habits, courses, readings, or custom goals, one animated progress bar at a time.">
+  <link rel="stylesheet" href="index.css?v=1.1">
+</head>
+<body>
+
+  <!-- Configuration Warning Banner (Dynamic) -->
+  <div id="config-banner" class="config-warning-banner hidden">
+    <span>⚠️ <strong>Firebase Configuration Required:</strong> Copy <code>firebase-config.template.js</code> to <code>firebase-config.js</code> and fill in your project credentials to get started. Alternatively, you can use the local sandbox.</span>
+  </div>
+
+  <main class="landing-container">
+    <div class="landing-card">
+      <div class="logo-container">
+        <span class="logo-icon">📊</span>
+        <h1 class="logo-text">ProgressShelf</h1>
+      </div>
+      <p class="landing-tagline">Track everything. One bar at a time.</p>
+
+      <div class="auth-options">
+        <button id="btn-google-login" class="btn-google">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20" />
+          Sign in with Google
+        </button>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <button id="btn-guest" class="btn-guest">
+          Continue without login
+        </button>
+
+        <p class="auth-hint">
+          <span class="hint-login">Sign in to sync across devices and store on cloud.</span><br/>
+          <span class="hint-guest">Guest mode stays in this browser only.</span>
+        </p>
+      </div>
+      
+      <p id="error-message" style="color: var(--error); margin-top: 16px; font-size: 0.9rem;" class="hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { isConfigured } from "./firebase-config.js";
+    import { loginWithGoogle, initAuthProtection, enterGuestMode } from "./auth.js";
+
+    const configBanner = document.getElementById("config-banner");
+    const googleLoginBtn = document.getElementById("btn-google-login");
+    const guestBtn = document.getElementById("btn-guest");
+    const errorMsg = document.getElementById("error-message");
+
+    // Initialize Auth listener to redirect if user is already logged in
+    if (isConfigured) {
+      initAuthProtection();
+    } else {
+      // Show setup warning if configuration file is missing/dummy
+      configBanner.classList.remove("hidden");
+    }
+
+    // Display any redirect errors
+    const savedError = sessionStorage.getItem("auth_error");
+    if (savedError) {
+      errorMsg.textContent = savedError;
+      errorMsg.classList.remove("hidden");
+      sessionStorage.removeItem("auth_error");
+    }
+
+    // Handle Google Login Button Trigger
+    googleLoginBtn.addEventListener("click", async () => {
+      errorMsg.classList.add("hidden");
+      googleLoginBtn.style.pointerEvents = "none";
+      const originalHtml = googleLoginBtn.innerHTML;
+      googleLoginBtn.innerHTML = "Signing in...";
+      
+      try {
+        await loginWithGoogle();
+        // Redirect is handled by onAuthStateChanged / initAuthProtection in auth.js
+      } catch (error) {
+        console.error(error);
+        errorMsg.textContent = error.message || "Failed to authenticate. Please try again.";
+        errorMsg.classList.remove("hidden");
+        googleLoginBtn.style.pointerEvents = "all";
+        googleLoginBtn.innerHTML = originalHtml;
+      }
+    });
+
+    // Handle Guest Button Trigger
+    guestBtn.addEventListener("click", () => {
+      enterGuestMode();
+    });
+  </script>
+</body>
+</html>

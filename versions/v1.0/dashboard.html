@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProgressShelf Dashboard</title>
+  <link rel="stylesheet" href="index.css?v=1.1">
+</head>
+<body>
+
+  <!-- Fullscreen Initial loading overlay to prevent flash of content -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="skeleton-percent" style="animation: skeletonPulse 1s infinite; width: 60px; height: 60px; border-radius: 50%;"></div>
+  </div>
+
+  <!-- Main App Wrapper (initially hidden) -->
+  <div id="app-content" class="hidden">
+    
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="nav-container">
+        <a class="nav-logo" href="#">
+          <span class="nav-logo-icon">📊</span>
+          <span class="nav-logo-text">ProgressShelf</span>
+        </a>
+        <div class="nav-profile">
+          <div class="version-selector">
+            <select class="version-select" onchange="location = this.value;">
+              <option value="../../dashboard.html">v2.0 (Latest)</option>
+              <option value="" disabled selected>v1.0 (Basic)</option>
+            </select>
+          </div>
+          <div class="user-info">
+            <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
+            <span id="user-name" class="user-name">Loading...</span>
+          </div>
+          <button id="btn-logout" class="btn-logout">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <div id="guest-banner" class="guest-banner" style="display:none;">
+      <span>
+        You're in guest mode — data stays in this browser only.
+      </span>
+      <button id="btn-banner-login" class="btn-banner-login">
+        Sign in to sync
+      </button>
+    </div>
+
+    <!-- Main Dashboard Section -->
+    <main class="dashboard-main">
+      <!-- Grid Container -->
+      <div id="cards-grid" class="cards-grid">
+        <!-- Skeleton Cards (Shown while loading Firestore) -->
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- CREATE BAR MODAL -->
+    <div id="modal-create" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 id="modal-create-title" class="modal-title">Create Progress Bar</h2>
+          <button class="btn-close-modal" data-close="modal-create">&times;</button>
+        </div>
+        <form id="form-create">
+          <div class="modal-body">
+            
+            <!-- Title -->
+            <div class="form-group">
+              <label class="form-label" for="bar-title">Title</label>
+              <input class="form-input" type="text" id="bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50">
+            </div>
+
+            <!-- Preset -->
+            <div class="form-group">
+              <label class="form-label" for="bar-preset">Preset Unit Type</label>
+              <select class="form-input" id="bar-preset" required>
+                <option value="">Select a type...</option>
+                <option value="Lectures">Lectures</option>
+                <option value="Videos">Videos</option>
+                <option value="Problems">Problems</option>
+                <option value="Tasks">Tasks</option>
+                <option value="Pages">Pages</option>
+                <option value="Books">Books</option>
+                <option value="Chapters">Chapters</option>
+                <option value="Time">Time (hrs / min / sec)</option>
+                <option value="Custom">Custom</option>
+              </select>
+            </div>
+
+            <!-- Pre-filled conversions and custom levels -->
+            <div id="create-presets-dynamic">
+              <!-- Dynamically populated fields for Chapters ratio or Custom configuration -->
+            </div>
+
+            <!-- Target values -->
+            <div class="form-group">
+              <label class="form-label">Target Goal</label>
+              <div id="create-target-dynamic" class="form-row">
+                <!-- Dynamically populated inputs per level -->
+              </div>
+            </div>
+
+            <!-- Current progress values -->
+            <div class="form-group">
+              <label class="form-label">Current Progress</label>
+              <div id="create-current-dynamic" class="form-row">
+                <!-- Dynamically populated inputs per level -->
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-create">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Bar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- UPDATE PROGRESS MODAL -->
+    <div id="modal-update" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 id="update-modal-title" class="modal-title">Update Progress</h2>
+          <button class="btn-close-modal" data-close="modal-update">&times;</button>
+        </div>
+        <form id="form-update">
+          <input type="hidden" id="update-bar-id">
+          <div class="modal-body">
+            
+            <!-- Current values editor -->
+            <p class="section-label">Current Progress Value</p>
+            <div id="update-current-dynamic">
+              <!-- Dynamically populated inputs per level (Single-level or Multi-level) -->
+            </div>
+
+            <!-- Safety Delete Confirmation Pane (collapsible / dynamic) -->
+            <div id="delete-safety-pane" class="delete-safety-panel hidden">
+              <span class="delete-safety-text">⚠️ Are you sure you want to delete this progress bar? This action is permanent.</span>
+              <div class="delete-safety-actions">
+                <button type="button" id="btn-delete-confirm-no" class="btn btn-secondary">No, Keep It</button>
+                <button type="button" id="btn-delete-confirm-yes" class="btn btn-danger-confirm">Yes, Delete</button>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <!-- Normal action footer -->
+            <div id="update-actions-standard" style="display: flex; justify-content: space-between; width: 100%;">
+              <button type="button" id="btn-delete-trigger" class="btn btn-danger btn-delete">Delete</button>
+              <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn btn-secondary btn-cancel" data-close="modal-update">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-save">Save Progress</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Application Logic -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

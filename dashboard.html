@@ -27,6 +27,12 @@
           <span class="nav-logo-text">ProgressShelf</span>
         </a>
         <div class="nav-profile">
+          <div class="version-selector">
+            <select class="version-select" onchange="location = this.value;">
+              <option value="" disabled selected>v2.0 (Latest)</option>
+              <option value="versions/v1.0/dashboard.html">v1.0 (Basic)</option>
+            </select>
+          </div>
           <div class="user-info">
             <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
             <span id="user-name" class="user-name">Loading...</span>
