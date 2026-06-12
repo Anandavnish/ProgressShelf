@@ -1,16 +1,16 @@
 // db.js
 import { db, isConfigured } from "./firebase-config.js";
 import { isGuestMode } from "./auth.js";
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Helper to get/set local storage bars for Sandbox mode
@@ -51,17 +51,17 @@ export function subscribeToBars(uid, onUpdate, onError) {
     setTimeout(() => {
       onUpdate(getLocalBars());
     }, 100);
-    
+
     // Return unsubscribe callback
     return () => {
       mockListeners = mockListeners.filter(l => l !== onUpdate);
     };
   }
-  
+
   try {
     const barsRef = collection(db, "users", uid, "bars");
     const q = query(barsRef, orderBy("createdAt", "asc"));
-    
+
     return onSnapshot(q, (snapshot) => {
       const bars = [];
       snapshot.forEach((doc) => {
@@ -78,7 +78,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
   } catch (error) {
     console.error("Failed to setup Firestore subscription:", error);
     if (onError) onError(error);
-    return () => {};
+    return () => { };
   }
 }
 
@@ -88,27 +88,31 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, preset, levels, targetSmallest, currentSmallest }) {
+export async function createBar(uid, { title, preset, levels, targetSmallest, currentSmallest, deadlineAt, deadlineSetAt }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
+    const now = Date.now();
     const newBar = {
-      id: "bar_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+      id: "bar_" + now + "_" + Math.random().toString(36).substr(2, 9),
       title,
       preset,
       levels,
       targetSmallest: Number(targetSmallest),
       currentSmallest: Number(currentSmallest),
-      createdAt: Date.now(),
-      lastUpdated: Date.now()
+      createdAt: now,
+      lastUpdated: now,
+      deadlineAt: deadlineAt || null,
+      deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null
     };
     bars.push(newBar);
     setLocalBars(bars);
     triggerMockUpdate();
     return newBar.id;
   }
-  
+
   try {
     const barsRef = collection(db, "users", uid, "bars");
+    const now = new Date();
     const docRef = await addDoc(barsRef, {
       title,
       preset,
@@ -116,7 +120,9 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
       targetSmallest: Number(targetSmallest),
       currentSmallest: Number(currentSmallest),
       createdAt: serverTimestamp(),
-      lastUpdated: serverTimestamp()
+      lastUpdated: serverTimestamp(),
+      deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
+      deadlineSetAt: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt) : now) : null
     });
     return docRef.id;
   } catch (error) {
@@ -145,7 +151,7 @@ export async function updateBarProgress(uid, barId, currentSmallest) {
     }
     return;
   }
-  
+
   try {
     const barDocRef = doc(db, "users", uid, "bars", barId);
     await updateDoc(barDocRef, {
@@ -170,7 +176,7 @@ export async function deleteBar(uid, barId) {
     triggerMockUpdate();
     return;
   }
-  
+
   try {
     const barDocRef = doc(db, "users", uid, "bars", barId);
     await deleteDoc(barDocRef);
@@ -181,18 +187,35 @@ export async function deleteBar(uid, barId) {
 }
 
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest
+  title, levels, targetSmallest, currentSmallest, deadlineAt, updateDeadline
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const idx = bars.findIndex(b => b.id === barId);
     if (idx !== -1) {
+      const original = bars[idx];
+      let newDeadlineAt = original.deadlineAt;
+      let newDeadlineSetAt = original.deadlineSetAt;
+
+      if (updateDeadline) {
+        if (deadlineAt) {
+          newDeadlineAt = deadlineAt;
+          newDeadlineSetAt = Date.now();
+        } else {
+          newDeadlineAt = null;
+          newDeadlineSetAt = null;
+        }
+      }
+
       bars[idx] = {
-        ...bars[idx],
+        ...original,
         title,
         levels,
         targetSmallest: Number(targetSmallest),
-        lastUpdated: Date.now()
+        currentSmallest: Number(currentSmallest),
+        lastUpdated: Date.now(),
+        deadlineAt: newDeadlineAt,
+        deadlineSetAt: newDeadlineSetAt
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -202,15 +225,31 @@ export async function editBar(uid, barId, {
 
   try {
     const barDocRef = doc(db, "users", uid, "bars", barId);
-    await updateDoc(barDocRef, {
+    const now = new Date();
+    
+    const updates = {
       title,
       levels,
       targetSmallest: Number(targetSmallest),
+      currentSmallest: Number(currentSmallest),
       lastUpdated: serverTimestamp()
-    });
+    };
+
+    if (updateDeadline) {
+      if (deadlineAt) {
+        updates.deadlineAt = new Date(deadlineAt);
+        updates.deadlineSetAt = now;
+      } else {
+        updates.deadlineAt = null;
+        updates.deadlineSetAt = null;
+      }
+    }
+
+    await updateDoc(barDocRef, updates);
   } catch (error) {
     console.error("Error editing bar:", error);
     throw error;
   }
 }
+
 

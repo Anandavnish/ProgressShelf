@@ -110,19 +110,55 @@
               <!-- Dynamically populated fields for Chapters ratio or Custom configuration -->
             </div>
 
-            <!-- Target values -->
-            <div class="form-group">
-              <label class="form-label">Target Goal</label>
-              <div id="create-target-dynamic" class="form-row">
-                <!-- Dynamically populated inputs per level -->
+            <!-- Target & Current values wrapper -->
+            <div class="form-row-group-wrapper" id="create-values-wrapper">
+              <!-- Target values -->
+              <div class="form-group">
+                <label class="form-label">Target Goal</label>
+                <div id="create-target-dynamic" class="form-row">
+                  <!-- Dynamically populated inputs per level -->
+                </div>
+              </div>
+
+              <!-- Current progress values -->
+              <div class="form-group">
+                <label class="form-label">Current Progress</label>
+                <div id="create-current-dynamic" class="form-row">
+                  <!-- Dynamically populated inputs per level -->
+                </div>
               </div>
             </div>
 
-            <!-- Current progress values -->
-            <div class="form-group">
-              <label class="form-label">Current Progress</label>
-              <div id="create-current-dynamic" class="form-row">
-                <!-- Dynamically populated inputs per level -->
+            <!-- Deadline selection (optional) -->
+            <div class="form-group" id="deadline-group">
+              <label class="form-label">
+                Deadline
+                <span class="form-label-optional">(optional)</span>
+              </label>
+
+              <!-- Method 2: Relative duration from now -->
+              <div class="deadline-relative">
+                <span class="deadline-way-label">From now</span>
+                <div class="deadline-relative-inputs">
+                  <input type="number" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH">
+                  <span class="deadline-sep">hrs</span>
+                  <input type="number" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM">
+                  <span class="deadline-sep">min</span>
+                </div>
+              </div>
+
+              <!-- Or divider -->
+              <div class="deadline-or-divider">
+                <span>or</span>
+              </div>
+
+              <!-- Method 1: Specific date and time -->
+              <div class="deadline-absolute">
+                <span class="deadline-way-label">Specific date &amp; time</span>
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input" id="deadline-date">
+                  <input type="time" class="form-input" id="deadline-time">
+                </div>
               </div>
             </div>
 
@@ -170,11 +206,61 @@
               </select>
             </div>
 
-            <!-- Target values -->
-            <div class="form-group">
-              <label class="form-label">Target Goal</label>
-              <div id="edit-target-dynamic" class="form-row">
-                <!-- Dynamically populated inputs per level -->
+            <!-- Target & Current values wrapper -->
+            <div class="form-row-group-wrapper" id="edit-values-wrapper">
+              <!-- Target values -->
+              <div class="form-group">
+                <label class="form-label">Target Goal</label>
+                <div id="edit-target-dynamic" class="form-row">
+                  <!-- Dynamically populated inputs per level -->
+                </div>
+              </div>
+
+              <!-- Current progress values -->
+              <div class="form-group">
+                <label class="form-label">Current Progress</label>
+                <div id="edit-current-dynamic" class="form-row">
+                  <!-- Dynamically populated inputs per level -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Deadline selection (optional) -->
+            <div class="form-group" id="edit-deadline-group">
+              <label class="form-label">
+                Deadline
+                <span class="form-label-optional">(optional)</span>
+              </label>
+
+              <!-- Method 2: Relative duration from now -->
+              <div class="deadline-relative">
+                <span class="deadline-way-label">From now</span>
+                <div class="deadline-relative-inputs">
+                  <input type="number" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH">
+                  <span class="deadline-sep">hrs</span>
+                  <input type="number" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM">
+                  <span class="deadline-sep">min</span>
+                </div>
+              </div>
+
+              <!-- Or divider -->
+              <div class="deadline-or-divider">
+                <span>or</span>
+              </div>
+
+              <!-- Method 1: Specific date and time -->
+              <div class="deadline-absolute">
+                <span class="deadline-way-label">Specific date &amp; time</span>
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input" id="edit-deadline-date">
+                  <input type="time" class="form-input" id="edit-deadline-time">
+                </div>
+              </div>
+
+              <!-- Remove deadline checkbox -->
+              <div class="deadline-clear-row" style="margin-top: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="edit-deadline-clear" style="cursor: pointer;">
+                <label for="edit-deadline-clear" style="cursor: pointer; color: var(--text-muted);">Remove existing deadline</label>
               </div>
             </div>
 
