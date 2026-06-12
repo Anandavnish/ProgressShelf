@@ -355,6 +355,13 @@ body {
   background-color: rgba(255, 77, 77, 0.05);
 }
 
+.nav-actions-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
 .version-selector {
   display: flex;
   align-items: center;
