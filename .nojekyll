@@ -1,0 +1,1 @@
+# Bypass Jekyll processing on GitHub Pages to prevent build failures and 404s on subdirectories
