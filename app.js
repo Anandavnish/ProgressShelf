@@ -252,7 +252,21 @@ function formatNumber(value) {
 
 function formatTimeLeft(deadlineMs) {
   const ms = deadlineMs - Date.now();
-  if (ms <= 0) return "Overdue";
+  if (ms <= 0) {
+    const overdueMs = Date.now() - deadlineMs;
+    const totalMin  = Math.floor(overdueMs / 60000);
+    const totalHrs  = Math.floor(totalMin / 60);
+    const totalDays = Math.floor(totalHrs / 24);
+    const weeks     = Math.floor(totalDays / 7);
+    const days      = totalDays % 7;
+    const hrs       = totalHrs % 24;
+    const mins      = totalMin % 60;
+
+    if (weeks >= 1) return `Overdue by ${weeks}w ${days}d`;
+    if (totalDays >= 1) return `Overdue by ${totalDays}d ${hrs}hr`;
+    if (totalHrs  >= 1) return `Overdue by ${hrs}hr ${mins}min`;
+    return `Overdue by ${mins}min`;
+  }
   const totalSec  = Math.floor(ms / 1000);
   const totalMin  = Math.floor(totalSec / 60);
   const totalHrs  = Math.floor(totalMin / 60);
@@ -337,6 +351,13 @@ function decodeFromSmallest(smallest, levels) {
   return vals.reverse();
 }
 
+function getUnitName(name) {
+  if (name === "Hours") return "hr";
+  if (name === "Minutes") return "min";
+  if (name === "Seconds") return "sec";
+  return name;
+}
+
 function formatCurrentProgress(current, levels) {
   const vals = decodeFromSmallest(current, levels); // largest-to-smallest
   const reversedLevels = [...levels].reverse(); // largest-to-smallest
@@ -353,23 +374,23 @@ function formatCurrentProgress(current, levels) {
   
   // If all values are 0
   if (firstIdx === -1) {
-    return `${formatNumber(0)} ${levels[0].name}`;
+    return `${formatNumber(0)} ${getUnitName(levels[0].name)}`;
   }
   
   const parts = [];
   for (let i = firstIdx; i <= lastIdx; i++) {
-    parts.push(`${formatNumber(vals[i])} ${reversedLevels[i].name}`);
+    parts.push(`${formatNumber(vals[i])} ${getUnitName(reversedLevels[i].name)}`);
   }
   return parts.join(' ');
 }
 
 function formatCardLabel(current, target, levels) {
   if (levels.length === 1) {
-    return `${formatNumber(current)} / ${formatNumber(target)} ${levels[0].name}`;
+    return `${formatNumber(current)} / ${formatNumber(target)} ${getUnitName(levels[0].name)}`;
   } else {
     const reversedLevels = [...levels].reverse();
     const targetVals = decodeFromSmallest(target, levels);
-    const targetStr = targetVals.map((val, idx) => `${formatNumber(val)} ${reversedLevels[idx].name}`).join(' ');
+    const targetStr = targetVals.map((val, idx) => `${formatNumber(val)} ${getUnitName(reversedLevels[idx].name)}`).join(' ');
     const currentStr = formatCurrentProgress(current, levels);
     return `${currentStr} / ${targetStr}`;
   }
@@ -554,7 +575,7 @@ setInterval(() => {
         
         const text = formatTimeLeft(deadlineMs);
         valSpan.innerHTML = `⏱ ${text}`;
-        if (text === "Overdue") {
+        if (text.startsWith("Overdue")) {
           labelEl.classList.add("overdue");
         } else {
           labelEl.classList.remove("overdue");
