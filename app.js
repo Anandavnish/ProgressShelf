@@ -10,6 +10,15 @@ const cardsGrid = document.getElementById("cards-grid");
 const btnLogout = document.getElementById("btn-logout");
 const userAvatar = document.getElementById("user-avatar");
 const userName = document.getElementById("user-name");
+const btnProfileBadge = document.getElementById("btn-profile-badge");
+const profileDropdown = document.getElementById("profile-dropdown");
+const userStatus = document.getElementById("user-status");
+const statTotal = document.getElementById("stat-total");
+const statDeadlines = document.getElementById("stat-deadlines");
+const statOverdue = document.getElementById("stat-overdue");
+const statCompleted = document.getElementById("stat-completed");
+const statFlexible = document.getElementById("stat-flexible");
+const statsBanner = document.getElementById("stats-banner");
 
 // Modals
 const modalCreate = document.getElementById("modal-create");
@@ -172,6 +181,7 @@ let currentBars = [];
 let selectedBar = null;
 let activeUnsubscribe = null;
 let authInitialized = false;
+let currentFilter = "all";
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -397,11 +407,150 @@ function formatCardLabel(current, target, levels) {
 }
 
 // ==========================================
+// Dashboard Stats Bar Calculation
+// ==========================================
+function updateOverallStats(bars) {
+  if (!statTotal || !statDeadlines || !statOverdue || !statCompleted || !statFlexible || !statsBanner) return;
+
+  const total = bars.length;
+  let deadlinesCount = 0;
+  let overdueCount = 0;
+  let completedCount = 0;
+  let flexibleCount = 0;
+  const now = Date.now();
+
+  bars.forEach(bar => {
+    const percent = bar.targetSmallest > 0 
+      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+      : 0;
+
+    if (percent >= 100) {
+      completedCount++;
+    } else {
+      const deadlineMs = getDeadlineMs(bar);
+      if (deadlineMs) {
+        if (deadlineMs <= now) {
+          overdueCount++;
+        } else {
+          deadlinesCount++;
+        }
+      } else {
+        flexibleCount++;
+      }
+    }
+  });
+
+  // Update text contents
+  statTotal.textContent = total;
+  statDeadlines.textContent = deadlinesCount;
+  statOverdue.textContent = overdueCount;
+  statCompleted.textContent = completedCount;
+  statFlexible.textContent = flexibleCount;
+
+  // If no cards are available at all, hide the entire stats bar
+  if (total === 0) {
+    statsBanner.classList.add("hidden");
+    return;
+  } else {
+    statsBanner.classList.remove("hidden");
+  }
+
+  // Get buttons and dividers
+  const btnAll = document.getElementById("btn-stat-all");
+  const btnDeadlines = document.getElementById("btn-stat-deadlines");
+  const btnOverdue = document.getElementById("btn-stat-overdue");
+  const btnCompleted = document.getElementById("btn-stat-completed");
+  const btnFlexible = document.getElementById("btn-stat-flexible");
+
+  const divDeadlines = document.getElementById("div-stat-deadlines");
+  const divOverdue = document.getElementById("div-stat-overdue");
+  const divCompleted = document.getElementById("div-stat-completed");
+  const divFlexible = document.getElementById("div-stat-flexible");
+
+  // Helper to toggle visibility of button and its preceding divider
+  function toggleBtn(btn, div, count) {
+    if (!btn) return;
+    if (count > 0) {
+      btn.classList.remove("hidden");
+      if (div) div.classList.remove("hidden");
+    } else {
+      btn.classList.add("hidden");
+      if (div) div.classList.add("hidden");
+    }
+  }
+
+  // All Trackers is always visible if total > 0
+  if (btnAll) btnAll.classList.remove("hidden");
+
+  toggleBtn(btnDeadlines, divDeadlines, deadlinesCount);
+  toggleBtn(btnOverdue, divOverdue, overdueCount);
+  toggleBtn(btnCompleted, divCompleted, completedCount);
+  toggleBtn(btnFlexible, divFlexible, flexibleCount);
+
+  // If the active filter is now hidden, reset to 'all'
+  if (currentFilter === "deadlines" && deadlinesCount === 0) currentFilter = "all";
+  if (currentFilter === "overdue" && overdueCount === 0) currentFilter = "all";
+  if (currentFilter === "completed" && completedCount === 0) currentFilter = "all";
+  if (currentFilter === "flexible" && flexibleCount === 0) currentFilter = "all";
+
+  // Update active class on buttons
+  const buttons = [btnAll, btnDeadlines, btnOverdue, btnCompleted, btnFlexible];
+  buttons.forEach(btn => {
+    if (btn) {
+      if (btn.getAttribute("data-filter") === currentFilter) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    }
+  });
+}
+
+function filterBars(bars) {
+  const now = Date.now();
+  return bars.filter(bar => {
+    const percent = bar.targetSmallest > 0 
+      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+      : 0;
+
+    if (currentFilter === "all") {
+      return true;
+    }
+
+    if (currentFilter === "completed") {
+      return percent >= 100;
+    }
+
+    // Incomplete filters
+    if (percent >= 100) {
+      return false;
+    }
+
+    const deadlineMs = getDeadlineMs(bar);
+
+    if (currentFilter === "deadlines") {
+      return deadlineMs && deadlineMs > now;
+    }
+
+    if (currentFilter === "overdue") {
+      return deadlineMs && deadlineMs <= now;
+    }
+
+    if (currentFilter === "flexible") {
+      return !deadlineMs;
+    }
+
+    return true;
+  });
+}
+
+// ==========================================
 // Dashboard Card Rendering
 // ==========================================
 
 function renderDashboard(bars) {
   currentBars = bars;
+  updateOverallStats(bars);
   cardsGrid.innerHTML = "";
   
   // ADD CARD ALWAYS FIRST
@@ -418,7 +567,7 @@ function renderDashboard(bars) {
 
 
   // THEN render bar cards — newest first (reverse createdAt asc order)
-  [...bars].reverse().forEach((bar) => {
+  filterBars([...bars]).reverse().forEach((bar) => {
     const card = document.createElement("div");
     card.className = "card-progress";
     card.setAttribute("data-bar-id", bar.id);
@@ -583,6 +732,7 @@ setInterval(() => {
       }
     }
   });
+  updateOverallStats(currentBars);
 }, 1000);
 
 // ==========================================
@@ -1347,8 +1497,37 @@ if (btnBannerLogin) {
 }
 
 // ==========================================
-// Authentication Redirection
+// Authentication Redirection & Profile Dropdown
 // ==========================================
+
+// Stats filter button event listeners
+const setupStatsFilterListeners = () => {
+  const filterButtons = document.querySelectorAll(".stats-btn");
+  filterButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const filter = btn.getAttribute("data-filter");
+      if (filter) {
+        currentFilter = filter;
+        renderDashboard(currentBars);
+      }
+    });
+  });
+};
+setupStatsFilterListeners();
+
+// Toggle profile dropdown menu
+btnProfileBadge?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  profileDropdown?.classList.toggle("active");
+});
+
+// Close profile dropdown when clicking outside
+window.addEventListener("click", (e) => {
+  if (profileDropdown && !profileDropdown.contains(e.target) && e.target !== btnProfileBadge) {
+    profileDropdown.classList.remove("active");
+  }
+});
+
 btnLogout.addEventListener("click", async () => {
   try {
     if (isGuestMode()) {
@@ -1415,9 +1594,11 @@ initAuthProtection(async (user) => {
   if (isGuestMode()) {
     userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = "Guest User";
+    if (userStatus) userStatus.textContent = "Guest Sandbox Mode";
   } else {
     userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = user.displayName || "Tracker User";
+    if (userStatus) userStatus.textContent = "Signed In (Cloud)";
   }
   
   // Show application content, hide splash screen

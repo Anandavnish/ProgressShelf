@@ -22,27 +22,146 @@
     <!-- Navbar -->
     <header class="navbar">
       <div class="nav-container">
-        <a class="nav-logo" href="#">
+        <a class="nav-logo" href="dashboard.html">
           <span class="nav-logo-icon">📊</span>
           <span class="nav-logo-text">ProgressShelf</span>
         </a>
-        <div class="nav-profile">
-          <div class="user-info">
-            <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
-            <span id="user-name" class="user-name">Loading...</span>
+        <div class="nav-toolbar">
+          <!-- GitHub Link -->
+          <a class="nav-github-link" href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer" title="View Source on GitHub">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+            </svg>
+          </a>
+          <!-- Version Selector -->
+          <div class="version-selector">
+            <select class="version-select" onchange="location = this.value;">
+              <option value="" disabled selected>v2.0 (Latest)</option>
+              <option value="versions/v1.0/dashboard.html">v1.0 (Basic)</option>
+            </select>
           </div>
-          <div class="nav-actions-vertical">
-            <button id="btn-logout" class="btn-logout">Logout</button>
-            <div class="version-selector">
-              <select class="version-select" onchange="location = this.value;">
-                <option value="" disabled selected>v2.0 (Latest)</option>
-                <option value="versions/v1.0/dashboard.html">v1.0 (Basic)</option>
-              </select>
+          <!-- User Profile Dropdown Container -->
+          <div class="profile-menu-container">
+            <button id="btn-profile-badge" class="profile-badge-btn" title="Account Menu">
+              <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
+            </button>
+            <div id="profile-dropdown" class="profile-dropdown">
+              <div class="dropdown-header">
+                <p id="user-name" class="dropdown-user-name">Loading...</p>
+                <p id="user-status" class="dropdown-user-status">Online Mode</p>
+              </div>
+              <div class="dropdown-divider"></div>
+              <button id="btn-logout" class="dropdown-item btn-logout">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
       </div>
     </header>
+
+    <!-- Overall Stats Bar (3D Glossy Buttons) -->
+    <div id="stats-banner" class="stats-banner hidden">
+      <div class="stats-container">
+        
+        <!-- All Trackers -->
+        <button class="stats-btn active" data-filter="all" id="btn-stat-all">
+          <div class="stats-icon-wrapper val-blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
+              <path d="M8 10h8"/>
+              <path d="M8 14h4"/>
+              <circle cx="18" cy="18" r="4" fill="currentColor" opacity="0.2"/>
+              <path d="M16 18l1.5 1.5L20 16"/>
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-total" class="stats-num">0</span>
+            <span class="stats-label">Trackers</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-deadlines"></div>
+
+        <!-- Active Deadlines -->
+        <button class="stats-btn" data-filter="deadlines" id="btn-stat-deadlines">
+          <div class="stats-icon-wrapper val-orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <circle cx="17" cy="17" r="4" fill="currentColor" opacity="0.2"/>
+              <polyline points="17 15 17 17 18.5 18"/>
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-deadlines" class="stats-num">0</span>
+            <span class="stats-label">Active Deadlines</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-overdue"></div>
+
+        <!-- Overdue -->
+        <button class="stats-btn" data-filter="overdue" id="btn-stat-overdue">
+          <div class="stats-icon-wrapper val-red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="13" r="8"/>
+              <path d="M5 3L2 6"/>
+              <path d="M19 3l3 3"/>
+              <path d="M12 9v4"/>
+              <path d="M12 16h.01" stroke-width="3"/>
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-overdue" class="stats-num">0</span>
+            <span class="stats-label">Overdue</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-completed"></div>
+
+        <!-- Completed -->
+        <button class="stats-btn" data-filter="completed" id="btn-stat-completed">
+          <div class="stats-icon-wrapper val-green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M8 12l3 3 5-5"/>
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-completed" class="stats-num">0</span>
+            <span class="stats-label">Completed</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-flexible"></div>
+
+        <!-- Flexible Goals (Without Deadlines) -->
+        <button class="stats-btn" data-filter="flexible" id="btn-stat-flexible">
+          <div class="stats-icon-wrapper val-purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2"/>
+              <path d="M12 2v2m0 16v2m-10-10h2m16 0h2"/>
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-flexible" class="stats-num">0</span>
+            <span class="stats-label">Flexible Goals</span>
+          </div>
+        </button>
+
+      </div>
+    </div>
+
 
     <div id="guest-banner" class="guest-banner" style="display:none;">
       <span>
