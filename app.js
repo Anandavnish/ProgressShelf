@@ -59,8 +59,8 @@ const btnBannerLogin = document.getElementById("btn-banner-login");
 
 const deadlineResizeObserver = new ResizeObserver(entries => {
   entries.forEach(entry => {
-    const card    = entry.target;
-    const barEl   = card.querySelector('.deadline-bar');
+    const card = entry.target;
+    const barEl = card.querySelector('.deadline-bar');
     const trackEl = card.querySelector('.deadline-track');
     if (!barEl || !trackEl) return;
     resizeDeadlineSVG(card, barEl, trackEl);
@@ -75,20 +75,20 @@ function getDeadlineMs(bar) {
 }
 
 function applyDeadlineTick(barEl) {
-  const deadlineMs   = Number(barEl.dataset.deadlineMs);
+  const deadlineMs = Number(barEl.dataset.deadlineMs);
   const deadlineSetMs = Number(barEl.dataset.deadlineSetMs);
-  const perimeter     = Number(barEl.dataset.perimeter);
+  const perimeter = Number(barEl.dataset.perimeter);
   if (!perimeter) return;
-  
-  const total       = deadlineMs - deadlineSetMs;
-  const timeLeft    = deadlineMs - Date.now();
+
+  const total = deadlineMs - deadlineSetMs;
+  const timeLeft = deadlineMs - Date.now();
   const percentLeft = total > 0
     ? Math.max(0, Math.min(100, (timeLeft / total) * 100))
     : 0;
-    
-  barEl.setAttribute('stroke-dasharray',  perimeter);
+
+  barEl.setAttribute('stroke-dasharray', perimeter);
   barEl.setAttribute('stroke-dashoffset', perimeter - (perimeter * percentLeft / 100));
-  
+
   if (timeLeft <= 0) {
     barEl.setAttribute('stroke', '#E74C3C');
     barEl.classList.add('deadline-overdue');
@@ -102,39 +102,39 @@ function resizeDeadlineSVG(card, barEl, trackEl) {
   const w = card.clientWidth;
   const h = card.clientHeight;
   if (!w || !h) return;
-  
+
   const strokeWidth = 5;
   const pad = strokeWidth / 2; // 2.5px padding so centered stroke is inward
   const rx = 12 - pad; // 9.5px rounded corners to match 12px card border radius
-  const perimeter = 2 * ((w - pad*2) + (h - pad*2));
-  
+  const perimeter = 2 * ((w - pad * 2) + (h - pad * 2));
+
   const svg = card.querySelector('.deadline-svg');
   if (svg) {
     Object.assign(svg.style, {
-      position     : 'absolute',
-      top          : '0',
-      left         : '0',
-      width        : '100%',
-      height       : '100%',
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: '100%',
+      height: '100%',
       pointerEvents: 'none',
-      overflow     : 'hidden',
-      zIndex       : '0',
-      transform    : 'scaleX(-1)' // Clockwise drain
+      overflow: 'hidden',
+      zIndex: '0',
+      transform: 'scaleX(-1)' // Clockwise drain
     });
   }
-  
+
   [barEl, trackEl].forEach(el => {
-    el.setAttribute('x',      pad);
-    el.setAttribute('y',      pad);
-    el.setAttribute('width',  w - pad*2);
-    el.setAttribute('height', h - pad*2);
-    el.setAttribute('rx',     rx);
-    el.setAttribute('fill',   'none');
+    el.setAttribute('x', pad);
+    el.setAttribute('y', pad);
+    el.setAttribute('width', w - pad * 2);
+    el.setAttribute('height', h - pad * 2);
+    el.setAttribute('rx', rx);
+    el.setAttribute('fill', 'none');
   });
-  
-  trackEl.setAttribute('stroke',       'rgba(255,255,255,0.07)');
+
+  trackEl.setAttribute('stroke', 'rgba(255,255,255,0.07)');
   trackEl.setAttribute('stroke-width', strokeWidth);
-  barEl.setAttribute('stroke-width',   strokeWidth);
+  barEl.setAttribute('stroke-width', strokeWidth);
   barEl.setAttribute('stroke-linecap', 'round');
   barEl.dataset.perimeter = perimeter;
   applyDeadlineTick(barEl);
@@ -144,33 +144,33 @@ function attachDeadlineBorder(card, bar) {
   card.querySelector('.deadline-svg')?.remove();
   const deadlineMs = getDeadlineMs(bar);
   if (!deadlineMs) return;
-  
+
   let deadlineSetMs = typeof bar.deadlineSetAt?.toDate === 'function'
     ? bar.deadlineSetAt.toDate().getTime()
     : (Number(bar.deadlineSetAt) || null);
-    
+
   if (!deadlineSetMs) {
     deadlineSetMs = typeof bar.createdAt?.toDate === 'function'
       ? bar.createdAt.toDate().getTime()
       : (Number(bar.createdAt) || Date.now());
   }
-    
+
   const svgNS = 'http://www.w3.org/2000/svg';
-  const svg   = document.createElementNS(svgNS, 'svg');
+  const svg = document.createElementNS(svgNS, 'svg');
   svg.classList.add('deadline-svg');
-  
+
   const track = document.createElementNS(svgNS, 'rect');
   track.classList.add('deadline-track');
-  
+
   const barEl = document.createElementNS(svgNS, 'rect');
   barEl.classList.add('deadline-bar');
   barEl.dataset.deadlineMs = deadlineMs;
   barEl.dataset.deadlineSetMs = deadlineSetMs;
-  
+
   svg.appendChild(track);
   svg.appendChild(barEl);
   card.appendChild(svg);
-  
+
   resizeDeadlineSVG(card, barEl, track);
   deadlineResizeObserver.observe(card);
 }
@@ -194,17 +194,17 @@ function startSubscription(uid, onUpdate, onError) {
 
 const PRESETS = {
   Lectures: { levels: [{ name: 'Lectures', conversionToNext: null }] },
-  Videos:   { levels: [{ name: 'Videos',   conversionToNext: null }] },
+  Videos: { levels: [{ name: 'Videos', conversionToNext: null }] },
   Problems: { levels: [{ name: 'Problems', conversionToNext: null }] },
-  Tasks:    { levels: [{ name: 'Tasks',    conversionToNext: null }] },
-  Pages:    { levels: [{ name: 'Pages',    conversionToNext: null }] },
-  Books:    { levels: [{ name: 'Books',    conversionToNext: null }] },
+  Tasks: { levels: [{ name: 'Tasks', conversionToNext: null }] },
+  Pages: { levels: [{ name: 'Pages', conversionToNext: null }] },
+  Books: { levels: [{ name: 'Books', conversionToNext: null }] },
   Chapters: { levels: [{ name: 'Chapters', conversionToNext: null }] },
   Time: {
     levels: [
       { name: 'Seconds', conversionToNext: 60 },
       { name: 'Minutes', conversionToNext: 60 },
-      { name: 'Hours',   conversionToNext: null }
+      { name: 'Hours', conversionToNext: null }
     ]
   },
   Custom: null
@@ -216,19 +216,19 @@ const PRESETS = {
 function showToast(message, type = "info") {
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
-  
+
   toast.innerHTML = `
     <span class="toast-message">${escapeHtml(message)}</span>
     <button class="btn-close-toast">&times;</button>
   `;
-  
+
   toastContainer.appendChild(toast);
-  
+
   // Close button trigger
   toast.querySelector(".btn-close-toast").addEventListener("click", () => {
     dismissToast(toast);
   });
-  
+
   // Auto-dismiss after 4 seconds
   setTimeout(() => {
     dismissToast(toast);
@@ -264,29 +264,29 @@ function formatTimeLeft(deadlineMs) {
   const ms = deadlineMs - Date.now();
   if (ms <= 0) {
     const overdueMs = Date.now() - deadlineMs;
-    const totalMin  = Math.floor(overdueMs / 60000);
-    const totalHrs  = Math.floor(totalMin / 60);
+    const totalMin = Math.floor(overdueMs / 60000);
+    const totalHrs = Math.floor(totalMin / 60);
     const totalDays = Math.floor(totalHrs / 24);
-    const weeks     = Math.floor(totalDays / 7);
-    const days      = totalDays % 7;
-    const hrs       = totalHrs % 24;
-    const mins      = totalMin % 60;
+    const weeks = Math.floor(totalDays / 7);
+    const days = totalDays % 7;
+    const hrs = totalHrs % 24;
+    const mins = totalMin % 60;
 
     if (weeks >= 1) return `Overdue by ${weeks}w ${days}d`;
     if (totalDays >= 1) return `Overdue by ${totalDays}d ${hrs}hr`;
-    if (totalHrs  >= 1) return `Overdue by ${hrs}hr ${mins}min`;
+    if (totalHrs >= 1) return `Overdue by ${hrs}hr ${mins}min`;
     return `Overdue by ${mins}min`;
   }
-  const totalSec  = Math.floor(ms / 1000);
-  const totalMin  = Math.floor(totalSec / 60);
-  const totalHrs  = Math.floor(totalMin / 60);
+  const totalSec = Math.floor(ms / 1000);
+  const totalMin = Math.floor(totalSec / 60);
+  const totalHrs = Math.floor(totalMin / 60);
   const totalDays = Math.floor(totalHrs / 24);
-  const weeks     = Math.floor(totalDays / 7);
-  const days      = totalDays % 7;
-  const hrs       = totalHrs % 24;
-  const mins      = totalMin % 60;
-  const secs      = totalSec % 60;
-  
+  const weeks = Math.floor(totalDays / 7);
+  const days = totalDays % 7;
+  const hrs = totalHrs % 24;
+  const mins = totalMin % 60;
+  const secs = totalSec % 60;
+
   if (weeks >= 2) {
     return `${weeks} weeks ${days} days left`;
   }
@@ -312,16 +312,16 @@ function formatTimeLeft(deadlineMs) {
  */
 function getProgressColor(percent) {
   const p = Math.max(0, Math.min(100, percent)) / 100;
-  
+
   // Blue: rgb(74, 144, 217)
   const rStart = 74, gStart = 144, bStart = 217;
   // Green: rgb(39, 174, 96)
   const rEnd = 39, gEnd = 174, bEnd = 96;
-  
+
   const r = Math.round(rStart + (rEnd - rStart) * p);
   const g = Math.round(gStart + (gEnd - gStart) * p);
   const b = Math.round(bStart + (bEnd - bStart) * p);
-  
+
   return `rgb(${r}, ${g}, ${b})`;
 }
 
@@ -330,7 +330,7 @@ function encodeToSmallest(levelValues, levels) {
   // levels: array ordered smallest→largest (matches Firestore schema)
   // Reverse levelValues to align with levels array
   const vals = [...levelValues].reverse();
-  
+
   let smallest = 0;
   let multiplier = 1;
   for (let i = 0; i < levels.length; i++) {
@@ -373,7 +373,7 @@ function formatCurrentProgress(current, levels) {
   const safeLevels = (levels && levels.length) ? levels : [{ name: 'Units', conversionToNext: null }];
   const vals = decodeFromSmallest(current, safeLevels); // largest-to-smallest
   const reversedLevels = [...safeLevels].reverse(); // largest-to-smallest
-  
+
   // Find first and last non-zero index
   let firstIdx = -1;
   let lastIdx = -1;
@@ -383,12 +383,12 @@ function formatCurrentProgress(current, levels) {
       lastIdx = i;
     }
   }
-  
+
   // If all values are 0
   if (firstIdx === -1) {
     return `${formatNumber(0)} ${getUnitName(safeLevels[0].name)}`;
   }
-  
+
   const parts = [];
   for (let i = firstIdx; i <= lastIdx; i++) {
     parts.push(`${formatNumber(vals[i])} ${getUnitName(reversedLevels[i].name)}`);
@@ -423,7 +423,7 @@ function updateOverallStats(bars) {
   const now = Date.now();
 
   bars.forEach(bar => {
-    const percent = bar.targetSmallest > 0 
+    const percent = bar.targetSmallest > 0
       ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
       : 0;
 
@@ -519,7 +519,7 @@ function filterBars(bars) {
       return false;
     }
 
-    const percent = bar.targetSmallest > 0 
+    const percent = bar.targetSmallest > 0
       ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
       : 0;
 
@@ -560,9 +560,39 @@ function filterBars(bars) {
 
 function renderDashboard(bars) {
   currentBars = bars;
+  const filtered = filterBars([...bars]);
   updateOverallStats(bars);
+
+  // Update search helper text for matches in other categories
+  const searchInput = document.getElementById("global-search");
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const searchHelper = document.getElementById("search-helper");
+  if (searchHelper) {
+    if (query && currentFilter !== "all") {
+      const totalQueryMatches = bars.filter(bar => bar.title.toLowerCase().includes(query)).length;
+      const currentCategoryMatches = filtered.length;
+      const diff = totalQueryMatches - currentCategoryMatches;
+      if (diff > 0) {
+        searchHelper.innerHTML = `
+          <span>🔍 Found <strong>${diff}</strong> more match${diff === 1 ? '' : 'es'} in other categories.</span>
+          <button id="btn-clear-search-filters" class="search-helper-link">Clear filters to view</button>
+        `;
+        searchHelper.classList.remove("hidden");
+        document.getElementById("btn-clear-search-filters")?.addEventListener("click", () => {
+          currentFilter = "all";
+          renderDashboard(bars);
+        });
+      } else {
+        searchHelper.classList.add("hidden");
+        searchHelper.innerHTML = "";
+      }
+    } else {
+      searchHelper.classList.add("hidden");
+      searchHelper.innerHTML = "";
+    }
+  }
+
   cardsGrid.innerHTML = "";
-  
 
   // ADD CARD ALWAYS FIRST
   const addCard = document.createElement("div");
@@ -575,39 +605,37 @@ function renderDashboard(bars) {
   addCard.addEventListener("click", () => openCreateModal());
   cardsGrid.appendChild(addCard);
 
-
-
   // THEN render bar cards — newest first (reverse createdAt asc order)
-  filterBars([...bars]).reverse().forEach((bar) => {
+  filtered.reverse().forEach((bar) => {
     const card = document.createElement("div");
     card.className = "card-progress";
     card.setAttribute("data-bar-id", bar.id);
-    
+
     // Calculate completion percentage
-    const percent = bar.targetSmallest > 0 
+    const percent = bar.targetSmallest > 0
       ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
       : 0;
-    
+
     // Get interpolated color
     const barColor = getProgressColor(percent);
     card.style.setProperty("--bar-color", barColor);
-    
+
     // Set timestamp reference for the 5-minute background check
     let lastUpdatedMs = Date.now();
     if (bar.lastUpdated) {
       // Handle firestore Timestamp vs client side local date
-      lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function' 
-        ? bar.lastUpdated.toDate().getTime() 
+      lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
+        ? bar.lastUpdated.toDate().getTime()
         : bar.lastUpdated;
     }
     card.setAttribute("data-last-updated", lastUpdatedMs);
-    
+
     // Add glowing pulse animation if updated in the last 5 minutes
     const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
     if (diffMinutes < 5) {
       card.classList.add("pulse-glow");
     }
-    
+
     card.innerHTML = `
       <div class="card-actions">
         <button class="btn-card-delete" title="Delete">
@@ -637,10 +665,10 @@ function renderDashboard(bars) {
       ${getDeadlineMs(bar) ? `
         <hr class="card-divider">
         <div class="card-deadline-label" data-deadline-ms="${getDeadlineMs(bar)}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-          ${percent >= 100 
-            ? `<span class="badge-completed">✓ Completed</span>` 
-            : `<span class="deadline-text-val">⏱ ${formatTimeLeft(getDeadlineMs(bar))}</span>`
-          }
+          ${percent >= 100
+          ? `<span class="badge-completed">✓ Completed</span>`
+          : `<span class="deadline-text-val">⏱ ${formatTimeLeft(getDeadlineMs(bar))}</span>`
+        }
         </div>
       ` : ''}
 
@@ -726,13 +754,13 @@ setInterval(() => {
         if (completedBadge) {
           completedBadge.remove();
         }
-        
+
         let valSpan = labelEl.querySelector('.deadline-text-val');
         if (!valSpan) {
           labelEl.innerHTML = `<span class="deadline-text-val"></span>`;
           valSpan = labelEl.querySelector('.deadline-text-val');
         }
-        
+
         const text = formatTimeLeft(deadlineMs);
         valSpan.innerHTML = `⏱ ${text}`;
         if (text.startsWith("Overdue")) {
@@ -785,7 +813,7 @@ barPresetSelect.addEventListener("change", rebuildCreateFormInputs);
 function rebuildCreateFormInputs() {
   const preset = barPresetSelect.value;
   presetsDynamicContainer.innerHTML = "";
-  
+
   if (preset === "Custom") {
     presetsDynamicContainer.innerHTML = `
       <div class="custom-levels-config">
@@ -814,7 +842,7 @@ function rebuildCustomConfigFields() {
   const count = parseInt(document.getElementById("custom-level-count").value) || 1;
   const container = document.getElementById("custom-level-fields");
   container.innerHTML = "";
-  
+
   if (count === 1) {
     container.innerHTML = `
       <div class="custom-level-row">
@@ -861,7 +889,7 @@ function rebuildCustomConfigFields() {
       </div>
     `;
   }
-  
+
   // Bind listeners to custom input changes
   container.querySelectorAll(".custom-level-name-input").forEach(input => {
     input.addEventListener("input", () => {
@@ -872,7 +900,7 @@ function rebuildCustomConfigFields() {
   container.querySelectorAll(".custom-level-ratio-input").forEach(input => {
     input.addEventListener("change", renderTargetAndCurrentInputs);
   });
-  
+
   updateCustomFormState();
   renderTargetAndCurrentInputs();
 }
@@ -881,14 +909,14 @@ function updateCustomFormState() {
   const countSelect = document.getElementById("custom-level-count");
   if (!countSelect) return;
   const count = parseInt(countSelect.value) || 1;
-  
+
   const l1Name = document.getElementById("custom-l1-name")?.value.trim() || "";
-  
+
   if (count === 2) {
     const l2Name = document.getElementById("custom-l2-name")?.value.trim() || "";
     const ratioGroupL2 = document.getElementById("ratio-group-l2");
     const labelRatioL2 = document.getElementById("label-ratio-l2");
-    
+
     if (l1Name && l2Name) {
       labelRatioL2.textContent = `How many ${l2Name} per ${l1Name}?`;
       ratioGroupL2.classList.remove("hidden");
@@ -902,14 +930,14 @@ function updateCustomFormState() {
     const labelRatioL2 = document.getElementById("label-ratio-l2");
     const ratioGroupL3 = document.getElementById("ratio-group-l3");
     const labelRatioL3 = document.getElementById("label-ratio-l3");
-    
+
     if (l1Name && l2Name) {
       labelRatioL2.textContent = `How many ${l2Name} per ${l1Name}?`;
       ratioGroupL2.classList.remove("hidden");
     } else {
       ratioGroupL2.classList.add("hidden");
     }
-    
+
     if (l2Name && l3Name) {
       labelRatioL3.textContent = `How many ${l3Name} per ${l2Name}?`;
       ratioGroupL3.classList.remove("hidden");
@@ -923,10 +951,10 @@ function updateCustomFormState() {
 function updateLabelsInRealtime() {
   const levels = getLevelsFromForm();
   const reversedLevels = [...levels].reverse();
-  
+
   const targetLabelSpans = createTargetDynamic.querySelectorAll(".form-row-label");
   const currentLabelSpans = createCurrentDynamic.querySelectorAll(".form-row-label");
-  
+
   reversedLevels.forEach((level, index) => {
     if (targetLabelSpans[index]) targetLabelSpans[index].textContent = level.name || `Level ${index + 1}`;
     if (currentLabelSpans[index]) currentLabelSpans[index].textContent = level.name || `Level ${index + 1}`;
@@ -936,17 +964,17 @@ function updateLabelsInRealtime() {
 function getLevelsFromForm() {
   const preset = barPresetSelect.value;
   if (!preset) return [];
-  
+
   if (preset !== "Custom") {
     return PRESETS[preset].levels;
   }
-  
+
   const countSelect = document.getElementById("custom-level-count");
   if (!countSelect) return [{ name: "Level 1", conversionToNext: null }];
-  
+
   const count = parseInt(countSelect.value) || 1;
   const l1Name = document.getElementById("custom-l1-name")?.value.trim() || "Level 1";
-  
+
   if (count === 1) {
     return [{ name: l1Name, conversionToNext: null }];
   } else if (count === 2) {
@@ -972,10 +1000,10 @@ function getLevelsFromForm() {
 
 function renderTargetAndCurrentInputs() {
   const levels = getLevelsFromForm();
-  
+
   createTargetDynamic.innerHTML = "";
   createCurrentDynamic.innerHTML = "";
-  
+
   const wrapper = document.getElementById("create-values-wrapper");
   if (wrapper) {
     if (levels.length === 1) {
@@ -984,12 +1012,12 @@ function renderTargetAndCurrentInputs() {
       wrapper.classList.remove("side-by-side");
     }
   }
-  
+
   const reversedLevels = [...levels].reverse();
-  
+
   const isTimePres = (barPresetSelect.value === 'Time');
   const stepVal = isTimePres ? '1' : 'any';
-  
+
   reversedLevels.forEach((level) => {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
@@ -997,7 +1025,7 @@ function renderTargetAndCurrentInputs() {
       <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createTargetDynamic.appendChild(targetCol);
-    
+
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
@@ -1030,29 +1058,29 @@ function attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres) {
 // UPDATE MODAL LOGIC:
 function openUpdateModal(bar) {
   selectedBar = bar;
-  
+
   updateModalTitle.textContent = `Update Progress: ${bar.title}`;
   updateBarIdInput.value = bar.id;
   updateCurrentDynamic.innerHTML = "";
-  
+
   // Reset delete confirmation safety pane
   deleteSafetyPane.classList.add("hidden");
   updateActionsStandard.classList.remove("hidden");
-  
+
   const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
-  
+
   // Decode current value into levels
   const currentLevelVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
-  
+
   // UI inputs are displayed largest-to-smallest (reversed levels array)
   const reversedLevels = [...safeLevels].reverse();
-  
+
   const isTimePres = bar.preset === 'Time';
   const stepVal = isTimePres ? '1' : 'any';
-  
+
   if (safeLevels.length === 1) {
     const val = currentLevelVals[0] || 0;
-    
+
     const container = document.createElement("div");
     container.className = "stepper-horizontal";
     container.innerHTML = `
@@ -1061,19 +1089,19 @@ function openUpdateModal(bar) {
       <button type="button" class="stepper-btn" data-action="plus">+</button>
     `;
     updateCurrentDynamic.appendChild(container);
-    
+
     const inputEl = container.querySelector(".stepper-input");
     const minusBtn = container.querySelector('[data-action="minus"]');
     const plusBtn = container.querySelector('[data-action="plus"]');
-    
+
     attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
   } else {
     const container = document.createElement("div");
     container.className = "stepper-multi-row";
-    
+
     reversedLevels.forEach((level, index) => {
       const val = currentLevelVals[index] || 0;
-      
+
       const card = document.createElement("div");
       card.className = "stepper-card";
       card.innerHTML = `
@@ -1085,16 +1113,16 @@ function openUpdateModal(bar) {
         </div>
       `;
       container.appendChild(card);
-      
+
       const inputEl = card.querySelector(".stepper-input");
       const minusBtn = card.querySelector('[data-action="minus"]');
       const plusBtn = card.querySelector('[data-action="plus"]');
-      
+
       attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
     });
     updateCurrentDynamic.appendChild(container);
   }
-  
+
   openModal(modalUpdate);
 }
 
@@ -1109,7 +1137,7 @@ function openEditModal(bar) {
   editTargetDynamic.innerHTML = "";
   const editCurrentDynamic = document.getElementById("edit-current-dynamic");
   if (editCurrentDynamic) editCurrentDynamic.innerHTML = "";
-  
+
   const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
 
   const wrapper = document.getElementById("edit-values-wrapper");
@@ -1186,13 +1214,13 @@ function openEditModal(bar) {
 // Create Form Submit
 formCreate.addEventListener("submit", async (e) => {
   e.preventDefault();
-  
+
   if (!currentUser) return;
-  
+
   const title = document.getElementById("bar-title").value.trim();
   const preset = barPresetSelect.value;
   const levels = getLevelsFromForm();
-  
+
   // Custom Validation
   if (preset === "Custom") {
     const countSelect = document.getElementById("custom-level-count");
@@ -1227,12 +1255,12 @@ formCreate.addEventListener("submit", async (e) => {
       }
     }
   }
-  
+
   // Fetch form values in largest-to-smallest order
   const targetInputs = Array.from(createTargetDynamic.querySelectorAll(".target-val-input"));
   const isTimePres = (preset === 'Time');
   const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-  
+
   // Compute smallest unit totals
   const targetSmallest = encodeToSmallest(targetValsReversed, levels);
 
@@ -1241,25 +1269,25 @@ formCreate.addEventListener("submit", async (e) => {
     showToast("Target goal must be greater than 0.", "error");
     return;
   }
-  
+
   const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
   const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
   const currentSmallest = encodeToSmallest(currentValsReversed, levels);
-  
+
   if (currentSmallest < 0) {
     showToast("Current progress must be at least 0.", "error");
     return;
   }
-  
+
   if (currentSmallest > targetSmallest) {
     showToast("Current progress cannot exceed target goal.", "error");
     return;
   }
-  
+
   // Handle Deadline calculation in Create mode
   const dateInput = document.getElementById('deadline-date');
   const timeInput = document.getElementById('deadline-time');
-  const hrsInput  = document.getElementById('deadline-hrs');
+  const hrsInput = document.getElementById('deadline-hrs');
   const minsInput = document.getElementById('deadline-mins');
 
   let deadlineAt = null;
@@ -1290,7 +1318,7 @@ formCreate.addEventListener("submit", async (e) => {
     );
     return;
   }
-  
+
   try {
     closeModal(modalCreate);
     await createBar(isGuestMode() ? null : currentUser.uid, {
@@ -1310,27 +1338,27 @@ formCreate.addEventListener("submit", async (e) => {
 // Edit Form Submit
 formEdit.addEventListener("submit", async (e) => {
   e.preventDefault();
-  
+
   if (!currentUser || !selectedBar) return;
-  
+
   const title = document.getElementById("edit-bar-title").value.trim();
   const preset = selectedBar.preset;
   const levels = (selectedBar.levels && selectedBar.levels.length) ? selectedBar.levels : [{ name: selectedBar.preset || 'Units', conversionToNext: null }];
-  
+
   // Fetch form values in largest-to-smallest order
   const targetInputs = Array.from(editTargetDynamic.querySelectorAll(".target-val-input"));
   const isTimePres = (preset === 'Time');
   const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-  
+
   // Compute smallest unit totals
   const targetSmallest = encodeToSmallest(targetValsReversed, levels);
-  
+
   // Simple validation
   if (targetSmallest <= 0) {
     showToast("Target goal must be greater than 0.", "error");
     return;
   }
-  
+
   const editCurrentDynamic = document.getElementById("edit-current-dynamic");
   const currentInputs = editCurrentDynamic ? Array.from(editCurrentDynamic.querySelectorAll(".current-val-input")) : [];
   const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
@@ -1349,7 +1377,7 @@ formEdit.addEventListener("submit", async (e) => {
   // Handle Deadline calculation in Edit mode
   const dateInput = document.getElementById('edit-deadline-date');
   const timeInput = document.getElementById('edit-deadline-time');
-  const hrsInput  = document.getElementById('edit-deadline-hrs');
+  const hrsInput = document.getElementById('edit-deadline-hrs');
   const minsInput = document.getElementById('edit-deadline-mins');
   const clearCheckbox = document.getElementById('edit-deadline-clear');
 
@@ -1376,7 +1404,7 @@ formEdit.addEventListener("submit", async (e) => {
       updateDeadline = true;
     }
   }
-  
+
   try {
     closeModal(modalEdit);
     await editBar(isGuestMode() ? null : currentUser.uid, selectedBar.id, {
@@ -1396,28 +1424,28 @@ formEdit.addEventListener("submit", async (e) => {
 // Update Form Submit
 formUpdate.addEventListener("submit", async (e) => {
   e.preventDefault();
-  
+
   if (!currentUser || !selectedBar) return;
-  
+
   const barId = updateBarIdInput.value;
-  
+
   // Fetch input fields
   const updateInputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
   const isTimePres = (selectedBar.preset === 'Time');
   const currentValsReversed = updateInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-  
+
   const currentSmallest = encodeToSmallest(currentValsReversed, selectedBar.levels);
-  
+
   if (currentSmallest < 0) {
     showToast("Current progress must be at least 0.", "error");
     return;
   }
-  
+
   if (currentSmallest > selectedBar.targetSmallest) {
     showToast("Current progress cannot exceed target goal.", "error");
     return;
   }
-  
+
   try {
     closeModal(modalUpdate);
     await updateBarProgress(isGuestMode() ? null : currentUser.uid, barId, currentSmallest);
@@ -1442,7 +1470,7 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
   if (!currentUser || !selectedBar) return;
   const barId = selectedBar.id;
   const title = selectedBar.title;
-  
+
   try {
     closeModal(modalUpdate);
     await deleteBar(isGuestMode() ? null : currentUser.uid, barId);
@@ -1532,10 +1560,41 @@ const setupStatsFilterListeners = () => {
 };
 setupStatsFilterListeners();
 
-// Global Search listener
-document.getElementById("global-search")?.addEventListener("input", () => {
-  renderDashboard(currentBars);
-});
+// Setup global search input listener
+const setupGlobalSearchListener = () => {
+  const searchInput = document.getElementById("global-search");
+  const searchBtn = document.getElementById("btn-search");
+  const searchContainer = document.querySelector(".nav-search-container");
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      renderDashboard(currentBars);
+    });
+  }
+
+  if (searchContainer && searchBtn && searchInput) {
+    searchBtn.addEventListener("click", (e) => {
+      if (window.innerWidth <= 600) {
+        if (!searchContainer.classList.contains("expanded")) {
+          e.preventDefault();
+          e.stopPropagation();
+          searchContainer.classList.add("expanded");
+          searchInput.focus();
+        }
+      }
+    });
+
+    // Collapse search when clicking outside
+    document.addEventListener("click", (e) => {
+      if (window.innerWidth <= 600) {
+        if (searchContainer.classList.contains("expanded") && !searchContainer.contains(e.target)) {
+          searchContainer.classList.remove("expanded");
+        }
+      }
+    });
+  }
+};
+setupGlobalSearchListener();
 
 // Toggle profile dropdown menu
 btnProfileBadge?.addEventListener("click", (e) => {
@@ -1577,14 +1636,14 @@ initAuthProtection(async (user) => {
 
     await migrateGuestBarsToFirestore(user.uid);
     // exitGuestMode() already called inside migrateGuestBarsToFirestore
-    
+
     // Instead of returning and getting stuck, let it fall through to 
     // the normal dashboard initialization below, which will setup UI
     // for the logged-in user and start the proper Firestore subscription.
   }
 
   currentUser = user;
-  
+
   // Render guest banner on dashboard if in guest mode
   if (guestBanner) {
     if (isGuestMode()) {
@@ -1593,7 +1652,7 @@ initAuthProtection(async (user) => {
       guestBanner.style.display = "none";
     }
   }
-  
+
   // Render sandbox warning banner on dashboard if unconfigured and not in guest mode
   if (!isConfigured && !isGuestMode()) {
     if (!document.getElementById("sandbox-banner")) {
@@ -1607,7 +1666,7 @@ initAuthProtection(async (user) => {
       appContent.insertBefore(banner, appContent.firstChild);
     }
   }
-  
+
   // Render profile info
   if (isGuestMode()) {
     userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
@@ -1618,13 +1677,13 @@ initAuthProtection(async (user) => {
     userName.textContent = user.displayName || "Tracker User";
     if (userStatus) userStatus.textContent = "Signed In (Cloud)";
   }
-  
+
   // Show application content, hide splash screen
   if (navLogoSvg) {
     navLogoSvg.classList.remove("logo-loading");
   }
   appContent.classList.remove("hidden");
-  
+
   // Subscribe to progress bars collection
   startSubscription(
     isGuestMode() ? null : user.uid,
@@ -1651,11 +1710,11 @@ initAuthProtection(async (user) => {
 function setupDeadlineMutualExclusion(prefix = "") {
   const dateInput = document.getElementById(prefix + 'deadline-date');
   const timeInput = document.getElementById(prefix + 'deadline-time');
-  const hrsInput  = document.getElementById(prefix + 'deadline-hrs');
+  const hrsInput = document.getElementById(prefix + 'deadline-hrs');
   const minsInput = document.getElementById(prefix + 'deadline-mins');
-  
+
   if (!dateInput || !hrsInput) return;
-  
+
   // Dynamic min date to block past dates
   const updateMinDate = () => {
     const today = new Date();
@@ -1665,7 +1724,7 @@ function setupDeadlineMutualExclusion(prefix = "") {
     dateInput.min = `${yyyy}-${mm}-${dd}`;
   };
   updateMinDate();
-  
+
   // Validation for today's date vs time
   const validateTime = () => {
     if (!dateInput.value) return;
@@ -1690,16 +1749,16 @@ function setupDeadlineMutualExclusion(prefix = "") {
     }
     validateTime();
   });
-  
+
   timeInput?.addEventListener('change', validateTime);
-  
+
   const clearAbsoluteInputs = () => {
     if (hrsInput.value || minsInput.value) {
       dateInput.value = '';
       if (timeInput) timeInput.value = '';
     }
   };
-  
+
   hrsInput.addEventListener('input', clearAbsoluteInputs);
   minsInput.addEventListener('input', clearAbsoluteInputs);
 }

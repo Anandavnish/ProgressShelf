@@ -14,7 +14,8 @@
   <header class="navbar">
     <div class="nav-container">
       <a class="nav-logo" href="index.html">
-        <svg id="nav-logo-svg" class="logo-svg logo-loading" viewBox="30 15 170 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg id="nav-logo-svg" class="logo-svg logo-loading" viewBox="30 15 170 110" fill="none"
+          xmlns="http://www.w3.org/2000/svg">
           <defs>
             <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
               <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4" />
@@ -58,12 +59,13 @@
           <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#barGreen)" />
 
           <!-- Plus -->
-          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round" />
+          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5"
+            stroke-linecap="round" />
 
           <!-- Red exclamation warning badge (Translation on parent, Scale animation on child) -->
           <g transform="translate(116, 40)">
             <g class="logo-badge-red">
-              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5"/>
+              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5" />
               <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
             </g>
           </g>
@@ -71,8 +73,9 @@
           <!-- Green checkmark badge (Translation on parent, Scale animation on child) -->
           <g transform="translate(140, 20)">
             <g class="logo-badge-green">
-              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5"/>
-              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5" />
+              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round" />
             </g>
           </g>
         </svg>
@@ -80,16 +83,16 @@
           <span class="text-gradient">Progress</span><span class="text-outline">Shelf</span>
         </span>
       </a>
-
       <!-- Global Search Bar -->
       <div class="nav-search-container">
-        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <input type="text" id="global-search" class="nav-search-input" placeholder="Search trackers by title...">
+        <input type="text" id="global-search" class="nav-search-input" placeholder="Search for title...">
+        <button id="btn-search" class="nav-search-btn" title="Search">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
       </div>
-
       <div class="nav-toolbar">
         <!-- GitHub Link -->
         <a class="nav-github-link" href="https://github.com/Anandavnish/ProgressShelf" target="_blank"
@@ -233,8 +236,8 @@
             <span class="stats-label">Flexible Goals</span>
           </div>
         </button>
-    </div> <!-- Close stats-container -->
-  </div> <!-- Close stats-banner -->
+      </div> <!-- Close stats-container -->
+    </div> <!-- Close stats-banner -->
 
 
     <div id="guest-banner" class="guest-banner" style="display:none;">
@@ -248,6 +251,9 @@
 
     <!-- Main Dashboard Section -->
     <main class="dashboard-main">
+      <!-- Search Helper Notification -->
+      <div id="search-helper" class="search-helper hidden"></div>
+
       <!-- Grid Container -->
       <div id="cards-grid" class="cards-grid">
         <!-- Skeleton Cards (Shown while loading Firestore) -->
@@ -518,6 +524,22 @@
         </form>
       </div>
     </div>
+
+
+    <!-- Footer Section -->
+    <footer class="app-footer">
+      <div class="footer-content">
+        <p class="footer-title">ProgressShelf — Open source &amp; free forever</p>
+        <p class="footer-links">
+          Built by <a href="https://github.com/Anandavnish" target="_blank" rel="noopener noreferrer">Anand Avnish</a> with AI assistance (Antigravity, Claude &amp; Gemini)
+          <span class="footer-bullet">•</span>
+          <a href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">View source on GitHub</a>
+          <span class="footer-bullet">•</span>
+          <span class="footer-version">v2.0</span>
+        </p>
+        <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
+      </div>
+    </footer>
 
   </div>
 
