@@ -343,17 +343,18 @@ function encodeToSmallest(levelValues, levels) {
 }
 
 function decodeFromSmallest(smallest, levels) {
+  const safeLevels = (levels && levels.length) ? levels : [{ name: 'Units', conversionToNext: null }];
   // Returns array ordered largest→smallest (for display)
   let remaining = smallest;
   const vals = [];
 
-  for (let i = 0; i < levels.length; i++) {
-    if (levels[i].conversionToNext === null) {
+  for (let i = 0; i < safeLevels.length; i++) {
+    if (safeLevels[i].conversionToNext === null) {
       // Top level — remainder goes here
       vals.push(remaining);
     } else {
-      vals.push(remaining % levels[i].conversionToNext);
-      remaining = Math.floor(remaining / levels[i].conversionToNext);
+      vals.push(remaining % safeLevels[i].conversionToNext);
+      remaining = Math.floor(remaining / safeLevels[i].conversionToNext);
     }
   }
 
@@ -369,8 +370,9 @@ function getUnitName(name) {
 }
 
 function formatCurrentProgress(current, levels) {
-  const vals = decodeFromSmallest(current, levels); // largest-to-smallest
-  const reversedLevels = [...levels].reverse(); // largest-to-smallest
+  const safeLevels = (levels && levels.length) ? levels : [{ name: 'Units', conversionToNext: null }];
+  const vals = decodeFromSmallest(current, safeLevels); // largest-to-smallest
+  const reversedLevels = [...safeLevels].reverse(); // largest-to-smallest
   
   // Find first and last non-zero index
   let firstIdx = -1;
@@ -384,7 +386,7 @@ function formatCurrentProgress(current, levels) {
   
   // If all values are 0
   if (firstIdx === -1) {
-    return `${formatNumber(0)} ${getUnitName(levels[0].name)}`;
+    return `${formatNumber(0)} ${getUnitName(safeLevels[0].name)}`;
   }
   
   const parts = [];
@@ -395,13 +397,14 @@ function formatCurrentProgress(current, levels) {
 }
 
 function formatCardLabel(current, target, levels) {
-  if (levels.length === 1) {
-    return `${formatNumber(current)} / ${formatNumber(target)} ${getUnitName(levels[0].name)}`;
+  const safeLevels = (levels && levels.length) ? levels : [{ name: 'Units', conversionToNext: null }];
+  if (safeLevels.length === 1) {
+    return `${formatNumber(current)} / ${formatNumber(target)} ${getUnitName(safeLevels[0].name)}`;
   } else {
-    const reversedLevels = [...levels].reverse();
-    const targetVals = decodeFromSmallest(target, levels);
+    const reversedLevels = [...safeLevels].reverse();
+    const targetVals = decodeFromSmallest(target, safeLevels);
     const targetStr = targetVals.map((val, idx) => `${formatNumber(val)} ${getUnitName(reversedLevels[idx].name)}`).join(' ');
-    const currentStr = formatCurrentProgress(current, levels);
+    const currentStr = formatCurrentProgress(current, safeLevels);
     return `${currentStr} / ${targetStr}`;
   }
 }
@@ -553,6 +556,7 @@ function renderDashboard(bars) {
   updateOverallStats(bars);
   cardsGrid.innerHTML = "";
   
+
   // ADD CARD ALWAYS FIRST
   const addCard = document.createElement("div");
   addCard.className = "card-add";
@@ -1028,16 +1032,18 @@ function openUpdateModal(bar) {
   deleteSafetyPane.classList.add("hidden");
   updateActionsStandard.classList.remove("hidden");
   
+  const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+  
   // Decode current value into levels
-  const currentLevelVals = decodeFromSmallest(bar.currentSmallest, bar.levels);
+  const currentLevelVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
   
   // UI inputs are displayed largest-to-smallest (reversed levels array)
-  const reversedLevels = [...bar.levels].reverse();
+  const reversedLevels = [...safeLevels].reverse();
   
   const isTimePres = bar.preset === 'Time';
   const stepVal = isTimePres ? '1' : 'any';
   
-  if (bar.levels.length === 1) {
+  if (safeLevels.length === 1) {
     const val = currentLevelVals[0] || 0;
     
     const container = document.createElement("div");
@@ -1090,23 +1096,25 @@ function openEditModal(bar) {
   formEdit.reset();
 
   document.getElementById('edit-bar-title').value = bar.title;
-  editBarPresetSelect.value = bar.preset;
+  editBarPresetSelect.value = bar.preset || "";
 
   // Render the target inputs for the edit modal dynamically
   editTargetDynamic.innerHTML = "";
   const editCurrentDynamic = document.getElementById("edit-current-dynamic");
   if (editCurrentDynamic) editCurrentDynamic.innerHTML = "";
   
+  const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+
   const wrapper = document.getElementById("edit-values-wrapper");
   if (wrapper) {
-    if (bar.levels.length === 1) {
+    if (safeLevels.length === 1) {
       wrapper.classList.add("side-by-side");
     } else {
       wrapper.classList.remove("side-by-side");
     }
   }
 
-  const reversedLevels = [...bar.levels].reverse();
+  const reversedLevels = [...safeLevels].reverse();
   const isTimePres = bar.preset === 'Time';
   const stepVal = isTimePres ? '1' : 'any';
 
@@ -1129,7 +1137,7 @@ function openEditModal(bar) {
   });
 
   // Pre-fill target values
-  const targetVals = decodeFromSmallest(bar.targetSmallest, bar.levels);
+  const targetVals = decodeFromSmallest(bar.targetSmallest, safeLevels);
   const targetInputs = Array.from(editTargetDynamic.querySelectorAll('.target-val-input'));
   targetInputs.forEach((input, i) => {
     input.value = targetVals[i] ?? 0;
@@ -1137,7 +1145,7 @@ function openEditModal(bar) {
 
   // Pre-fill current progress values
   if (editCurrentDynamic) {
-    const currentVals = decodeFromSmallest(bar.currentSmallest, bar.levels);
+    const currentVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
     const currentInputs = Array.from(editCurrentDynamic.querySelectorAll('.current-val-input'));
     currentInputs.forEach((input, i) => {
       input.value = currentVals[i] ?? 0;
@@ -1146,16 +1154,18 @@ function openEditModal(bar) {
 
   // Pre-fill deadline if bar has one
   const deadlineMs = getDeadlineMs(bar);
-  if (deadlineMs) {
+  if (deadlineMs && !isNaN(deadlineMs)) {
     const d = new Date(deadlineMs);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const hrsStr = String(d.getHours()).padStart(2, '0');
-    const minsStr = String(d.getMinutes()).padStart(2, '0');
+    if (!isNaN(d.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hrsStr = String(d.getHours()).padStart(2, '0');
+      const minsStr = String(d.getMinutes()).padStart(2, '0');
 
-    document.getElementById('edit-deadline-date').value = `${yyyy}-${mm}-${dd}`;
-    document.getElementById('edit-deadline-time').value = `${hrsStr}:${minsStr}`;
+      document.getElementById('edit-deadline-date').value = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('edit-deadline-time').value = `${hrsStr}:${minsStr}`;
+    }
   }
 
   openModal(modalEdit);
@@ -1298,7 +1308,7 @@ formEdit.addEventListener("submit", async (e) => {
   
   const title = document.getElementById("edit-bar-title").value.trim();
   const preset = selectedBar.preset;
-  const levels = selectedBar.levels;
+  const levels = (selectedBar.levels && selectedBar.levels.length) ? selectedBar.levels : [{ name: selectedBar.preset || 'Units', conversionToNext: null }];
   
   // Fetch form values in largest-to-smallest order
   const targetInputs = Array.from(editTargetDynamic.querySelectorAll(".target-val-input"));
@@ -1456,7 +1466,7 @@ async function migrateGuestBarsToFirestore(uid) {
       await createBar(uid, {
         title: bar.title,
         preset: bar.preset,
-        levels: bar.levels,
+        levels: bar.levels || [{ name: bar.preset || 'Units', conversionToNext: null }],
         targetSmallest: bar.targetSmallest,
         currentSmallest: bar.currentSmallest,
         deadlineAt: bar.deadlineAt,
@@ -1546,7 +1556,6 @@ initAuthProtection(async (user) => {
   const localBars = getLocalBars();
   const hasLocalBars = localBars && localBars.length > 0;
 
-  if (authInitialized && !isGuestMode() && !hasLocalBars) return;
   authInitialized = true;
 
   // Silent auto-migration if guest logs in or has local bars
