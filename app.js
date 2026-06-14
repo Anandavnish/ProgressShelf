@@ -261,42 +261,79 @@ function formatNumber(value) {
 }
 
 function formatTimeLeft(deadlineMs) {
-  const ms = deadlineMs - Date.now();
-  if (ms <= 0) {
-    const overdueMs = Date.now() - deadlineMs;
-    const totalMin = Math.floor(overdueMs / 60000);
-    const totalHrs = Math.floor(totalMin / 60);
-    const totalDays = Math.floor(totalHrs / 24);
+  const now = Date.now();
+  const rawDiff = deadlineMs - now;
+  const isOverdue = rawDiff < 0;
+  const diff = Math.abs(rawDiff);
+
+  if (diff === 0) {
+    return { label: "Due now", isOverdue: false };
+  }
+
+  const totalSecs  = Math.floor(diff / 1000);
+  const totalMins  = Math.floor(totalSecs / 60);
+  const totalHours = Math.floor(totalMins / 60);
+  const totalDays  = Math.floor(totalHours / 24);
+
+  // Helper to format values with optional singular/plural formatting
+  const fmt = (val, singular, plural) => {
+    return val === 1 ? `1 ${singular}` : `${val} ${plural}`;
+  };
+
+  let tierOutput = "";
+
+  if (totalSecs < 60) {
+    // Tier 1: seconds only
+    tierOutput = fmt(totalSecs, "sec", "secs");
+  } else if (totalMins < 60) {
+    // Tier 2: minutes + seconds
+    const mins = totalMins;
+    const secs = totalSecs % 60;
+    if (secs === 0) {
+      tierOutput = fmt(mins, "min", "mins");
+    } else {
+      tierOutput = `${fmt(mins, "min", "mins")} ${fmt(secs, "sec", "secs")}`;
+    }
+  } else if (totalHours < 48) {
+    // Tier 3: hours + minutes
+    const hrs = totalHours;
+    const mins = totalMins % 60;
+    if (mins === 0) {
+      tierOutput = fmt(hrs, "hr", "hrs");
+    } else {
+      tierOutput = `${fmt(hrs, "hr", "hrs")} ${fmt(mins, "min", "mins")}`;
+    }
+  } else if (totalDays < 14) {
+    // Tier 4: days + hours
+    const days = totalDays;
+    const hrs = totalHours % 24;
+    if (hrs === 0) {
+      tierOutput = fmt(days, "day", "days");
+    } else {
+      tierOutput = `${fmt(days, "day", "days")} ${fmt(hrs, "hr", "hrs")}`;
+    }
+  } else if (totalDays < 60) {
+    // Tier 5: weeks + days
     const weeks = Math.floor(totalDays / 7);
     const days = totalDays % 7;
-    const hrs = totalHrs % 24;
-    const mins = totalMin % 60;
+    if (days === 0) {
+      tierOutput = fmt(weeks, "week", "weeks");
+    } else {
+      tierOutput = `${fmt(weeks, "week", "weeks")} ${fmt(days, "day", "days")}`;
+    }
+  } else {
+    // Tier 6: months + days
+    const months = Math.floor(totalDays / 30);
+    const days = totalDays % 30;
+    if (days === 0) {
+      tierOutput = fmt(months, "month", "months");
+    } else {
+      tierOutput = `${fmt(months, "month", "months")} ${fmt(days, "day", "days")}`;
+    }
+  }
 
-    if (weeks >= 1) return `Overdue by ${weeks}w ${days}d`;
-    if (totalDays >= 1) return `Overdue by ${totalDays}d ${hrs}hr`;
-    if (totalHrs >= 1) return `Overdue by ${hrs}hr ${mins}min`;
-    return `Overdue by ${mins}min`;
-  }
-  const totalSec = Math.floor(ms / 1000);
-  const totalMin = Math.floor(totalSec / 60);
-  const totalHrs = Math.floor(totalMin / 60);
-  const totalDays = Math.floor(totalHrs / 24);
-  const weeks = Math.floor(totalDays / 7);
-  const days = totalDays % 7;
-  const hrs = totalHrs % 24;
-  const mins = totalMin % 60;
-  const secs = totalSec % 60;
-
-  if (weeks >= 2) {
-    return `${weeks} weeks ${days} days left`;
-  }
-  if (totalDays >= 1) {
-    return `${totalDays} days ${hrs} hrs left`;
-  }
-  if (totalHrs >= 1) {
-    return `${hrs} hrs ${mins} min left`;
-  }
-  return `${mins} min ${secs} sec left`;
+  const label = isOverdue ? `Overdue by ${tierOutput}` : `${tierOutput} left`;
+  return { label, isOverdue };
 }
 
 
@@ -662,15 +699,20 @@ function renderDashboard(bars) {
         </div>
       </div>
       <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
-      ${getDeadlineMs(bar) ? `
-        <hr class="card-divider">
-        <div class="card-deadline-label" data-deadline-ms="${getDeadlineMs(bar)}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-          ${percent >= 100
-          ? `<span class="badge-completed">✓ Completed</span>`
-          : `<span class="deadline-text-val">⏱ ${formatTimeLeft(getDeadlineMs(bar))}</span>`
-        }
-        </div>
-      ` : ''}
+      ${getDeadlineMs(bar) ? (() => {
+        const dMs = getDeadlineMs(bar);
+        const { label, isOverdue } = formatTimeLeft(dMs);
+        const overdueClass = (isOverdue && percent < 100) ? ' overdue' : '';
+        return `
+          <hr class="card-divider">
+          <div class="card-deadline-label${overdueClass}" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+            ${percent >= 100
+              ? `<span class="badge-completed">✓ Completed</span>`
+              : `<span class="deadline-text-val">⏱ ${label}</span>`
+            }
+          </div>
+        `;
+      })() : ''}
 
       <!-- Inline delete confirmation overlay -->
       <div class="card-delete-confirm hidden">
@@ -761,9 +803,9 @@ setInterval(() => {
           valSpan = labelEl.querySelector('.deadline-text-val');
         }
 
-        const text = formatTimeLeft(deadlineMs);
-        valSpan.innerHTML = `⏱ ${text}`;
-        if (text.startsWith("Overdue")) {
+        const result = formatTimeLeft(deadlineMs);
+        valSpan.innerHTML = `⏱ ${result.label}`;
+        if (result.isOverdue) {
           labelEl.classList.add("overdue");
         } else {
           labelEl.classList.remove("overdue");
