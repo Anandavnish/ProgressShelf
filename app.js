@@ -4,7 +4,7 @@ import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar } from "./db.js";
 
 // Page elements
-const loadingScreen = document.getElementById("loading-screen");
+const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
 const cardsGrid = document.getElementById("cards-grid");
 const btnLogout = document.getElementById("btn-logout");
@@ -511,7 +511,14 @@ function updateOverallStats(bars) {
 
 function filterBars(bars) {
   const now = Date.now();
+  const searchInput = document.getElementById("global-search");
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+
   return bars.filter(bar => {
+    if (query && !bar.title.toLowerCase().includes(query)) {
+      return false;
+    }
+
     const percent = bar.targetSmallest > 0 
       ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
       : 0;
@@ -1525,6 +1532,11 @@ const setupStatsFilterListeners = () => {
 };
 setupStatsFilterListeners();
 
+// Global Search listener
+document.getElementById("global-search")?.addEventListener("input", () => {
+  renderDashboard(currentBars);
+});
+
 // Toggle profile dropdown menu
 btnProfileBadge?.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1561,10 +1573,7 @@ initAuthProtection(async (user) => {
   // Silent auto-migration if guest logs in or has local bars
   if ((isGuestMode() || hasLocalBars) && user && user.uid !== null) {
     // Show migration status
-    if (loadingScreen) {
-      const loadingText = loadingScreen.querySelector('.loading-text');
-      if (loadingText) loadingText.textContent = 'Syncing your data...';
-    }
+    showToast("Syncing your data to cloud account...", "info");
 
     await migrateGuestBarsToFirestore(user.uid);
     // exitGuestMode() already called inside migrateGuestBarsToFirestore
@@ -1611,10 +1620,9 @@ initAuthProtection(async (user) => {
   }
   
   // Show application content, hide splash screen
-  loadingScreen.style.opacity = "0";
-  loadingScreen.addEventListener("transitionend", () => {
-    loadingScreen.remove();
-  });
+  if (navLogoSvg) {
+    navLogoSvg.classList.remove("logo-loading");
+  }
   appContent.classList.remove("hidden");
   
   // Subscribe to progress bars collection
