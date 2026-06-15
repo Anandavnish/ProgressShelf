@@ -2381,6 +2381,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   word-break: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2392,6 +2393,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   display: block;
   overflow: visible;
   -webkit-line-clamp: unset;
+  line-clamp: unset;
   max-height: 2000px;
 }
 
