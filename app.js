@@ -2071,10 +2071,14 @@ async function migrateGuestBarsToFirestore(uid) {
     try {
       await createBar(uid, {
         title: bar.title,
+        type: bar.type || "goal",
         preset: bar.preset,
-        levels: bar.levels || [{ name: bar.preset || 'Units', conversionToNext: null }],
+        levels: bar.levels || (bar.type === "goal" || !bar.type ? [{ name: bar.preset || 'Units', conversionToNext: null }] : null),
         targetSmallest: bar.targetSmallest,
         currentSmallest: bar.currentSmallest,
+        items: bar.items || null,
+        text: bar.text || null,
+        completed: bar.completed || false,
         deadlineAt: bar.deadlineAt,
         deadlineSetAt: bar.deadlineSetAt
       });
