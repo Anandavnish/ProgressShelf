@@ -1,14 +1,24 @@
-# ProgressShelf 📊
+<p align="center">
+  <img src="logo.svg" alt="ProgressShelf — Track everything. One bar at a time." width="520" />
+</p>
 
 <p align="center">
-  <img src="logo.svg" alt="ProgressShelf Animated Logo" width="280" />
+  <a href="https://anandavnish.github.io/ProgressShelf/">Live Demo</a>
+  &nbsp;•&nbsp;
+  <a href="https://github.com/Anandavnish/ProgressShelf">GitHub Repo</a>
+  &nbsp;•&nbsp;
+  <img src="https://img.shields.io/badge/version-v3.0-38BDF8?style=flat-square" alt="v3.0"/>
+  &nbsp;•&nbsp;
+  <img src="https://img.shields.io/badge/license-MIT-4ADE80?style=flat-square" alt="MIT"/>
 </p>
+
+---
 
 **ProgressShelf** is a modern, responsive personal progress tracking dashboard that lets you track habits, courses, readings, custom goals, checklists, and quick notes — all in one place, one animated progress bar at a time.
 
 Built with zero build tools. Runs instantly on any static host.
 
-**Live Demo:** [https://anandavnish.github.io/ProgressShelf/](https://anandavnish.github.io/ProgressShelf/)
+
 
 ---
 

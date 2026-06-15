@@ -1,0 +1,91 @@
+<svg viewBox="30 12 175 114" xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <defs>
+    <style>
+      .logo-bar-1 { animation: logoBarPulse 1.4s infinite ease-in-out;        transform-origin: 68px  108px; }
+      .logo-bar-2 { animation: logoBarPulse 1.4s infinite ease-in-out 0.15s;  transform-origin: 92px  108px; }
+      .logo-bar-3 { animation: logoBarPulse 1.4s infinite ease-in-out 0.3s;   transform-origin: 116px 108px; }
+      .logo-bar-4 { animation: logoBarPulse 1.4s infinite ease-in-out 0.45s;  transform-origin: 140px 108px; }
+      .logo-plus       { animation: logoPulseGlow  1.4s infinite ease-in-out; }
+      .logo-badge-red  { animation: logoBadgePulse 1.4s infinite ease-in-out 0.3s;  transform-origin: 0 0; }
+      .logo-badge-green{ animation: logoBadgePulse 1.4s infinite ease-in-out 0.45s; transform-origin: 0 0; }
+
+      @keyframes logoBarPulse {
+        0%, 100% { transform: scaleY(1);   }
+        50%       { transform: scaleY(0.4); }
+      }
+      @keyframes logoPulseGlow {
+        0%, 100% { opacity: 1;   filter: drop-shadow(0 0 2px rgba(56,189,248,.3)); }
+        50%       { opacity: 0.5; filter: drop-shadow(0 0 8px rgba(56,189,248,.8)); }
+      }
+      @keyframes logoBadgePulse {
+        0%, 100% { transform: scale(1);    }
+        50%       { transform: scale(0.85); }
+      }
+    </style>
+
+    <filter id="fvShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+
+    <linearGradient id="fvBlue"   x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="fvOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="fvRed"    x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#F87171"/>
+      <stop offset="100%" stop-color="#DC2626"/>
+    </linearGradient>
+    <linearGradient id="fvGreen"  x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#16A34A"/>
+    </linearGradient>
+    <linearGradient id="fvShelfGrad" x1="0" y1="0" x2="100%" y2="0">
+      <stop offset="0%"   stop-color="#1E293B"/>
+      <stop offset="50%"  stop-color="#475569"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="fvShelfRail" x1="0" y1="0" x2="100%" y2="0">
+      <stop offset="0%"   stop-color="#334155"/>
+      <stop offset="50%"  stop-color="#64748B"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark rounded background -->
+  <rect x="30" y="12" width="175" height="114" rx="14" fill="#0D1117"/>
+
+  <!-- Shelf Base -->
+  <rect x="36" y="108" width="168" height="7" rx="3.5" fill="url(#fvShelfGrad)" filter="url(#fvShadow)"/>
+  <rect x="40" y="109" width="160" height="2"  rx="1"   fill="url(#fvShelfRail)"/>
+
+  <!-- Bars -->
+  <rect class="logo-bar-1" x="60"  y="90" width="16" height="16" rx="3" fill="url(#fvBlue)"/>
+  <rect class="logo-bar-2" x="84"  y="70" width="16" height="36" rx="3" fill="url(#fvOrange)"/>
+  <rect class="logo-bar-3" x="108" y="50" width="16" height="56" rx="3" fill="url(#fvRed)"/>
+  <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#fvGreen)"/>
+
+  <!-- Plus icon -->
+  <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14"
+        stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round"/>
+
+  <!-- Red warning badge -->
+  <g transform="translate(116, 40)">
+    <g class="logo-badge-red">
+      <circle cx="0" cy="0" r="12" fill="url(#fvRed)" stroke="#161B22" stroke-width="2.5"/>
+      <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Green checkmark badge -->
+  <g transform="translate(140, 20)">
+    <g class="logo-badge-green">
+      <circle cx="0" cy="0" r="14" fill="url(#fvGreen)" stroke="#161B22" stroke-width="2.5"/>
+      <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7"
+            stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
