@@ -418,7 +418,8 @@ function renderDashboard(bars) {
 
 
   // THEN render bar cards — newest first (reverse createdAt asc order)
-  [...bars].reverse().forEach((bar) => {
+  const goalOnlyBars = [...bars].filter(bar => !bar.type || bar.type === "goal");
+  goalOnlyBars.reverse().forEach((bar) => {
     const card = document.createElement("div");
     card.className = "card-progress";
     card.setAttribute("data-bar-id", bar.id);
