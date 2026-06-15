@@ -1128,11 +1128,20 @@ body {
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   transform: translateY(10px);
   opacity: 0;
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+}
+
+.modal-container form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .modal-overlay.active .modal-container {
@@ -1170,6 +1179,8 @@ body {
 
 .modal-body {
   padding: 24px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* Form Styles */
@@ -1233,6 +1244,7 @@ body {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Dynamic sub-forms */
@@ -1343,7 +1355,7 @@ body {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1100;
+  z-index: 20000;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2206,6 +2218,250 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-muted);
   font-style: italic;
   opacity: 0.85;
+}
+
+/* --- Tracker Type Segmented Control --- */
+.tracker-type-selector {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tracker-type-selector input[type="radio"] {
+  display: none;
+}
+
+.tracker-type-selector label.type-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.tracker-type-selector label.type-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tracker-type-selector input[type="radio"]:checked + label.type-tab {
+  background: var(--accent);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* --- Checklist Builder in Modals --- */
+.checklist-builder-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.checklist-builder-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.checklist-builder-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.checklist-builder-item .item-text-input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 0.92rem;
+  flex: 1;
+  outline: none;
+  padding: 2px 0;
+}
+
+.checklist-builder-item .item-text-input:focus {
+  border-bottom: 1px solid var(--accent);
+}
+
+.btn-remove-item {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 1.25rem;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.btn-remove-item:hover {
+  transform: scale(1.15);
+}
+
+/* --- Card Checklist styles --- */
+.card-checklist-container {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 120px;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+
+.card-progress.expanded .card-checklist-container {
+  max-height: 1000px;
+}
+
+.card-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  cursor: default;
+  transition: opacity 0.2s ease;
+}
+
+.card-checklist-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--success);
+  pointer-events: none; /* View-only on dashboard card */
+}
+
+.card-checklist-item.done {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.card-checklist-item.done .checklist-item-text {
+  text-decoration: line-through;
+}
+
+.checklist-summary-line {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- Card Note styles --- */
+.card-note-text {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-top: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 96px; /* 4 lines approx */
+  transition: max-height 0.35s ease;
+}
+
+.card-progress.expanded .card-note-text {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  max-height: 2000px;
+}
+
+.show-more-indicator {
+  font-size: 0.82rem;
+  color: var(--accent);
+  margin-top: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-block;
+  user-select: none;
+}
+
+.card-progress.expanded .show-more-indicator {
+  display: none;
+}
+
+/* --- Update Modal Checklist List --- */
+.update-checklist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 2px 4px;
+}
+
+.update-checklist-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.update-checklist-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--card-border);
+}
+
+.update-checklist-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--success);
+  cursor: pointer;
+}
+
+.update-checklist-row.done {
+  color: var(--text-muted);
+}
+
+.update-checklist-row.done .update-checklist-text {
+  text-decoration: line-through;
+}
+
+/* --- Card clickable styling --- */
+.card-progress {
+  cursor: pointer;
+}
+
+.card-progress.expanded {
+  height: auto !important;
+  min-height: 180px;
 }
 
 

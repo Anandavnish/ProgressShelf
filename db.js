@@ -88,17 +88,21 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, preset, levels, targetSmallest, currentSmallest, deadlineAt, deadlineSetAt }) {
+export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
     const newBar = {
       id: "bar_" + now + "_" + Math.random().toString(36).substr(2, 9),
       title,
-      preset,
-      levels,
-      targetSmallest: Number(targetSmallest),
-      currentSmallest: Number(currentSmallest),
+      type: type || "goal",
+      preset: preset || null,
+      levels: levels || null,
+      targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : null,
+      currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : null,
+      items: items || null,
+      text: text || null,
+      completed: completed || false,
       createdAt: now,
       lastUpdated: now,
       deadlineAt: deadlineAt || null,
@@ -115,10 +119,14 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
     const now = new Date();
     const docRef = await addDoc(barsRef, {
       title,
-      preset,
-      levels,
-      targetSmallest: Number(targetSmallest),
-      currentSmallest: Number(currentSmallest),
+      type: type || "goal",
+      preset: preset || null,
+      levels: levels || null,
+      targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : null,
+      currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : null,
+      items: items || null,
+      text: text || null,
+      completed: completed || false,
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp(),
       deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
@@ -137,12 +145,13 @@ export async function createBar(uid, { title, preset, levels, targetSmallest, cu
  * @param {string} barId The ID of the progress bar document.
  * @param {number} currentSmallest The new current progress in the smallest unit.
  */
-export async function updateBarProgress(uid, barId, currentSmallest) {
+export async function updateBarProgress(uid, barId, currentSmallest, completed) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const barIndex = bars.findIndex(b => b.id === barId);
     if (barIndex !== -1) {
       bars[barIndex].currentSmallest = Number(currentSmallest);
+      bars[barIndex].completed = completed;
       bars[barIndex].lastUpdated = Date.now();
       setLocalBars(bars);
       triggerMockUpdate();
@@ -156,6 +165,7 @@ export async function updateBarProgress(uid, barId, currentSmallest) {
     const barDocRef = doc(db, "users", uid, "bars", barId);
     await updateDoc(barDocRef, {
       currentSmallest: Number(currentSmallest),
+      completed: completed,
       lastUpdated: serverTimestamp()
     });
   } catch (error) {
@@ -187,7 +197,7 @@ export async function deleteBar(uid, barId) {
 }
 
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, deadlineAt, updateDeadline
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -210,9 +220,12 @@ export async function editBar(uid, barId, {
       bars[idx] = {
         ...original,
         title,
-        levels,
-        targetSmallest: Number(targetSmallest),
-        currentSmallest: Number(currentSmallest),
+        levels: levels !== undefined ? levels : original.levels,
+        targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : null,
+        currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : null,
+        items: items !== undefined ? items : original.items,
+        text: text !== undefined ? text : original.text,
+        completed: completed !== undefined ? completed : original.completed,
         lastUpdated: Date.now(),
         deadlineAt: newDeadlineAt,
         deadlineSetAt: newDeadlineSetAt
@@ -229,11 +242,15 @@ export async function editBar(uid, barId, {
     
     const updates = {
       title,
-      levels,
-      targetSmallest: Number(targetSmallest),
-      currentSmallest: Number(currentSmallest),
       lastUpdated: serverTimestamp()
     };
+
+    if (levels !== undefined) updates.levels = levels;
+    if (targetSmallest !== null && targetSmallest !== undefined) updates.targetSmallest = Number(targetSmallest);
+    if (currentSmallest !== null && currentSmallest !== undefined) updates.currentSmallest = Number(currentSmallest);
+    if (items !== undefined) updates.items = items;
+    if (text !== undefined) updates.text = text;
+    if (completed !== undefined) updates.completed = completed;
 
     if (updateDeadline) {
       if (deadlineAt) {

@@ -288,6 +288,21 @@
         <form id="form-create">
           <div class="modal-body">
 
+            <!-- Tracker Type selector -->
+            <div class="form-group">
+              <label class="form-label">Tracker Type</label>
+              <div class="tracker-type-selector">
+                <input type="radio" id="create-type-goal" name="create-tracker-type" value="goal" checked>
+                <label for="create-type-goal" class="type-tab">Progress Goal</label>
+                
+                <input type="radio" id="create-type-checklist" name="create-tracker-type" value="checklist">
+                <label for="create-type-checklist" class="type-tab">Task Checklist</label>
+                
+                <input type="radio" id="create-type-note" name="create-tracker-type" value="note">
+                <label for="create-type-note" class="type-tab">Quick Note</label>
+              </div>
+            </div>
+
             <!-- Title -->
             <div class="form-group">
               <label class="form-label" for="bar-title">Title</label>
@@ -295,44 +310,69 @@
                 required maxlength="50">
             </div>
 
-            <!-- Preset -->
-            <div class="form-group">
-              <label class="form-label" for="bar-preset">Preset Unit Type</label>
-              <select class="form-input" id="bar-preset" required>
-                <option value="">Select a type...</option>
-                <option value="Lectures">Lectures</option>
-                <option value="Videos">Videos</option>
-                <option value="Problems">Problems</option>
-                <option value="Tasks">Tasks</option>
-                <option value="Pages">Pages</option>
-                <option value="Books">Books</option>
-                <option value="Chapters">Chapters</option>
-                <option value="Time">Time (hrs / min / sec)</option>
-                <option value="Custom">Custom</option>
-              </select>
-            </div>
-
-            <!-- Pre-filled conversions and custom levels -->
-            <div id="create-presets-dynamic">
-              <!-- Dynamically populated fields for Chapters ratio or Custom configuration -->
-            </div>
-
-            <!-- Target & Current values wrapper -->
-            <div class="form-row-group-wrapper" id="create-values-wrapper">
-              <!-- Target values -->
+            <!-- GOAL FIELDS -->
+            <div id="create-goal-fields">
+              <!-- Preset -->
               <div class="form-group">
-                <label class="form-label">Target Goal</label>
-                <div id="create-target-dynamic" class="form-row">
-                  <!-- Dynamically populated inputs per level -->
-                </div>
+                <label class="form-label" for="bar-preset">Preset Unit Type</label>
+                <select class="form-input" id="bar-preset" required>
+                  <option value="">Select a type...</option>
+                  <option value="Lectures">Lectures</option>
+                  <option value="Videos">Videos</option>
+                  <option value="Problems">Problems</option>
+                  <option value="Tasks">Tasks</option>
+                  <option value="Pages">Pages</option>
+                  <option value="Books">Books</option>
+                  <option value="Chapters">Chapters</option>
+                  <option value="Time">Time (hrs / min)</option>
+                  <option value="Custom">Custom</option>
+                </select>
               </div>
 
-              <!-- Current progress values -->
-              <div class="form-group">
-                <label class="form-label">Current Progress</label>
-                <div id="create-current-dynamic" class="form-row">
-                  <!-- Dynamically populated inputs per level -->
+              <!-- Pre-filled conversions and custom levels -->
+              <div id="create-presets-dynamic">
+                <!-- Dynamically populated fields for Chapters ratio or Custom configuration -->
+              </div>
+
+              <!-- Target & Current values wrapper -->
+              <div class="form-row-group-wrapper" id="create-values-wrapper">
+                <!-- Target values -->
+                <div class="form-group">
+                  <label class="form-label">Target Goal</label>
+                  <div id="create-target-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
                 </div>
+
+                <!-- Current progress values -->
+                <div class="form-group">
+                  <label class="form-label">Current Progress</label>
+                  <div id="create-current-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="create-checklist-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label">Checklist Items</label>
+                <div class="checklist-builder-input-group">
+                  <input type="text" id="create-checklist-item-input" class="form-input" placeholder="Add new item...">
+                  <button type="button" id="btn-create-add-item" class="btn btn-primary btn-add-item">Add</button>
+                </div>
+                <ul id="create-checklist-items-list" class="checklist-builder-list">
+                  <!-- Dynamically populated checklist item rows -->
+                </ul>
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="create-note-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label" for="create-note-text">Note Text</label>
+                <textarea class="form-input" id="create-note-text" rows="5" placeholder="Write your note here..."></textarea>
               </div>
             </div>
 
@@ -347,9 +387,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH">
+                  <input type="number" step="any" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH">
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM">
+                  <input type="number" step="any" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM">
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -396,39 +436,64 @@
                 placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50">
             </div>
 
-            <!-- Preset -->
-            <div class="form-group">
-              <label class="form-label" for="edit-bar-preset">Preset Unit Type</label>
-              <select class="form-input" id="edit-bar-preset" disabled required>
-                <option value="">Select a type...</option>
-                <option value="Lectures">Lectures</option>
-                <option value="Videos">Videos</option>
-                <option value="Problems">Problems</option>
-                <option value="Tasks">Tasks</option>
-                <option value="Pages">Pages</option>
-                <option value="Books">Books</option>
-                <option value="Chapters">Chapters</option>
-                <option value="Time">Time (hrs / min / sec)</option>
-                <option value="Custom">Custom</option>
-              </select>
-            </div>
-
-            <!-- Target & Current values wrapper -->
-            <div class="form-row-group-wrapper" id="edit-values-wrapper">
-              <!-- Target values -->
+            <!-- GOAL FIELDS -->
+            <div id="edit-goal-fields">
+              <!-- Preset -->
               <div class="form-group">
-                <label class="form-label">Target Goal</label>
-                <div id="edit-target-dynamic" class="form-row">
-                  <!-- Dynamically populated inputs per level -->
-                </div>
+                <label class="form-label" for="edit-bar-preset">Preset Unit Type</label>
+                <select class="form-input" id="edit-bar-preset" disabled required>
+                  <option value="">Select a type...</option>
+                  <option value="Lectures">Lectures</option>
+                  <option value="Videos">Videos</option>
+                  <option value="Problems">Problems</option>
+                  <option value="Tasks">Tasks</option>
+                  <option value="Pages">Pages</option>
+                  <option value="Books">Books</option>
+                  <option value="Chapters">Chapters</option>
+                  <option value="Time">Time (hrs / min)</option>
+                  <option value="Custom">Custom</option>
+                </select>
               </div>
 
-              <!-- Current progress values -->
-              <div class="form-group">
-                <label class="form-label">Current Progress</label>
-                <div id="edit-current-dynamic" class="form-row">
-                  <!-- Dynamically populated inputs per level -->
+              <!-- Target & Current values wrapper -->
+              <div class="form-row-group-wrapper" id="edit-values-wrapper">
+                <!-- Target values -->
+                <div class="form-group">
+                  <label class="form-label">Target Goal</label>
+                  <div id="edit-target-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
                 </div>
+
+                <!-- Current progress values -->
+                <div class="form-group">
+                  <label class="form-label">Current Progress</label>
+                  <div id="edit-current-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="edit-checklist-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label">Checklist Items</label>
+                <div class="checklist-builder-input-group">
+                  <input type="text" id="edit-checklist-item-input" class="form-input" placeholder="Add new item...">
+                  <button type="button" id="btn-edit-add-item" class="btn btn-primary btn-add-item">Add</button>
+                </div>
+                <ul id="edit-checklist-items-list" class="checklist-builder-list">
+                  <!-- Dynamically populated checklist items -->
+                </ul>
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="edit-note-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label" for="edit-note-text">Note Text</label>
+                <textarea class="form-input" id="edit-note-text" rows="5" placeholder="Write your note here..."></textarea>
               </div>
             </div>
 
@@ -443,9 +508,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH">
+                  <input type="number" step="any" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH">
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM">
+                  <input type="number" step="any" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM">
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -494,10 +559,34 @@
           <input type="hidden" id="update-bar-id">
           <div class="modal-body">
 
-            <!-- Current values editor -->
-            <p class="section-label">Current Progress Value</p>
-            <div id="update-current-dynamic">
-              <!-- Dynamically populated inputs per level (Single-level or Multi-level) -->
+            <!-- GOAL FIELDS -->
+            <div id="update-goal-fields">
+              <p class="section-label">Current Progress Value</p>
+              <div id="update-current-dynamic">
+                <!-- Dynamically populated inputs per level (Single-level or Multi-level) -->
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="update-checklist-fields" class="hidden">
+              <p class="section-label">Checklist Items</p>
+              <div id="update-checklist-items-container" class="update-checklist-list">
+                <!-- Dynamically rendered checkbox rows -->
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="update-note-fields" class="hidden">
+              <p class="section-label">Note Text</p>
+              <div class="form-group">
+                <textarea class="form-input" id="update-note-text" rows="5" placeholder="Write your note here..."></textarea>
+              </div>
+            </div>
+
+            <!-- Shared Mark as Complete Checkbox -->
+            <div class="form-group" id="update-mark-complete-group" style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="update-mark-complete" style="cursor: pointer; width: 18px; height: 18px;">
+              <label id="update-mark-complete-label" for="update-mark-complete" style="cursor: pointer; user-select: none; font-size: 0.95rem; font-weight: 500; color: var(--text-primary);">Mark Goal as Complete</label>
             </div>
 
             <!-- Safety Delete Confirmation Pane (collapsible / dynamic) -->

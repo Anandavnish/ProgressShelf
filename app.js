@@ -202,7 +202,6 @@ const PRESETS = {
   Chapters: { levels: [{ name: 'Chapters', conversionToNext: null }] },
   Time: {
     levels: [
-      { name: 'Seconds', conversionToNext: 60 },
       { name: 'Minutes', conversionToNext: 60 },
       { name: 'Hours', conversionToNext: null }
     ]
@@ -449,6 +448,22 @@ function formatCardLabel(current, target, levels) {
 // ==========================================
 // Dashboard Stats Bar Calculation
 // ==========================================
+function isTrackerCompleted(bar) {
+  if (bar.completed !== undefined && bar.completed !== null) {
+    return !!bar.completed;
+  }
+  const barType = bar.type || "goal";
+  if (barType === "goal") {
+    const percent = bar.targetSmallest > 0 ? (bar.currentSmallest / bar.targetSmallest) * 100 : 0;
+    return percent >= 100;
+  }
+  if (barType === "checklist") {
+    const items = bar.items || [];
+    return items.length > 0 && items.every(item => item.done);
+  }
+  return false;
+}
+
 function updateOverallStats(bars) {
   if (!statTotal || !statDeadlines || !statOverdue || !statCompleted || !statFlexible || !statsBanner) return;
 
@@ -460,11 +475,9 @@ function updateOverallStats(bars) {
   const now = Date.now();
 
   bars.forEach(bar => {
-    const percent = bar.targetSmallest > 0
-      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-      : 0;
+    const completed = isTrackerCompleted(bar);
 
-    if (percent >= 100) {
+    if (completed) {
       completedCount++;
     } else {
       const deadlineMs = getDeadlineMs(bar);
@@ -556,20 +569,18 @@ function filterBars(bars) {
       return false;
     }
 
-    const percent = bar.targetSmallest > 0
-      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-      : 0;
+    const completed = isTrackerCompleted(bar);
 
     if (currentFilter === "all") {
       return true;
     }
 
     if (currentFilter === "completed") {
-      return percent >= 100;
+      return completed;
     }
 
     // Incomplete filters
-    if (percent >= 100) {
+    if (completed) {
       return false;
     }
 
@@ -673,6 +684,58 @@ function renderDashboard(bars) {
       card.classList.add("pulse-glow");
     }
 
+    const barType = bar.type || "goal";
+    let bodyHtml = "";
+
+    if (barType === "goal") {
+      bodyHtml = `
+        <div class="card-body">
+          <div class="card-percent">${formatNumber(percent)}%</div>
+          <div class="progressbar-track">
+            <div class="progressbar-fill" style="width: ${percent}%;"></div>
+          </div>
+        </div>
+        <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
+      `;
+    } else if (barType === "checklist") {
+      const items = bar.items || [];
+      const doneCount = items.filter(item => item.done).length;
+      const totalCount = items.length;
+      
+      const showMoreBtnHtml = totalCount > 3 ? `<div class="show-more-indicator">Show more (+${totalCount - 3})</div>` : "";
+      
+      const itemsHtml = items.map((item, index) => {
+        const collapsibleClass = index >= 3 ? " collapsible-item" : "";
+        const inlineStyle = index >= 3 ? ' style="display: none;"' : '';
+        return `
+          <div class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
+            <input type="checkbox" ${item.done ? "checked" : ""}>
+            <span class="checklist-item-text">${escapeHtml(item.text)}</span>
+          </div>
+        `;
+      }).join("");
+
+      bodyHtml = `
+        <div class="card-checklist-container">
+          ${itemsHtml}
+        </div>
+        ${showMoreBtnHtml}
+        <div class="checklist-summary-line">
+          <span>✓</span> ${doneCount} / ${totalCount} done
+        </div>
+      `;
+    } else if (barType === "note") {
+      const text = bar.text || "";
+      const isLongNote = text.length > 150 || text.includes("\n");
+      const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
+      bodyHtml = `
+        <div class="card-note-text">${escapeHtml(text)}</div>
+        ${showMoreBtnHtml}
+      `;
+    }
+
+    const isCompleted = isTrackerCompleted(bar);
+
     card.innerHTML = `
       <div class="card-actions">
         <button class="btn-card-delete" title="Delete">
@@ -692,26 +755,26 @@ function renderDashboard(bars) {
         </button>
       </div>
       <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
-      <div class="card-body">
-        <div class="card-percent">${formatNumber(percent)}%</div>
-        <div class="progressbar-track">
-          <div class="progressbar-fill" style="width: ${percent}%;"></div>
-        </div>
-      </div>
-      <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
-      ${getDeadlineMs(bar) ? (() => {
+      ${bodyHtml}
+      ${(isCompleted || getDeadlineMs(bar)) ? (() => {
         const dMs = getDeadlineMs(bar);
-        const { label, isOverdue } = formatTimeLeft(dMs);
-        const overdueClass = (isOverdue && percent < 100) ? ' overdue' : '';
-        return `
-          <hr class="card-divider">
-          <div class="card-deadline-label${overdueClass}" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-            ${percent >= 100
-              ? `<span class="badge-completed">✓ Completed</span>`
-              : `<span class="deadline-text-val">⏱ ${label}</span>`
-            }
-          </div>
-        `;
+        if (isCompleted) {
+          return `
+            <hr class="card-divider">
+            <div class="card-deadline-label" data-completed="true" data-deadline-ms="${dMs || ''}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+              <span class="badge-completed">✓ Completed</span>
+            </div>
+          `;
+        } else {
+          const { label, isOverdue } = formatTimeLeft(dMs);
+          const overdueClass = isOverdue ? ' overdue' : '';
+          return `
+            <hr class="card-divider">
+            <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+              <span class="deadline-text-val">⏱ ${label}</span>
+            </div>
+          `;
+        }
       })() : ''}
 
       <!-- Inline delete confirmation overlay -->
@@ -749,9 +812,19 @@ function renderDashboard(bars) {
       openEditModal(bar);
     });
 
-    // Click on card body opens update modal (only if confirm panel not visible)
+    // Expansion & click interaction
+    const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
+                          (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
+
     card.addEventListener("click", () => {
-      if (deleteConfirmPanel.classList.contains('hidden')) {
+      if (!deleteConfirmPanel.classList.contains('hidden')) return;
+
+      if (isTruncatable && !card.classList.contains("expanded")) {
+        card.classList.add("expanded");
+        card.querySelectorAll(".collapsible-item").forEach(item => {
+          item.style.display = "flex";
+        });
+      } else {
         openUpdateModal(bar);
       }
     });
@@ -782,6 +855,13 @@ setInterval(() => {
     applyDeadlineTick(barEl);
   });
   document.querySelectorAll('.card-deadline-label').forEach(labelEl => {
+    if (labelEl.dataset.completed === "true") {
+      labelEl.classList.remove("overdue");
+      if (!labelEl.querySelector('.badge-completed')) {
+        labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
+      }
+      return;
+    }
     const deadlineMs = Number(labelEl.dataset.deadlineMs);
     const percent = Number(labelEl.dataset.percent || 0);
     if (deadlineMs) {
@@ -841,9 +921,101 @@ window.addEventListener("click", (e) => {
   }
 });
 
+// Close active modals on Escape key press
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal-overlay.active").forEach((modal) => {
+      closeModal(modal);
+    });
+  }
+});
+
 // CREATE MODAL LOGIC:
+// CREATE MODAL LOGIC:
+let createChecklistItems = [];
+
+function toggleCreateTypeFields(type) {
+  const goalFields = document.getElementById("create-goal-fields");
+  const checklistFields = document.getElementById("create-checklist-fields");
+  const noteFields = document.getElementById("create-note-fields");
+
+  goalFields.classList.add("hidden");
+  checklistFields.classList.add("hidden");
+  noteFields.classList.add("hidden");
+
+  barPresetSelect.required = false;
+
+  if (type === "goal") {
+    goalFields.classList.remove("hidden");
+    barPresetSelect.required = true;
+  } else if (type === "checklist") {
+    checklistFields.classList.remove("hidden");
+  } else if (type === "note") {
+    noteFields.classList.remove("hidden");
+  }
+}
+
+function renderCreateChecklist() {
+  const listContainer = document.getElementById("create-checklist-items-list");
+  listContainer.innerHTML = "";
+  createChecklistItems.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.className = "checklist-builder-item";
+    li.innerHTML = `
+      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <button type="button" class="btn-remove-item" data-index="${index}">&times;</button>
+    `;
+    listContainer.appendChild(li);
+
+    li.querySelector(".item-text-input").addEventListener("input", (e) => {
+      createChecklistItems[index].text = e.target.value;
+    });
+
+    li.querySelector(".btn-remove-item").addEventListener("click", () => {
+      createChecklistItems.splice(index, 1);
+      renderCreateChecklist();
+    });
+  });
+}
+
+// Bind radio button triggers
+document.querySelectorAll('input[name="create-tracker-type"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    toggleCreateTypeFields(e.target.value);
+  });
+});
+
+// Bind Add Checklist Item button triggers
+const createChecklistItemInput = document.getElementById("create-checklist-item-input");
+const btnCreateAddItem = document.getElementById("btn-create-add-item");
+
+if (btnCreateAddItem && createChecklistItemInput) {
+  btnCreateAddItem.addEventListener("click", () => {
+    const val = createChecklistItemInput.value.trim();
+    if (!val) return;
+    createChecklistItems.push({
+      id: "item_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+      text: val,
+      done: false
+    });
+    createChecklistItemInput.value = "";
+    renderCreateChecklist();
+  });
+
+  createChecklistItemInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnCreateAddItem.click();
+    }
+  });
+}
+
 function openCreateModal() {
   formCreate.reset();
+  document.getElementById("create-type-goal").checked = true;
+  createChecklistItems = [];
+  renderCreateChecklist();
+  toggleCreateTypeFields("goal");
   barPresetSelect.value = "";
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
@@ -1098,6 +1270,26 @@ function attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres) {
 }
 
 // UPDATE MODAL LOGIC:
+let updateChecklistItems = [];
+
+function toggleUpdateTypeFields(type) {
+  const goalFields = document.getElementById("update-goal-fields");
+  const checklistFields = document.getElementById("update-checklist-fields");
+  const noteFields = document.getElementById("update-note-fields");
+
+  goalFields.classList.add("hidden");
+  checklistFields.classList.add("hidden");
+  noteFields.classList.add("hidden");
+
+  if (type === "goal") {
+    goalFields.classList.remove("hidden");
+  } else if (type === "checklist") {
+    checklistFields.classList.remove("hidden");
+  } else if (type === "note") {
+    noteFields.classList.remove("hidden");
+  }
+}
+
 function openUpdateModal(bar) {
   selectedBar = bar;
 
@@ -1109,63 +1301,232 @@ function openUpdateModal(bar) {
   deleteSafetyPane.classList.add("hidden");
   updateActionsStandard.classList.remove("hidden");
 
-  const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+  const barType = bar.type || "goal";
+  toggleUpdateTypeFields(barType);
 
-  // Decode current value into levels
-  const currentLevelVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
+  if (barType === "goal") {
+    const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
 
-  // UI inputs are displayed largest-to-smallest (reversed levels array)
-  const reversedLevels = [...safeLevels].reverse();
+    // Decode current value into levels
+    const currentLevelVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
 
-  const isTimePres = bar.preset === 'Time';
-  const stepVal = isTimePres ? '1' : 'any';
+    // UI inputs are displayed largest-to-smallest (reversed levels array)
+    const reversedLevels = [...safeLevels].reverse();
 
-  if (safeLevels.length === 1) {
-    const val = currentLevelVals[0] || 0;
+    const isTimePres = bar.preset === 'Time';
+    const stepVal = isTimePres ? '1' : 'any';
 
-    const container = document.createElement("div");
-    container.className = "stepper-horizontal";
-    container.innerHTML = `
-      <button type="button" class="stepper-btn" data-action="minus">−</button>
-      <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
-      <button type="button" class="stepper-btn" data-action="plus">+</button>
-    `;
-    updateCurrentDynamic.appendChild(container);
+    if (safeLevels.length === 1) {
+      const val = currentLevelVals[0] || 0;
 
-    const inputEl = container.querySelector(".stepper-input");
-    const minusBtn = container.querySelector('[data-action="minus"]');
-    const plusBtn = container.querySelector('[data-action="plus"]');
-
-    attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
-  } else {
-    const container = document.createElement("div");
-    container.className = "stepper-multi-row";
-
-    reversedLevels.forEach((level, index) => {
-      const val = currentLevelVals[index] || 0;
-
-      const card = document.createElement("div");
-      card.className = "stepper-card";
-      card.innerHTML = `
-        <div class="stepper-card-label">${escapeHtml(level.name)}</div>
-        <div class="stepper-card-controls">
-          <button type="button" class="stepper-btn" data-action="minus">−</button>
-          <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
-          <button type="button" class="stepper-btn" data-action="plus">+</button>
-        </div>
+      const container = document.createElement("div");
+      container.className = "stepper-horizontal";
+      container.innerHTML = `
+        <button type="button" class="stepper-btn" data-action="minus">−</button>
+        <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
+        <button type="button" class="stepper-btn" data-action="plus">+</button>
       `;
-      container.appendChild(card);
+      updateCurrentDynamic.appendChild(container);
 
-      const inputEl = card.querySelector(".stepper-input");
-      const minusBtn = card.querySelector('[data-action="minus"]');
-      const plusBtn = card.querySelector('[data-action="plus"]');
+      const inputEl = container.querySelector(".stepper-input");
+      const minusBtn = container.querySelector('[data-action="minus"]');
+      const plusBtn = container.querySelector('[data-action="plus"]');
 
       attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
+    } else {
+      const container = document.createElement("div");
+      container.className = "stepper-multi-row";
+
+      reversedLevels.forEach((level, index) => {
+        const val = currentLevelVals[index] || 0;
+
+        const card = document.createElement("div");
+        card.className = "stepper-card";
+        card.innerHTML = `
+          <div class="stepper-card-label">${escapeHtml(level.name)}</div>
+          <div class="stepper-card-controls">
+            <button type="button" class="stepper-btn" data-action="minus">−</button>
+            <input type="number" step="${stepVal}" class="stepper-input update-val-input" min="0" value="${formatNumber(val)}">
+            <button type="button" class="stepper-btn" data-action="plus">+</button>
+          </div>
+        `;
+        container.appendChild(card);
+
+        const inputEl = card.querySelector(".stepper-input");
+        const minusBtn = card.querySelector('[data-action="minus"]');
+        const plusBtn = card.querySelector('[data-action="plus"]');
+
+        attachStepperListeners(inputEl, minusBtn, plusBtn, isTimePres);
+      });
+      updateCurrentDynamic.appendChild(container);
+    }
+
+  } else if (barType === "checklist") {
+    updateChecklistItems = JSON.parse(JSON.stringify(bar.items || []));
+    const container = document.getElementById("update-checklist-items-container");
+    container.innerHTML = "";
+    updateChecklistItems.forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className = `update-checklist-row${item.done ? " done" : ""}`;
+      row.innerHTML = `
+        <input type="checkbox" id="up-item-${index}" ${item.done ? "checked" : ""}>
+        <label for="up-item-${index}" class="update-checklist-text">${escapeHtml(item.text)}</label>
+      `;
+      container.appendChild(row);
+
+      row.querySelector("input").addEventListener("change", (e) => {
+        updateChecklistItems[index].done = e.target.checked;
+        if (e.target.checked) {
+          row.classList.add("done");
+        } else {
+          row.classList.remove("done");
+        }
+        const checkbox = document.getElementById("update-mark-complete");
+        if (checkbox) {
+          checkbox.checked = updateChecklistItems.every(item => item.done);
+        }
+      });
     });
-    updateCurrentDynamic.appendChild(container);
+  } else if (barType === "note") {
+    document.getElementById("update-note-text").value = bar.text || "";
+  }
+
+  // Handle Mark as Completed checkbox
+  const checkbox = document.getElementById("update-mark-complete");
+  const checkboxLabel = document.getElementById("update-mark-complete-label");
+  if (checkbox && checkboxLabel) {
+    checkbox.checked = false;
+    const newCheckbox = checkbox.cloneNode(true);
+    checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+
+    if (barType === "goal") {
+      checkboxLabel.textContent = "Mark Goal as Complete";
+      const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+      const currentLevelVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
+
+      newCheckbox.addEventListener("change", (e) => {
+        const inputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
+        if (e.target.checked) {
+          const targetVals = decodeFromSmallest(bar.targetSmallest, safeLevels);
+          inputs.forEach((input, idx) => {
+            input.value = targetVals[idx] ?? 0;
+          });
+        } else {
+          inputs.forEach((input, idx) => {
+            input.value = currentLevelVals[idx] ?? 0;
+          });
+        }
+      });
+
+      // Uncheck when manually typing or clicking step buttons
+      updateCurrentDynamic.addEventListener("input", () => {
+        newCheckbox.checked = false;
+      });
+      updateCurrentDynamic.addEventListener("click", (e) => {
+        if (e.target.classList.contains("stepper-btn")) {
+          newCheckbox.checked = false;
+        }
+      });
+    } else if (barType === "checklist") {
+      checkboxLabel.textContent = "Mark Checklist as Complete";
+      if (updateChecklistItems.length > 0 && updateChecklistItems.every(item => item.done)) {
+        newCheckbox.checked = true;
+      }
+
+      newCheckbox.addEventListener("change", (e) => {
+        const isChecked = e.target.checked;
+        const container = document.getElementById("update-checklist-items-container");
+        container.querySelectorAll("input[type='checkbox']").forEach((cb, idx) => {
+          cb.checked = isChecked;
+          updateChecklistItems[idx].done = isChecked;
+          const row = cb.closest(".update-checklist-row");
+          if (isChecked) {
+            row.classList.add("done");
+          } else {
+            row.classList.remove("done");
+          }
+        });
+      });
+    } else if (barType === "note") {
+      checkboxLabel.textContent = "Mark Note as Complete";
+      if (bar.completed) {
+        newCheckbox.checked = true;
+      }
+    }
   }
 
   openModal(modalUpdate);
+}
+
+let editChecklistItems = [];
+
+function toggleEditTypeFields(type) {
+  const goalFields = document.getElementById("edit-goal-fields");
+  const checklistFields = document.getElementById("edit-checklist-fields");
+  const noteFields = document.getElementById("edit-note-fields");
+
+  goalFields.classList.add("hidden");
+  checklistFields.classList.add("hidden");
+  noteFields.classList.add("hidden");
+
+  editBarPresetSelect.required = false;
+
+  if (type === "goal") {
+    goalFields.classList.remove("hidden");
+    editBarPresetSelect.required = true;
+  } else if (type === "checklist") {
+    checklistFields.classList.remove("hidden");
+  } else if (type === "note") {
+    noteFields.classList.remove("hidden");
+  }
+}
+
+function renderEditChecklist() {
+  const listContainer = document.getElementById("edit-checklist-items-list");
+  listContainer.innerHTML = "";
+  editChecklistItems.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.className = "checklist-builder-item";
+    li.innerHTML = `
+      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <button type="button" class="btn-remove-item" data-index="${index}">&times;</button>
+    `;
+    listContainer.appendChild(li);
+
+    li.querySelector(".item-text-input").addEventListener("input", (e) => {
+      editChecklistItems[index].text = e.target.value;
+    });
+
+    li.querySelector(".btn-remove-item").addEventListener("click", () => {
+      editChecklistItems.splice(index, 1);
+      renderEditChecklist();
+    });
+  });
+}
+
+// Bind Add Checklist Item button triggers for Edit modal
+const editChecklistItemInput = document.getElementById("edit-checklist-item-input");
+const btnEditAddItem = document.getElementById("btn-edit-add-item");
+
+if (btnEditAddItem && editChecklistItemInput) {
+  btnEditAddItem.addEventListener("click", () => {
+    const val = editChecklistItemInput.value.trim();
+    if (!val) return;
+    editChecklistItems.push({
+      id: "item_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+      text: val,
+      done: false
+    });
+    editChecklistItemInput.value = "";
+    renderEditChecklist();
+  });
+
+  editChecklistItemInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnEditAddItem.click();
+    }
+  });
 }
 
 function openEditModal(bar) {
@@ -1175,59 +1536,77 @@ function openEditModal(bar) {
   document.getElementById('edit-bar-title').value = bar.title;
   editBarPresetSelect.value = bar.preset || "";
 
-  // Render the target inputs for the edit modal dynamically
-  editTargetDynamic.innerHTML = "";
-  const editCurrentDynamic = document.getElementById("edit-current-dynamic");
-  if (editCurrentDynamic) editCurrentDynamic.innerHTML = "";
+  const barType = bar.type || "goal";
+  toggleEditTypeFields(barType);
 
-  const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+  if (barType === "goal") {
+    // Render the target inputs for the edit modal dynamically
+    editTargetDynamic.innerHTML = "";
+    const editCurrentDynamic = document.getElementById("edit-current-dynamic");
+    if (editCurrentDynamic) editCurrentDynamic.innerHTML = "";
 
-  const wrapper = document.getElementById("edit-values-wrapper");
-  if (wrapper) {
-    if (safeLevels.length === 1) {
-      wrapper.classList.add("side-by-side");
-    } else {
-      wrapper.classList.remove("side-by-side");
+    const safeLevels = (bar.levels && bar.levels.length) ? bar.levels : [{ name: bar.preset || 'Units', conversionToNext: null }];
+
+    const wrapper = document.getElementById("edit-values-wrapper");
+    if (wrapper) {
+      if (safeLevels.length === 1) {
+        wrapper.classList.add("side-by-side");
+      } else {
+        wrapper.classList.remove("side-by-side");
+      }
     }
-  }
 
-  const reversedLevels = [...safeLevels].reverse();
-  const isTimePres = bar.preset === 'Time';
-  const stepVal = isTimePres ? '1' : 'any';
+    const reversedLevels = [...safeLevels].reverse();
+    const isTimePres = bar.preset === 'Time';
+    const stepVal = isTimePres ? '1' : 'any';
 
-  reversedLevels.forEach((level) => {
-    const targetCol = document.createElement("div");
-    targetCol.innerHTML = `
-      <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
-    `;
-    editTargetDynamic.appendChild(targetCol);
-
-    if (editCurrentDynamic) {
-      const currentCol = document.createElement("div");
-      currentCol.innerHTML = `
+    reversedLevels.forEach((level) => {
+      const targetCol = document.createElement("div");
+      targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
       `;
-      editCurrentDynamic.appendChild(currentCol);
-    }
-  });
+      editTargetDynamic.appendChild(targetCol);
 
-  // Pre-fill target values
-  const targetVals = decodeFromSmallest(bar.targetSmallest, safeLevels);
-  const targetInputs = Array.from(editTargetDynamic.querySelectorAll('.target-val-input'));
-  targetInputs.forEach((input, i) => {
-    input.value = targetVals[i] ?? 0;
-  });
-
-  // Pre-fill current progress values
-  if (editCurrentDynamic) {
-    const currentVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
-    const currentInputs = Array.from(editCurrentDynamic.querySelectorAll('.current-val-input'));
-    currentInputs.forEach((input, i) => {
-      input.value = currentVals[i] ?? 0;
+      if (editCurrentDynamic) {
+        const currentCol = document.createElement("div");
+        currentCol.innerHTML = `
+          <label class="form-row-label">${escapeHtml(level.name)}</label>
+          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+        `;
+        editCurrentDynamic.appendChild(currentCol);
+      }
     });
+
+    // Pre-fill target values
+    const targetVals = decodeFromSmallest(bar.targetSmallest, safeLevels);
+    const targetInputs = Array.from(editTargetDynamic.querySelectorAll('.target-val-input'));
+    targetInputs.forEach((input, i) => {
+      input.value = targetVals[i] ?? 0;
+    });
+
+    // Pre-fill current progress values
+    if (editCurrentDynamic) {
+      const currentVals = decodeFromSmallest(bar.currentSmallest, safeLevels);
+      const currentInputs = Array.from(editCurrentDynamic.querySelectorAll('.current-val-input'));
+      currentInputs.forEach((input, i) => {
+        input.value = currentVals[i] ?? 0;
+      });
+    }
+  } else if (barType === "checklist") {
+    editChecklistItems = JSON.parse(JSON.stringify(bar.items || []));
+    renderEditChecklist();
+  } else if (barType === "note") {
+    document.getElementById("edit-note-text").value = bar.text || "";
   }
+
+  // Clear relative inputs and checkbox first
+  document.getElementById('edit-deadline-hrs').value = "";
+  document.getElementById('edit-deadline-mins').value = "";
+  const editDeadlineClear = document.getElementById('edit-deadline-clear');
+  if (editDeadlineClear) editDeadlineClear.checked = false;
+  document.getElementById('edit-deadline-date').value = "";
+  document.getElementById('edit-deadline-time').value = "";
 
   // Pre-fill deadline if bar has one
   const deadlineMs = getDeadlineMs(bar);
@@ -1240,10 +1619,30 @@ function openEditModal(bar) {
       const hrsStr = String(d.getHours()).padStart(2, '0');
       const minsStr = String(d.getMinutes()).padStart(2, '0');
 
-      document.getElementById('edit-deadline-date').value = `${yyyy}-${mm}-${dd}`;
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const dateInput = document.getElementById('edit-deadline-date');
+      dateInput.value = dateStr;
       document.getElementById('edit-deadline-time').value = `${hrsStr}:${minsStr}`;
+
+      // Set min date to the pre-filled past date to avoid browser validation blocking
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (dateStr < todayStr) {
+        dateInput.min = dateStr;
+      } else {
+        dateInput.min = todayStr;
+      }
     }
   }
+
+  // Store initial state to detect user touches later
+  window.editModalInitialDeadline = {
+    date: document.getElementById('edit-deadline-date').value || "",
+    time: document.getElementById('edit-deadline-time').value || "",
+    hrs: "",
+    mins: "",
+    clearChecked: false
+  };
 
   openModal(modalEdit);
 }
@@ -1260,70 +1659,100 @@ formCreate.addEventListener("submit", async (e) => {
   if (!currentUser) return;
 
   const title = document.getElementById("bar-title").value.trim();
-  const preset = barPresetSelect.value;
-  const levels = getLevelsFromForm();
+  const type = document.querySelector('input[name="create-tracker-type"]:checked').value;
 
-  // Custom Validation
-  if (preset === "Custom") {
-    const countSelect = document.getElementById("custom-level-count");
-    const count = parseInt(countSelect.value) || 1;
-    const l1Name = document.getElementById("custom-l1-name")?.value.trim();
-    if (!l1Name) {
-      showToast("Level 1 Name is required.", "error");
+  let preset = null;
+  let levels = null;
+  let targetSmallest = null;
+  let currentSmallest = null;
+  let items = null;
+  let text = null;
+
+  if (type === "goal") {
+    preset = barPresetSelect.value;
+    levels = getLevelsFromForm();
+
+    // Custom Validation
+    if (preset === "Custom") {
+      const countSelect = document.getElementById("custom-level-count");
+      const count = parseInt(countSelect.value) || 1;
+      const l1Name = document.getElementById("custom-l1-name")?.value.trim();
+      if (!l1Name) {
+        showToast("Level 1 Name is required.", "error");
+        return;
+      }
+      if (count >= 2) {
+        const l2Name = document.getElementById("custom-l2-name")?.value.trim();
+        const l2Ratio = parseInt(document.getElementById("custom-l2-ratio")?.value);
+        if (!l2Name) {
+          showToast("Level 2 Name is required.", "error");
+          return;
+        }
+        if (isNaN(l2Ratio) || l2Ratio < 2) {
+          showToast("Level 2 conversion ratio must be an integer greater than or equal to 2.", "error");
+          return;
+        }
+      }
+      if (count === 3) {
+        const l3Name = document.getElementById("custom-l3-name")?.value.trim();
+        const l3Ratio = parseInt(document.getElementById("custom-l3-ratio")?.value);
+        if (!l3Name) {
+          showToast("Level 3 Name is required.", "error");
+          return;
+        }
+        if (isNaN(l3Ratio) || l3Ratio < 2) {
+          showToast("Level 3 conversion ratio must be an integer greater than or equal to 2.", "error");
+          return;
+        }
+      }
+    }
+
+    // Fetch form values in largest-to-smallest order
+    const targetInputs = Array.from(createTargetDynamic.querySelectorAll(".target-val-input"));
+    const isTimePres = (preset === 'Time');
+    const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+
+    // Compute smallest unit totals
+    targetSmallest = encodeToSmallest(targetValsReversed, levels);
+
+    // Simple validation
+    if (targetSmallest <= 0) {
+      showToast("Target goal must be greater than 0.", "error");
       return;
     }
-    if (count >= 2) {
-      const l2Name = document.getElementById("custom-l2-name")?.value.trim();
-      const l2Ratio = parseInt(document.getElementById("custom-l2-ratio")?.value);
-      if (!l2Name) {
-        showToast("Level 2 Name is required.", "error");
-        return;
-      }
-      if (isNaN(l2Ratio) || l2Ratio < 2) {
-        showToast("Level 2 conversion ratio must be an integer greater than or equal to 2.", "error");
-        return;
-      }
+
+    const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
+    const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+    currentSmallest = encodeToSmallest(currentValsReversed, levels);
+
+    if (currentSmallest < 0) {
+      showToast("Current progress must be at least 0.", "error");
+      return;
     }
-    if (count === 3) {
-      const l3Name = document.getElementById("custom-l3-name")?.value.trim();
-      const l3Ratio = parseInt(document.getElementById("custom-l3-ratio")?.value);
-      if (!l3Name) {
-        showToast("Level 3 Name is required.", "error");
-        return;
-      }
-      if (isNaN(l3Ratio) || l3Ratio < 2) {
-        showToast("Level 3 conversion ratio must be an integer greater than or equal to 2.", "error");
-        return;
-      }
+
+    if (currentSmallest > targetSmallest) {
+      showToast("Current progress cannot exceed target goal.", "error");
+      return;
     }
-  }
-
-  // Fetch form values in largest-to-smallest order
-  const targetInputs = Array.from(createTargetDynamic.querySelectorAll(".target-val-input"));
-  const isTimePres = (preset === 'Time');
-  const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-
-  // Compute smallest unit totals
-  const targetSmallest = encodeToSmallest(targetValsReversed, levels);
-
-  // Simple validation
-  if (targetSmallest <= 0) {
-    showToast("Target goal must be greater than 0.", "error");
-    return;
-  }
-
-  const currentInputs = Array.from(createCurrentDynamic.querySelectorAll(".current-val-input"));
-  const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-  const currentSmallest = encodeToSmallest(currentValsReversed, levels);
-
-  if (currentSmallest < 0) {
-    showToast("Current progress must be at least 0.", "error");
-    return;
-  }
-
-  if (currentSmallest > targetSmallest) {
-    showToast("Current progress cannot exceed target goal.", "error");
-    return;
+  } else if (type === "checklist") {
+    if (createChecklistItems.length === 0) {
+      showToast("Please add at least one item to the checklist.", "error");
+      return;
+    }
+    const emptyItem = createChecklistItems.find(item => !item.text.trim());
+    if (emptyItem) {
+      showToast("Checklist item text cannot be empty.", "error");
+      return;
+    }
+    items = createChecklistItems;
+    targetSmallest = items.length;
+    currentSmallest = items.filter(item => item.done).length;
+  } else if (type === "note") {
+    text = document.getElementById("create-note-text").value;
+    if (!text.trim()) {
+      showToast("Note content cannot be empty.", "error");
+      return;
+    }
   }
 
   // Handle Deadline calculation in Create mode
@@ -1361,17 +1790,27 @@ formCreate.addEventListener("submit", async (e) => {
     return;
   }
 
+  const completed = type === "goal"
+    ? (currentSmallest >= targetSmallest)
+    : (type === "checklist"
+        ? (items && items.length > 0 && items.every(item => item.done))
+        : false);
+
   try {
     closeModal(modalCreate);
     await createBar(isGuestMode() ? null : currentUser.uid, {
       title,
+      type,
       preset,
       levels,
       targetSmallest,
       currentSmallest,
+      items,
+      text,
+      completed,
       deadlineAt
     });
-    showToast(`Successfully created progress bar "${title}"!`, "success");
+    showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
     showToast("Failed to create progress bar. Try again later.", "error");
   }
@@ -1384,36 +1823,64 @@ formEdit.addEventListener("submit", async (e) => {
   if (!currentUser || !selectedBar) return;
 
   const title = document.getElementById("edit-bar-title").value.trim();
-  const preset = selectedBar.preset;
-  const levels = (selectedBar.levels && selectedBar.levels.length) ? selectedBar.levels : [{ name: selectedBar.preset || 'Units', conversionToNext: null }];
+  const barType = selectedBar.type || "goal";
 
-  // Fetch form values in largest-to-smallest order
-  const targetInputs = Array.from(editTargetDynamic.querySelectorAll(".target-val-input"));
-  const isTimePres = (preset === 'Time');
-  const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+  let preset = selectedBar.preset;
+  let levels = null;
+  let targetSmallest = null;
+  let currentSmallest = null;
+  let items = null;
+  let text = null;
 
-  // Compute smallest unit totals
-  const targetSmallest = encodeToSmallest(targetValsReversed, levels);
+  if (barType === "goal") {
+    levels = (selectedBar.levels && selectedBar.levels.length) ? selectedBar.levels : [{ name: selectedBar.preset || 'Units', conversionToNext: null }];
+    // Fetch form values in largest-to-smallest order
+    const targetInputs = Array.from(editTargetDynamic.querySelectorAll(".target-val-input"));
+    const isTimePres = (preset === 'Time');
+    const targetValsReversed = targetInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
 
-  // Simple validation
-  if (targetSmallest <= 0) {
-    showToast("Target goal must be greater than 0.", "error");
-    return;
-  }
+    // Compute smallest unit totals
+    targetSmallest = encodeToSmallest(targetValsReversed, levels);
 
-  const editCurrentDynamic = document.getElementById("edit-current-dynamic");
-  const currentInputs = editCurrentDynamic ? Array.from(editCurrentDynamic.querySelectorAll(".current-val-input")) : [];
-  const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
-  const currentSmallest = encodeToSmallest(currentValsReversed, levels);
+    // Simple validation
+    if (targetSmallest <= 0) {
+      showToast("Target goal must be greater than 0.", "error");
+      return;
+    }
 
-  if (currentSmallest < 0) {
-    showToast("Current progress must be at least 0.", "error");
-    return;
-  }
+    const editCurrentDynamic = document.getElementById("edit-current-dynamic");
+    const currentInputs = editCurrentDynamic ? Array.from(editCurrentDynamic.querySelectorAll(".current-val-input")) : [];
+    const currentValsReversed = currentInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+    currentSmallest = encodeToSmallest(currentValsReversed, levels);
 
-  if (currentSmallest > targetSmallest) {
-    showToast("Current progress cannot exceed target goal.", "error");
-    return;
+    if (currentSmallest < 0) {
+      showToast("Current progress must be at least 0.", "error");
+      return;
+    }
+
+    if (currentSmallest > targetSmallest) {
+      showToast("Current progress cannot exceed target goal.", "error");
+      return;
+    }
+  } else if (barType === "checklist") {
+    if (editChecklistItems.length === 0) {
+      showToast("Please add at least one item to the checklist.", "error");
+      return;
+    }
+    const emptyItem = editChecklistItems.find(item => !item.text.trim());
+    if (emptyItem) {
+      showToast("Checklist item text cannot be empty.", "error");
+      return;
+    }
+    items = editChecklistItems;
+    targetSmallest = items.length;
+    currentSmallest = items.filter(item => item.done).length;
+  } else if (barType === "note") {
+    text = document.getElementById("edit-note-text").value;
+    if (!text.trim()) {
+      showToast("Note content cannot be empty.", "error");
+      return;
+    }
   }
 
   // Handle Deadline calculation in Edit mode
@@ -1423,27 +1890,42 @@ formEdit.addEventListener("submit", async (e) => {
   const minsInput = document.getElementById('edit-deadline-mins');
   const clearCheckbox = document.getElementById('edit-deadline-clear');
 
-  let deadlineAt = null;
+  const initial = window.editModalInitialDeadline || {};
+  const isDateChanged = (dateInput?.value || "") !== (initial.date || "");
+  const isTimeChanged = (timeInput?.value || "") !== (initial.time || "");
+  const isHrsChanged = (hrsInput?.value || "") !== (initial.hrs || "");
+  const isMinsChanged = (minsInput?.value || "") !== (initial.mins || "");
+  const isClearChanged = (clearCheckbox?.checked || false) !== (initial.clearChecked || false);
+
+  const isDeadlineTouched = isDateChanged || isTimeChanged || isHrsChanged || isMinsChanged || isClearChanged;
+
+  let deadlineAt = selectedBar.deadlineAt ? (typeof selectedBar.deadlineAt.toDate === 'function' ? selectedBar.deadlineAt.toDate().getTime() : Number(selectedBar.deadlineAt)) : null;
   let updateDeadline = false;
 
-  if (clearCheckbox?.checked) {
-    deadlineAt = null;
+  if (isDeadlineTouched) {
     updateDeadline = true;
-  } else if (dateInput?.value) {
-    const timeVal = timeInput?.value || "23:59";
-    const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
-    deadlineAt = deadlineDate.getTime();
-    if (deadlineAt <= Date.now()) {
-      showToast("Deadline must be in the future.", "error");
-      return;
-    }
-    updateDeadline = true;
-  } else if (hrsInput?.value || minsInput?.value) {
-    const hrs = parseFloat(hrsInput.value) || 0;
-    const mins = parseFloat(minsInput.value) || 0;
-    if (hrs > 0 || mins > 0) {
-      deadlineAt = Date.now() + (hrs * 3600000) + (mins * 60000);
-      updateDeadline = true;
+    if (clearCheckbox?.checked) {
+      deadlineAt = null;
+    } else if (dateInput?.value) {
+      const timeVal = timeInput?.value || "23:59";
+      const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
+      deadlineAt = deadlineDate.getTime();
+      if (deadlineAt <= Date.now()) {
+        showToast("Deadline must be in the future.", "error");
+        return;
+      }
+    } else if (hrsInput?.value || minsInput?.value) {
+      const hrs = parseFloat(hrsInput.value) || 0;
+      const mins = parseFloat(minsInput.value) || 0;
+      if (hrs > 0 || mins > 0) {
+        deadlineAt = Date.now() + (hrs * 3600000) + (mins * 60000);
+      } else {
+        showToast("Deadline duration must be greater than 0.", "error");
+        return;
+      }
+    } else {
+      // Inputs cleared but clear checkbox not ticked: remove the deadline
+      deadlineAt = null;
     }
   }
 
@@ -1451,9 +1933,12 @@ formEdit.addEventListener("submit", async (e) => {
     closeModal(modalEdit);
     await editBar(isGuestMode() ? null : currentUser.uid, selectedBar.id, {
       title,
-      levels: selectedBar.levels,
+      levels: barType === "goal" ? levels : null,
       targetSmallest,
       currentSmallest,
+      items: barType === "checklist" ? items : null,
+      text: barType === "note" ? text : null,
+      completed: barType === "goal" ? (currentSmallest >= targetSmallest) : (barType === "checklist" ? (items.length > 0 && items.every(i => i.done)) : (barType === "note" ? selectedBar.completed : undefined)),
       deadlineAt,
       updateDeadline
     });
@@ -1470,30 +1955,74 @@ formUpdate.addEventListener("submit", async (e) => {
   if (!currentUser || !selectedBar) return;
 
   const barId = updateBarIdInput.value;
+  const barType = selectedBar.type || "goal";
 
-  // Fetch input fields
-  const updateInputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
-  const isTimePres = (selectedBar.preset === 'Time');
-  const currentValsReversed = updateInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
+  if (barType === "goal") {
+    // Fetch input fields
+    const updateInputs = Array.from(updateCurrentDynamic.querySelectorAll(".update-val-input"));
+    const isTimePres = (selectedBar.preset === 'Time');
+    const currentValsReversed = updateInputs.map(input => isTimePres ? (parseInt(input.value) || 0) : (parseFloat(input.value) || 0));
 
-  const currentSmallest = encodeToSmallest(currentValsReversed, selectedBar.levels);
+    const currentSmallest = encodeToSmallest(currentValsReversed, selectedBar.levels);
 
-  if (currentSmallest < 0) {
-    showToast("Current progress must be at least 0.", "error");
-    return;
-  }
+    if (currentSmallest < 0) {
+      showToast("Current progress must be at least 0.", "error");
+      return;
+    }
 
-  if (currentSmallest > selectedBar.targetSmallest) {
-    showToast("Current progress cannot exceed target goal.", "error");
-    return;
-  }
+    if (currentSmallest > selectedBar.targetSmallest) {
+      showToast("Current progress cannot exceed target goal.", "error");
+      return;
+    }
 
-  try {
-    closeModal(modalUpdate);
-    await updateBarProgress(isGuestMode() ? null : currentUser.uid, barId, currentSmallest);
-    showToast(`Progress for "${selectedBar.title}" updated.`, "success");
-  } catch (error) {
-    showToast("Failed to update progress.", "error");
+    try {
+      closeModal(modalUpdate);
+      const completed = currentSmallest >= selectedBar.targetSmallest;
+      await updateBarProgress(isGuestMode() ? null : currentUser.uid, barId, currentSmallest, completed);
+      showToast(`Progress for "${selectedBar.title}" updated.`, "success");
+    } catch (error) {
+      showToast("Failed to update progress.", "error");
+    }
+  } else if (barType === "checklist") {
+    const items = updateChecklistItems;
+    const targetSmallest = items.length;
+    const currentSmallest = items.filter(item => item.done).length;
+    const completed = items.length > 0 && items.every(item => item.done);
+
+    try {
+      closeModal(modalUpdate);
+      await editBar(isGuestMode() ? null : currentUser.uid, barId, {
+        title: selectedBar.title,
+        targetSmallest,
+        currentSmallest,
+        items,
+        completed,
+        updateDeadline: false
+      });
+      showToast(`Checklist progress for "${selectedBar.title}" updated.`, "success");
+    } catch (error) {
+      showToast("Failed to update checklist progress.", "error");
+    }
+  } else if (barType === "note") {
+    const text = document.getElementById("update-note-text").value;
+    if (!text.trim()) {
+      showToast("Note content cannot be empty.", "error");
+      return;
+    }
+    const completed = document.getElementById("update-mark-complete").checked;
+
+    try {
+      closeModal(modalUpdate);
+      await editBar(isGuestMode() ? null : currentUser.uid, barId, {
+        title: selectedBar.title,
+        text,
+        completed,
+        updateDeadline: false
+      });
+      showToast(`Note "${selectedBar.title}" updated.`, "success");
+    } catch (error) {
+      showToast("Failed to update note content.", "error");
+    }
   }
 });
 
@@ -1763,7 +2292,12 @@ function setupDeadlineMutualExclusion(prefix = "") {
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    dateInput.min = `${yyyy}-${mm}-${dd}`;
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    if (dateInput.value && dateInput.value < todayStr) {
+      dateInput.min = dateInput.value;
+    } else {
+      dateInput.min = todayStr;
+    }
   };
   updateMinDate();
 
