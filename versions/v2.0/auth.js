@@ -1,4 +1,4 @@
-﻿// auth.js
+// auth.js
 import { auth, isConfigured } from "./firebase-config.js";
 import { 
   signInWithPopup, 

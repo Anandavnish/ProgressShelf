@@ -1,4 +1,4 @@
-﻿// db.js
+// db.js
 import { db, isConfigured } from "./firebase-config.js";
 import { isGuestMode } from "./auth.js";
 import {

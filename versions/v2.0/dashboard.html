@@ -10,240 +10,44 @@
 
 <body>
 
-  <!-- Navbar (Rendered immediately to show natural layout) -->
-  <header class="navbar">
-    <div class="nav-container">
-      <a class="nav-logo" href="index.html">
-        <svg id="nav-logo-svg" class="logo-svg logo-loading" viewBox="30 15 170 110" fill="none"
-          xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
-              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4" />
-            </filter>
-            <linearGradient id="barBlue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#38BDF8" />
-              <stop offset="100%" stop-color="#2563EB" />
-            </linearGradient>
-            <linearGradient id="barOrange" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#FBBF24" />
-              <stop offset="100%" stop-color="#D97706" />
-            </linearGradient>
-            <linearGradient id="barRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#F87171" />
-              <stop offset="100%" stop-color="#DC2626" />
-            </linearGradient>
-            <linearGradient id="barGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4ADE80" />
-              <stop offset="100%" stop-color="#16A34A" />
-            </linearGradient>
-            <linearGradient id="shelfGrad" x1="0" y1="0" x2="100%" y2="0">
-              <stop offset="0%" stop-color="#1E293B" />
-              <stop offset="50%" stop-color="#475569" />
-              <stop offset="100%" stop-color="#1E293B" />
-            </linearGradient>
-            <linearGradient id="shelfRail" x1="0" y1="0" x2="100%" y2="0">
-              <stop offset="0%" stop-color="#334155" />
-              <stop offset="50%" stop-color="#64748B" />
-              <stop offset="100%" stop-color="#334155" />
-            </linearGradient>
-          </defs>
-
-          <!-- Shelf Base -->
-          <rect x="36" y="108" width="168" height="7" rx="3.5" fill="url(#shelfGrad)" filter="url(#logoShadow)" />
-          <rect x="40" y="109" width="160" height="2" rx="1" fill="url(#shelfRail)" />
-
-          <!-- Bars -->
-          <rect class="logo-bar-1" x="60" y="90" width="16" height="16" rx="3" fill="url(#barBlue)" />
-          <rect class="logo-bar-2" x="84" y="70" width="16" height="36" rx="3" fill="url(#barOrange)" />
-          <rect class="logo-bar-3" x="108" y="50" width="16" height="56" rx="3" fill="url(#barRed)" />
-          <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#barGreen)" />
-
-          <!-- Plus -->
-          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5"
-            stroke-linecap="round" />
-
-          <!-- Red exclamation warning badge (Translation on parent, Scale animation on child) -->
-          <g transform="translate(116, 40)">
-            <g class="logo-badge-red">
-              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5" />
-              <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
-            </g>
-          </g>
-
-          <!-- Green checkmark badge (Translation on parent, Scale animation on child) -->
-          <g transform="translate(140, 20)">
-            <g class="logo-badge-green">
-              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5" />
-              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"
-                stroke-linejoin="round" />
-            </g>
-          </g>
-        </svg>
-        <span class="nav-logo-text">
-          <span class="text-gradient">Progress</span><span class="text-outline">Shelf</span>
-        </span>
-      </a>
-      <!-- Global Search Bar -->
-      <div class="nav-search-container">
-        <input type="text" id="global-search" class="nav-search-input" placeholder="Search for title...">
-        <button id="btn-search" class="nav-search-btn" title="Search">
-          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-        </button>
-      </div>
-      <div class="nav-toolbar">
-        <!-- GitHub Link -->
-        <a class="nav-github-link" href="https://github.com/Anandavnish/ProgressShelf" target="_blank"
-          rel="noopener noreferrer" title="View Source on GitHub">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" clip-rule="evenodd"
-              d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-          </svg>
-        </a>
-        <!-- Version Selector -->
-        <div class="version-selector">
-          <select class="version-select" onchange="location = this.value;">
-            <option value="../../dashboard.html">v3.0 (Latest)</option>
-            <option value="" disabled selected>v2.0 (Stable)</option>
-            <option value="../v1.0/dashboard.html">v1.0 (Basic)</option>
-          </select>
-        </div>
-        <!-- User Profile Dropdown Container -->
-        <div class="profile-menu-container">
-          <button id="btn-profile-badge" class="profile-badge-btn" title="Account Menu">
-            <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
-          </button>
-          <div id="profile-dropdown" class="profile-dropdown">
-            <div class="dropdown-header">
-              <p id="user-name" class="dropdown-user-name">Loading...</p>
-              <p id="user-status" class="dropdown-user-status">Online Mode</p>
-            </div>
-            <div class="dropdown-divider"></div>
-            <button id="btn-logout" class="dropdown-item btn-logout">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-              </svg>
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
+  <!-- Fullscreen Initial loading overlay to prevent flash of content -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="skeleton-percent"
+      style="animation: skeletonPulse 1s infinite; width: 60px; height: 60px; border-radius: 50%;"></div>
+  </div>
 
   <!-- Main App Wrapper (initially hidden) -->
   <div id="app-content" class="hidden">
 
-    <!-- Overall Stats Bar (3D Glossy Buttons) -->
-    <div id="stats-banner" class="stats-banner hidden">
-      <div class="stats-container">
-
-        <!-- All Trackers -->
-        <button class="stats-btn active" data-filter="all" id="btn-stat-all">
-          <div class="stats-icon-wrapper val-blue">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z" />
-              <path d="M8 10h8" />
-              <path d="M8 14h4" />
-              <circle cx="18" cy="18" r="4" fill="currentColor" opacity="0.2" />
-              <path d="M16 18l1.5 1.5L20 16" />
-            </svg>
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="nav-container">
+        <a class="nav-logo" href="#">
+          <span class="nav-logo-icon">📊</span>
+          <span class="nav-logo-text">ProgressShelf</span>
+        </a>
+        <div class="nav-profile">
+          <div class="user-info">
+            <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
+            <span id="user-name" class="user-name">Loading...</span>
           </div>
-          <div class="stats-info">
-            <span id="stat-total" class="stats-num">0</span>
-            <span class="stats-label">Trackers</span>
+          <div class="nav-actions-vertical">
+            <button id="btn-logout" class="btn-logout">Logout</button>
+            <div class="version-selector">
+              <select class="version-select" onchange="location = this.value;">
+                <option value="../../dashboard.html">v3.0 (Latest)</option>
+                <option value="" disabled selected>v2.0 (Stable)</option>
+                <option value="../v1.0/dashboard.html">v1.0 (Basic)</option>
+              </select>
+            </div>
           </div>
-        </button>
-
-        <div class="stats-divider" id="div-stat-deadlines"></div>
-
-        <!-- Active Deadlines -->
-        <button class="stats-btn" data-filter="deadlines" id="btn-stat-deadlines">
-          <div class="stats-icon-wrapper val-orange">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-              <circle cx="17" cy="17" r="4" fill="currentColor" opacity="0.2" />
-              <polyline points="17 15 17 17 18.5 18" />
-            </svg>
-          </div>
-          <div class="stats-info">
-            <span id="stat-deadlines" class="stats-num">0</span>
-            <span class="stats-label">Active Deadlines</span>
-          </div>
-        </button>
-
-        <div class="stats-divider" id="div-stat-overdue"></div>
-
-        <!-- Overdue -->
-        <button class="stats-btn" data-filter="overdue" id="btn-stat-overdue">
-          <div class="stats-icon-wrapper val-red">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="13" r="8" />
-              <path d="M5 3L2 6" />
-              <path d="M19 3l3 3" />
-              <path d="M12 9v4" />
-              <path d="M12 16h.01" stroke-width="3" />
-            </svg>
-          </div>
-          <div class="stats-info">
-            <span id="stat-overdue" class="stats-num">0</span>
-            <span class="stats-label">Overdue</span>
-          </div>
-        </button>
-
-        <div class="stats-divider" id="div-stat-completed"></div>
-
-        <!-- Completed -->
-        <button class="stats-btn" data-filter="completed" id="btn-stat-completed">
-          <div class="stats-icon-wrapper val-green">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M8 12l3 3 5-5" />
-            </svg>
-          </div>
-          <div class="stats-info">
-            <span id="stat-completed" class="stats-num">0</span>
-            <span class="stats-label">Completed</span>
-          </div>
-        </button>
-
-        <div class="stats-divider" id="div-stat-flexible"></div>
-
-        <!-- Flexible Goals (Without Deadlines) -->
-        <button class="stats-btn" data-filter="flexible" id="btn-stat-flexible">
-          <div class="stats-icon-wrapper val-purple">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2" />
-              <path d="M12 2v2m0 16v2m-10-10h2m16 0h2" />
-            </svg>
-          </div>
-          <div class="stats-info">
-            <span id="stat-flexible" class="stats-num">0</span>
-            <span class="stats-label">Flexible Goals</span>
-          </div>
-        </button>
-      </div> <!-- Close stats-container -->
-    </div> <!-- Close stats-banner -->
-
+        </div>
+      </div>
+    </header>
 
     <div id="guest-banner" class="guest-banner" style="display:none;">
       <span>
-        You're in guest mode ΓÇö data stays in this browser only.
+        You're in guest mode — data stays in this browser only.
       </span>
       <button id="btn-banner-login" class="btn-banner-login">
         Sign in to sync
@@ -252,9 +56,6 @@
 
     <!-- Main Dashboard Section -->
     <main class="dashboard-main">
-      <!-- Search Helper Notification -->
-      <div id="search-helper" class="search-helper hidden"></div>
-
       <!-- Grid Container -->
       <div id="cards-grid" class="cards-grid">
         <!-- Skeleton Cards (Shown while loading Firestore) -->
@@ -393,8 +194,8 @@
             <!-- Title -->
             <div class="form-group">
               <label class="form-label" for="edit-bar-title">Title</label>
-              <input class="form-input" type="text" id="edit-bar-title"
-                placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50">
+              <input class="form-input" type="text" id="edit-bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar"
+                required maxlength="50">
             </div>
 
             <!-- Preset -->
@@ -466,11 +267,9 @@
               </div>
 
               <!-- Remove deadline checkbox -->
-              <div class="deadline-clear-row"
-                style="margin-top: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+              <div class="deadline-clear-row" style="margin-top: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="edit-deadline-clear" style="cursor: pointer;">
-                <label for="edit-deadline-clear" style="cursor: pointer; color: var(--text-muted);">Remove existing
-                  deadline</label>
+                <label for="edit-deadline-clear" style="cursor: pointer; color: var(--text-muted);">Remove existing deadline</label>
               </div>
             </div>
 
@@ -503,7 +302,7 @@
 
             <!-- Safety Delete Confirmation Pane (collapsible / dynamic) -->
             <div id="delete-safety-pane" class="delete-safety-panel hidden">
-              <span class="delete-safety-text">ΓÜá∩╕Å Are you sure you want to delete this progress bar? This action is
+              <span class="delete-safety-text">⚠️ Are you sure you want to delete this progress bar? This action is
                 permanent.</span>
               <div class="delete-safety-actions">
                 <button type="button" id="btn-delete-confirm-no" class="btn btn-secondary">No, Keep It</button>
@@ -525,22 +324,6 @@
         </form>
       </div>
     </div>
-
-
-    <!-- Footer Section -->
-    <footer class="app-footer">
-      <div class="footer-content">
-        <p class="footer-title">ProgressShelf ΓÇö Open source &amp; free forever</p>
-        <p class="footer-links">
-          Built by <a href="https://github.com/Anandavnish" target="_blank" rel="noopener noreferrer">Anand Avnish</a> with AI assistance (Antigravity, Claude &amp; Gemini)
-          <span class="footer-bullet">ΓÇó</span>
-          <a href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">View source on GitHub</a>
-          <span class="footer-bullet">ΓÇó</span>
-          <span class="footer-version">v2.0</span>
-        </p>
-        <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
-      </div>
-    </footer>
 
   </div>
 
