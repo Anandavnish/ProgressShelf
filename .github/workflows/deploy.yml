@@ -55,6 +55,9 @@ jobs:
           export { auth, db, firebaseConfig, isConfigured };
           EOF
 
+          mkdir -p versions/v2.0
+          cp firebase-config.js versions/v2.0/firebase-config.js
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
