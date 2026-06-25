@@ -10,6 +10,8 @@ const ASSETS_TO_CACHE = [
   'firebase-config.js',
   'favicon.svg',
   'logo.svg',
+  'icon-192.png',
+  'icon-512.png',
   'manifest.json'
 ];
 
@@ -60,7 +62,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
@@ -76,6 +78,10 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       }).catch((err) => {
+        // Offline fallback for navigation requests
+        if (event.request.mode === 'navigate') {
+          return caches.match('./', { ignoreSearch: true });
+        }
         console.error('[Service Worker] Fetch failed:', err);
       });
     })
