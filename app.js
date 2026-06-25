@@ -708,23 +708,14 @@ function renderDashboard(bars) {
       ` : "";
       
       const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-      const badgeIndex = Math.min(items.length - 1, 2);
 
       const itemsHtml = items.map((item, index) => {
         const collapsibleClass = index >= 3 ? " collapsible-item" : "";
         const inlineStyle = index >= 3 ? ' style="display: none;"' : '';
-        
-        // Show percentage badge next to the badgeIndex item if progress != 0
-        const isBadgeItem = (index === badgeIndex);
-        const percentHtml = (isBadgeItem && percentage !== 0) ? `
-          <span class="checklist-percent-badge" style="margin-left: auto; font-weight: 700; color: var(--text-primary); font-size: 1.1rem; flex-shrink: 0;">${percentage}%</span>
-        ` : "";
-
         return `
           <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
             <input type="checkbox" ${item.done ? "checked" : ""}>
             <span class="checklist-item-text">${escapeHtml(item.text)}</span>
-            ${percentHtml}
           </label>
         `;
       }).join("");
@@ -732,7 +723,8 @@ function renderDashboard(bars) {
       let pbarHtml = "";
       if (percentage !== 0) {
         pbarHtml = `
-          <div class="progressbar-track" style="margin-top: 14px; margin-bottom: 0px;">
+          <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
+          <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
             <div class="progressbar-fill" style="width: ${percentage}%;"></div>
           </div>
         `;
@@ -870,33 +862,13 @@ function renderDashboard(bars) {
           const progressWrapper = card.querySelector(".checklist-progress-wrapper");
           const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
           
-          // Remove old percentage badges from all items on the card
-          card.querySelectorAll(".checklist-percent-badge").forEach(el => el.remove());
-          
-          if (progressPercent !== 0) {
-            // Find the correct checklist item label and append the new badge (always index Min(len-1, 2))
-            const badgeIndex = Math.min(updatedItems.length - 1, 2);
-            const allItems = card.querySelectorAll(".card-checklist-item");
-            const badgeItemEl = allItems[badgeIndex];
-            if (badgeItemEl) {
-              const badge = document.createElement("span");
-              badge.className = "checklist-percent-badge";
-              badge.style.marginLeft = "auto";
-              badge.style.fontWeight = "700";
-              badge.style.color = "var(--text-primary)";
-              badge.style.fontSize = "1.1rem";
-              badge.style.flexShrink = "0";
-              badge.textContent = `${progressPercent}%`;
-              badgeItemEl.appendChild(badge);
-            }
-          }
-          
           if (progressWrapper) {
             if (progressPercent === 0) {
               progressWrapper.innerHTML = "";
             } else {
               progressWrapper.innerHTML = `
-                <div class="progressbar-track" style="margin-top: 14px; margin-bottom: 0px;">
+                <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
+                <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
                   <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
                 </div>
               `;
@@ -1053,7 +1025,7 @@ window.addEventListener("click", (e) => {
   }
 
   // Collapse checklist cards when clicking outside them
-  document.querySelectorAll(".card.expanded").forEach(card => {
+  document.querySelectorAll(".card-progress.expanded").forEach(card => {
     if (!card.contains(e.target)) {
       collapseCard(card);
     }
@@ -1062,7 +1034,7 @@ window.addEventListener("click", (e) => {
 
 // Close expanded checklist cards on scroll
 window.addEventListener("scroll", () => {
-  document.querySelectorAll(".card.expanded").forEach(card => {
+  document.querySelectorAll(".card-progress.expanded").forEach(card => {
     collapseCard(card);
   });
 }, { passive: true });
@@ -1072,12 +1044,6 @@ function collapseCard(card) {
   card.querySelectorAll(".collapsible-item").forEach(item => {
     item.style.display = "none";
   });
-  const showMoreBtn = card.querySelector(".show-more-indicator");
-  if (showMoreBtn) {
-    const totalCount = card.querySelectorAll(".card-checklist-item").length;
-    showMoreBtn.textContent = `Show more (+${totalCount - 3})`;
-    showMoreBtn.style.display = "block";
-  }
 }
 
 // Close active modals on Escape key press
