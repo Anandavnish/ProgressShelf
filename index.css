@@ -2340,7 +2340,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   gap: 10px;
   font-size: 0.92rem;
   color: var(--text-primary);
-  cursor: default;
+  cursor: pointer;
   transition: opacity 0.2s ease;
 }
 
@@ -2349,7 +2349,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   height: 16px;
   margin-top: 2px;
   accent-color: var(--success);
-  pointer-events: none; /* View-only on dashboard card */
+  cursor: pointer;
 }
 
 .card-checklist-item.done {
@@ -2409,6 +2409,20 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .card-progress.expanded .show-more-indicator {
   display: none;
+}
+
+.show-less-indicator {
+  font-size: 0.82rem;
+  color: var(--accent);
+  margin-top: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  display: none;
+  user-select: none;
+}
+
+.card-progress.expanded .show-less-indicator {
+  display: inline-block;
 }
 
 /* --- Update Modal Checklist List --- */

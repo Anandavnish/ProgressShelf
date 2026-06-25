@@ -702,24 +702,50 @@ function renderDashboard(bars) {
       const doneCount = items.filter(item => item.done).length;
       const totalCount = items.length;
       
-      const showMoreBtnHtml = totalCount > 3 ? `<div class="show-more-indicator">Show more (+${totalCount - 3})</div>` : "";
+      const showMoreBtnHtml = totalCount > 3 ? `
+        <div class="show-more-indicator">Show more (+${totalCount - 3})</div>
+        <div class="show-less-indicator">Collapse</div>
+      ` : "";
       
+      const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+      const badgeIndex = Math.min(items.length - 1, 2);
+
       const itemsHtml = items.map((item, index) => {
         const collapsibleClass = index >= 3 ? " collapsible-item" : "";
         const inlineStyle = index >= 3 ? ' style="display: none;"' : '';
+        
+        // Show percentage badge next to the badgeIndex item if progress != 0
+        const isBadgeItem = (index === badgeIndex);
+        const percentHtml = (isBadgeItem && percentage !== 0) ? `
+          <span class="checklist-percent-badge" style="margin-left: auto; font-weight: 700; color: var(--text-primary); font-size: 1.1rem; flex-shrink: 0;">${percentage}%</span>
+        ` : "";
+
         return `
-          <div class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
+          <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
             <input type="checkbox" ${item.done ? "checked" : ""}>
             <span class="checklist-item-text">${escapeHtml(item.text)}</span>
-          </div>
+            ${percentHtml}
+          </label>
         `;
       }).join("");
+
+      let pbarHtml = "";
+      if (percentage !== 0) {
+        pbarHtml = `
+          <div class="progressbar-track" style="margin-top: 14px; margin-bottom: 0px;">
+            <div class="progressbar-fill" style="width: ${percentage}%;"></div>
+          </div>
+        `;
+      }
 
       bodyHtml = `
         <div class="card-checklist-container">
           ${itemsHtml}
         </div>
         ${showMoreBtnHtml}
+        <div class="checklist-progress-wrapper">
+          ${pbarHtml}
+        </div>
         <div class="checklist-summary-line">
           <span>✓</span> ${doneCount} / ${totalCount} done
         </div>
@@ -812,6 +838,94 @@ function renderDashboard(bars) {
       openEditModal(bar);
     });
 
+    // Checkbox toggling on the dashboard card itself
+    if (barType === "checklist") {
+      card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
+        checkbox.addEventListener("click", (e) => {
+          e.stopPropagation(); // Stop click from opening update modal / expanding card
+        });
+        
+        checkbox.addEventListener("change", async (e) => {
+          const isChecked = e.target.checked;
+          const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
+          if (updatedItems[idx]) {
+            updatedItems[idx].done = isChecked;
+          }
+          
+          const targetSmallest = updatedItems.length;
+          const currentSmallest = updatedItems.filter(item => item.done).length;
+          const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
+          
+          // Optimistically update card item styling
+          const checklistItemEl = checkbox.closest(".card-checklist-item");
+          if (checklistItemEl) {
+            if (isChecked) {
+              checklistItemEl.classList.add("done");
+            } else {
+              checklistItemEl.classList.remove("done");
+            }
+          }
+          
+          // Optimistically update progress wrapper HTML (percentage and bar)
+          const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+          const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
+          
+          // Remove old percentage badges from all items on the card
+          card.querySelectorAll(".checklist-percent-badge").forEach(el => el.remove());
+          
+          if (progressPercent !== 0) {
+            // Find the correct checklist item label and append the new badge (always index Min(len-1, 2))
+            const badgeIndex = Math.min(updatedItems.length - 1, 2);
+            const allItems = card.querySelectorAll(".card-checklist-item");
+            const badgeItemEl = allItems[badgeIndex];
+            if (badgeItemEl) {
+              const badge = document.createElement("span");
+              badge.className = "checklist-percent-badge";
+              badge.style.marginLeft = "auto";
+              badge.style.fontWeight = "700";
+              badge.style.color = "var(--text-primary)";
+              badge.style.fontSize = "1.1rem";
+              badge.style.flexShrink = "0";
+              badge.textContent = `${progressPercent}%`;
+              badgeItemEl.appendChild(badge);
+            }
+          }
+          
+          if (progressWrapper) {
+            if (progressPercent === 0) {
+              progressWrapper.innerHTML = "";
+            } else {
+              progressWrapper.innerHTML = `
+                <div class="progressbar-track" style="margin-top: 14px; margin-bottom: 0px;">
+                  <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
+                </div>
+              `;
+            }
+          }
+          
+          // Optimistically update summary text
+          const summaryEl = card.querySelector(".checklist-summary-line");
+          if (summaryEl) {
+            summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
+          }
+          
+          try {
+            await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
+              title: bar.title,
+              targetSmallest,
+              currentSmallest,
+              items: updatedItems,
+              completed,
+              updateDeadline: false
+            });
+          } catch (error) {
+            showToast("Failed to update checklist progress.", "error");
+            renderBars(); // Revert to database state on error
+          }
+        });
+      });
+    }
+
     // Expansion & click interaction
     const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
                           (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
@@ -819,15 +933,33 @@ function renderDashboard(bars) {
     card.addEventListener("click", () => {
       if (!deleteConfirmPanel.classList.contains('hidden')) return;
 
-      if (isTruncatable && !card.classList.contains("expanded")) {
-        card.classList.add("expanded");
-        card.querySelectorAll(".collapsible-item").forEach(item => {
-          item.style.display = "flex";
-        });
+      if (barType === "checklist") {
+        if (isTruncatable && !card.classList.contains("expanded")) {
+          card.classList.add("expanded");
+          card.querySelectorAll(".collapsible-item").forEach(item => {
+            item.style.display = "flex";
+          });
+        }
       } else {
-        openUpdateModal(bar);
+        if (isTruncatable && !card.classList.contains("expanded")) {
+          card.classList.add("expanded");
+          card.querySelectorAll(".collapsible-item").forEach(item => {
+            item.style.display = "flex";
+          });
+        } else {
+          openUpdateModal(bar);
+        }
       }
     });
+
+    // Wire up collapse button click listener
+    const showLessBtn = card.querySelector(".show-less-indicator");
+    if (showLessBtn) {
+      showLessBtn.addEventListener("click", (e) => {
+        e.stopPropagation(); // Stop click from bubbling up to the card
+        collapseCard(card);
+      });
+    }
 
     cardsGrid.appendChild(card);
     if (getDeadlineMs(bar)) {
@@ -919,7 +1051,34 @@ window.addEventListener("click", (e) => {
   if (e.target.classList.contains("modal-overlay")) {
     closeModal(e.target);
   }
+
+  // Collapse checklist cards when clicking outside them
+  document.querySelectorAll(".card.expanded").forEach(card => {
+    if (!card.contains(e.target)) {
+      collapseCard(card);
+    }
+  });
 });
+
+// Close expanded checklist cards on scroll
+window.addEventListener("scroll", () => {
+  document.querySelectorAll(".card.expanded").forEach(card => {
+    collapseCard(card);
+  });
+}, { passive: true });
+
+function collapseCard(card) {
+  card.classList.remove("expanded");
+  card.querySelectorAll(".collapsible-item").forEach(item => {
+    item.style.display = "none";
+  });
+  const showMoreBtn = card.querySelector(".show-more-indicator");
+  if (showMoreBtn) {
+    const totalCount = card.querySelectorAll(".card-checklist-item").length;
+    showMoreBtn.textContent = `Show more (+${totalCount - 3})`;
+    showMoreBtn.style.display = "block";
+  }
+}
 
 // Close active modals on Escape key press
 document.addEventListener("keydown", (e) => {
