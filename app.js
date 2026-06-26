@@ -182,6 +182,7 @@ let selectedBar = null;
 let activeUnsubscribe = null;
 let authInitialized = false;
 let currentFilter = "all";
+const expandedCardIds = new Set();
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -602,9 +603,298 @@ function filterBars(bars) {
   });
 }
 
-// ==========================================
-// Dashboard Card Rendering
-// ==========================================
+function createCardElement(bar) {
+  const card = document.createElement("div");
+  card.className = "card-progress";
+  card.setAttribute("data-bar-id", bar.id);
+
+  // Calculate completion percentage
+  const percent = bar.targetSmallest > 0
+    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+    : 0;
+
+  // Get interpolated color
+  const barColor = getProgressColor(percent);
+  card.style.setProperty("--bar-color", barColor);
+
+  // Set timestamp reference for the 5-minute background check
+  let lastUpdatedMs = Date.now();
+  if (bar.lastUpdated) {
+    // Handle firestore Timestamp vs client side local date
+    lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
+      ? bar.lastUpdated.toDate().getTime()
+      : bar.lastUpdated;
+  }
+  card.setAttribute("data-last-updated", lastUpdatedMs);
+
+  // Add glowing pulse animation if updated in the last 5 minutes
+  const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
+  if (diffMinutes < 5) {
+    card.classList.add("pulse-glow");
+  }
+
+  const isExpanded = expandedCardIds.has(bar.id);
+  if (isExpanded) {
+    card.classList.add("expanded");
+  }
+
+  const barType = bar.type || "goal";
+  let bodyHtml = "";
+
+  if (barType === "goal") {
+    bodyHtml = `
+      <div class="card-body">
+        <div class="card-percent">${formatNumber(percent)}%</div>
+        <div class="progressbar-track">
+          <div class="progressbar-fill" style="width: ${percent}%;"></div>
+        </div>
+      </div>
+      <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
+    `;
+  } else if (barType === "checklist") {
+    const items = bar.items || [];
+    const doneCount = items.filter(item => item.done).length;
+    const totalCount = items.length;
+    
+    const showMoreBtnHtml = totalCount > 3 ? `
+      <div class="show-more-indicator">Show more (+${totalCount - 3})</div>
+      <div class="show-less-indicator">Collapse</div>
+    ` : "";
+    
+    const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+    const itemsHtml = items.map((item, index) => {
+      const collapsibleClass = index >= 3 ? " collapsible-item" : "";
+      const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
+      return `
+        <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
+          <input type="checkbox" ${item.done ? "checked" : ""}>
+          <span class="checklist-item-text">${escapeHtml(item.text)}</span>
+        </label>
+      `;
+    }).join("");
+
+    let pbarHtml = "";
+    if (percentage !== 0) {
+      pbarHtml = `
+        <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
+        <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
+          <div class="progressbar-fill" style="width: ${percentage}%;"></div>
+        </div>
+      `;
+    }
+
+    bodyHtml = `
+      <div class="card-checklist-container">
+        ${itemsHtml}
+      </div>
+      ${showMoreBtnHtml}
+      <div class="checklist-progress-wrapper">
+        ${pbarHtml}
+      </div>
+      <div class="checklist-summary-line">
+        <span>✓</span> ${doneCount} / ${totalCount} done
+      </div>
+    `;
+  } else if (barType === "note") {
+    const text = bar.text || "";
+    const isLongNote = text.length > 150 || text.includes("\n");
+    const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
+    bodyHtml = `
+      <div class="card-note-text">${escapeHtml(text)}</div>
+      ${showMoreBtnHtml}
+    `;
+  }
+
+  const isCompleted = isTrackerCompleted(bar);
+
+  card.innerHTML = `
+    <div class="card-actions">
+      <button class="btn-card-delete" title="Delete">
+        <svg width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2"
+          style="pointer-events:none;">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+        </svg>
+      </button>
+      <button class="btn-card-edit" title="Edit">
+        <svg width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2"
+          style="pointer-events:none;">
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </button>
+    </div>
+    <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
+    ${bodyHtml}
+    ${(isCompleted || getDeadlineMs(bar)) ? (() => {
+      const dMs = getDeadlineMs(bar);
+      if (isCompleted) {
+        return `
+          <hr class="card-divider">
+          <div class="card-deadline-label" data-completed="true" data-deadline-ms="${dMs || ''}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+            <span class="badge-completed">✓ Completed</span>
+          </div>
+        `;
+      } else {
+        const { label, isOverdue } = formatTimeLeft(dMs);
+        const overdueClass = isOverdue ? ' overdue' : '';
+        return `
+          <hr class="card-divider">
+          <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+            <span class="deadline-text-val">⏱ ${label}</span>
+          </div>
+        `;
+      }
+    })() : ''}
+
+    <!-- Inline delete confirmation overlay -->
+    <div class="card-delete-confirm hidden">
+      <p class="card-delete-confirm-text">Delete <strong>${escapeHtml(bar.title)}</strong>?</p>
+      <div class="card-delete-confirm-actions">
+        <button class="btn btn-secondary btn-delete-cancel-inline">Cancel</button>
+        <button class="btn btn-danger-confirm btn-delete-confirm-inline">Yes, Delete</button>
+      </div>
+    </div>
+  `;
+
+  // Wire up direct listeners on action buttons
+  const deleteConfirmPanel = card.querySelector('.card-delete-confirm');
+
+  card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteConfirmPanel.classList.remove('hidden');
+  });
+
+  card.querySelector('.btn-delete-cancel-inline').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteConfirmPanel.classList.add('hidden');
+  });
+
+  card.querySelector('.btn-delete-confirm-inline').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
+      .then(() => showToast(`Deleted "${bar.title}".`, "success"))
+      .catch(() => showToast("Failed to delete progress bar.", "error"));
+  });
+
+  card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openEditModal(bar);
+  });
+
+  // Checkbox toggling on the dashboard card itself
+  if (barType === "checklist") {
+    card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
+      checkbox.addEventListener("click", (e) => {
+        e.stopPropagation(); // Stop click from opening update modal / expanding card
+      });
+      
+      checkbox.addEventListener("change", async (e) => {
+        const isChecked = e.target.checked;
+        const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
+        if (updatedItems[idx]) {
+          updatedItems[idx].done = isChecked;
+        }
+        
+        const targetSmallest = updatedItems.length;
+        const currentSmallest = updatedItems.filter(item => item.done).length;
+        const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
+        
+        // Optimistically update card item styling
+        const checklistItemEl = checkbox.closest(".card-checklist-item");
+        if (checklistItemEl) {
+          if (isChecked) {
+            checklistItemEl.classList.add("done");
+          } else {
+            checklistItemEl.classList.remove("done");
+          }
+        }
+        
+        // Optimistically update progress wrapper HTML (percentage and bar)
+        const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+        const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
+        
+        if (progressWrapper) {
+          if (progressPercent === 0) {
+            progressWrapper.innerHTML = "";
+          } else {
+            progressWrapper.innerHTML = `
+              <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
+              <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
+                <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
+              </div>
+            `;
+          }
+        }
+        
+        // Optimistically update summary text
+        const summaryEl = card.querySelector(".checklist-summary-line");
+        if (summaryEl) {
+          summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
+        }
+        
+        try {
+          await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
+            title: bar.title,
+            targetSmallest,
+            currentSmallest,
+            items: updatedItems,
+            completed,
+            updateDeadline: false
+          });
+        } catch (error) {
+          showToast("Failed to update checklist progress.", "error");
+          renderDashboard(currentBars); // Revert to database state on error
+        }
+      });
+    });
+  }
+
+  // Expansion & click interaction
+  const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
+                        (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
+
+  card.addEventListener("click", () => {
+    if (!deleteConfirmPanel.classList.contains('hidden')) return;
+
+    if (barType === "checklist") {
+      if (isTruncatable && !card.classList.contains("expanded")) {
+        card.classList.add("expanded");
+        expandedCardIds.add(bar.id);
+        card.querySelectorAll(".collapsible-item").forEach(item => {
+          item.style.display = "flex";
+        });
+      }
+    } else {
+      if (isTruncatable && !card.classList.contains("expanded")) {
+        card.classList.add("expanded");
+        expandedCardIds.add(bar.id);
+        card.querySelectorAll(".collapsible-item").forEach(item => {
+          item.style.display = "flex";
+        });
+      } else {
+        openUpdateModal(bar);
+      }
+    }
+  });
+
+  // Wire up collapse button click listener
+  const showLessBtn = card.querySelector(".show-less-indicator");
+  if (showLessBtn) {
+    showLessBtn.addEventListener("click", (e) => {
+      e.stopPropagation(); // Stop click from bubbling up to the card
+      collapseCard(card);
+    });
+  }
+
+  if (getDeadlineMs(bar)) {
+    attachDeadlineBorder(card, bar);
+  }
+
+  return card;
+}
 
 function renderDashboard(bars) {
   currentBars = bars;
@@ -640,302 +930,47 @@ function renderDashboard(bars) {
     }
   }
 
-  cardsGrid.innerHTML = "";
-
-  // ADD CARD ALWAYS FIRST
-  const addCard = document.createElement("div");
-  addCard.className = "card-add";
-  addCard.id = "btn-add-card";
-  addCard.innerHTML = `
-    <div class="add-icon">+</div>
-    <span class="add-text">Add New Tracker</span>
-  `;
-  addCard.addEventListener("click", () => openCreateModal());
-  cardsGrid.appendChild(addCard);
-
-  // THEN render bar cards — newest first (reverse createdAt asc order)
-  filtered.reverse().forEach((bar) => {
-    const card = document.createElement("div");
-    card.className = "card-progress";
-    card.setAttribute("data-bar-id", bar.id);
-
-    // Calculate completion percentage
-    const percent = bar.targetSmallest > 0
-      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-      : 0;
-
-    // Get interpolated color
-    const barColor = getProgressColor(percent);
-    card.style.setProperty("--bar-color", barColor);
-
-    // Set timestamp reference for the 5-minute background check
-    let lastUpdatedMs = Date.now();
-    if (bar.lastUpdated) {
-      // Handle firestore Timestamp vs client side local date
-      lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
-        ? bar.lastUpdated.toDate().getTime()
-        : bar.lastUpdated;
-    }
-    card.setAttribute("data-last-updated", lastUpdatedMs);
-
-    // Add glowing pulse animation if updated in the last 5 minutes
-    const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
-    if (diffMinutes < 5) {
-      card.classList.add("pulse-glow");
-    }
-
-    const barType = bar.type || "goal";
-    let bodyHtml = "";
-
-    if (barType === "goal") {
-      bodyHtml = `
-        <div class="card-body">
-          <div class="card-percent">${formatNumber(percent)}%</div>
-          <div class="progressbar-track">
-            <div class="progressbar-fill" style="width: ${percent}%;"></div>
-          </div>
-        </div>
-        <div class="card-label" title="${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}">${escapeHtml(formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels))}</div>
-      `;
-    } else if (barType === "checklist") {
-      const items = bar.items || [];
-      const doneCount = items.filter(item => item.done).length;
-      const totalCount = items.length;
-      
-      const showMoreBtnHtml = totalCount > 3 ? `
-        <div class="show-more-indicator">Show more (+${totalCount - 3})</div>
-        <div class="show-less-indicator">Collapse</div>
-      ` : "";
-      
-      const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-
-      const itemsHtml = items.map((item, index) => {
-        const collapsibleClass = index >= 3 ? " collapsible-item" : "";
-        const inlineStyle = index >= 3 ? ' style="display: none;"' : '';
-        return `
-          <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
-            <input type="checkbox" ${item.done ? "checked" : ""}>
-            <span class="checklist-item-text">${escapeHtml(item.text)}</span>
-          </label>
-        `;
-      }).join("");
-
-      let pbarHtml = "";
-      if (percentage !== 0) {
-        pbarHtml = `
-          <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
-          <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-            <div class="progressbar-fill" style="width: ${percentage}%;"></div>
-          </div>
-        `;
-      }
-
-      bodyHtml = `
-        <div class="card-checklist-container">
-          ${itemsHtml}
-        </div>
-        ${showMoreBtnHtml}
-        <div class="checklist-progress-wrapper">
-          ${pbarHtml}
-        </div>
-        <div class="checklist-summary-line">
-          <span>✓</span> ${doneCount} / ${totalCount} done
-        </div>
-      `;
-    } else if (barType === "note") {
-      const text = bar.text || "";
-      const isLongNote = text.length > 150 || text.includes("\n");
-      const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
-      bodyHtml = `
-        <div class="card-note-text">${escapeHtml(text)}</div>
-        ${showMoreBtnHtml}
-      `;
-    }
-
-    const isCompleted = isTrackerCompleted(bar);
-
-    card.innerHTML = `
-      <div class="card-actions">
-        <button class="btn-card-delete" title="Delete">
-          <svg width="16" height="16" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2"
-            style="pointer-events:none;">
-            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
-          </svg>
-        </button>
-        <button class="btn-card-edit" title="Edit">
-          <svg width="16" height="16" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" stroke-width="2"
-            style="pointer-events:none;">
-            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-      </div>
-      <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
-      ${bodyHtml}
-      ${(isCompleted || getDeadlineMs(bar)) ? (() => {
-        const dMs = getDeadlineMs(bar);
-        if (isCompleted) {
-          return `
-            <hr class="card-divider">
-            <div class="card-deadline-label" data-completed="true" data-deadline-ms="${dMs || ''}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-              <span class="badge-completed">✓ Completed</span>
-            </div>
-          `;
-        } else {
-          const { label, isOverdue } = formatTimeLeft(dMs);
-          const overdueClass = isOverdue ? ' overdue' : '';
-          return `
-            <hr class="card-divider">
-            <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-              <span class="deadline-text-val">⏱ ${label}</span>
-            </div>
-          `;
-        }
-      })() : ''}
-
-      <!-- Inline delete confirmation overlay -->
-      <div class="card-delete-confirm hidden">
-        <p class="card-delete-confirm-text">Delete <strong>${escapeHtml(bar.title)}</strong>?</p>
-        <div class="card-delete-confirm-actions">
-          <button class="btn btn-secondary btn-delete-cancel-inline">Cancel</button>
-          <button class="btn btn-danger-confirm btn-delete-confirm-inline">Yes, Delete</button>
-        </div>
-      </div>
+  // Ensure Add Card is always present
+  let addCard = document.getElementById("btn-add-card");
+  if (!addCard) {
+    addCard = document.createElement("div");
+    addCard.className = "card-add";
+    addCard.id = "btn-add-card";
+    addCard.innerHTML = `
+      <div class="add-icon">+</div>
+      <span class="add-text">Add New Tracker</span>
     `;
+    addCard.addEventListener("click", () => openCreateModal());
+    cardsGrid.insertBefore(addCard, cardsGrid.firstChild);
+  }
 
-    // Wire up direct listeners on action buttons
-    const deleteConfirmPanel = card.querySelector('.card-delete-confirm');
-
-    card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteConfirmPanel.classList.remove('hidden');
-    });
-
-    card.querySelector('.btn-delete-cancel-inline').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteConfirmPanel.classList.add('hidden');
-    });
-
-    card.querySelector('.btn-delete-confirm-inline').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
-        .then(() => showToast(`Deleted "${bar.title}".`, "success"))
-        .catch(() => showToast("Failed to delete progress bar.", "error"));
-    });
-
-    card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
-      e.stopPropagation();
-      openEditModal(bar);
-    });
-
-    // Checkbox toggling on the dashboard card itself
-    if (barType === "checklist") {
-      card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
-        checkbox.addEventListener("click", (e) => {
-          e.stopPropagation(); // Stop click from opening update modal / expanding card
-        });
-        
-        checkbox.addEventListener("change", async (e) => {
-          const isChecked = e.target.checked;
-          const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
-          if (updatedItems[idx]) {
-            updatedItems[idx].done = isChecked;
-          }
-          
-          const targetSmallest = updatedItems.length;
-          const currentSmallest = updatedItems.filter(item => item.done).length;
-          const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
-          
-          // Optimistically update card item styling
-          const checklistItemEl = checkbox.closest(".card-checklist-item");
-          if (checklistItemEl) {
-            if (isChecked) {
-              checklistItemEl.classList.add("done");
-            } else {
-              checklistItemEl.classList.remove("done");
-            }
-          }
-          
-          // Optimistically update progress wrapper HTML (percentage and bar)
-          const progressWrapper = card.querySelector(".checklist-progress-wrapper");
-          const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
-          
-          if (progressWrapper) {
-            if (progressPercent === 0) {
-              progressWrapper.innerHTML = "";
-            } else {
-              progressWrapper.innerHTML = `
-                <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
-                <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-                  <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
-                </div>
-              `;
-            }
-          }
-          
-          // Optimistically update summary text
-          const summaryEl = card.querySelector(".checklist-summary-line");
-          if (summaryEl) {
-            summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
-          }
-          
-          try {
-            await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
-              title: bar.title,
-              targetSmallest,
-              currentSmallest,
-              items: updatedItems,
-              completed,
-              updateDeadline: false
-            });
-          } catch (error) {
-            showToast("Failed to update checklist progress.", "error");
-            renderBars(); // Revert to database state on error
-          }
-        });
-      });
+  // Compile list of expected elements in order
+  const expectedElements = [addCard];
+  
+  // Render / reconcile card elements
+  filtered.reverse().forEach((bar) => {
+    const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
+    const newCard = createCardElement(bar);
+    if (oldCard) {
+      oldCard.replaceWith(newCard);
+      expectedElements.push(newCard);
+    } else {
+      expectedElements.push(newCard);
     }
+  });
 
-    // Expansion & click interaction
-    const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
-                          (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
-
-    card.addEventListener("click", () => {
-      if (!deleteConfirmPanel.classList.contains('hidden')) return;
-
-      if (barType === "checklist") {
-        if (isTruncatable && !card.classList.contains("expanded")) {
-          card.classList.add("expanded");
-          card.querySelectorAll(".collapsible-item").forEach(item => {
-            item.style.display = "flex";
-          });
-        }
-      } else {
-        if (isTruncatable && !card.classList.contains("expanded")) {
-          card.classList.add("expanded");
-          card.querySelectorAll(".collapsible-item").forEach(item => {
-            item.style.display = "flex";
-          });
-        } else {
-          openUpdateModal(bar);
-        }
-      }
-    });
-
-    // Wire up collapse button click listener
-    const showLessBtn = card.querySelector(".show-less-indicator");
-    if (showLessBtn) {
-      showLessBtn.addEventListener("click", (e) => {
-        e.stopPropagation(); // Stop click from bubbling up to the card
-        collapseCard(card);
-      });
+  // Remove any obsolete card DOM elements
+  const childrenArray = Array.from(cardsGrid.children);
+  childrenArray.forEach((child) => {
+    if (!expectedElements.includes(child)) {
+      child.remove();
     }
+  });
 
-    cardsGrid.appendChild(card);
-    if (getDeadlineMs(bar)) {
-      attachDeadlineBorder(card, bar);
+  // Reorder children to match expectedElements list
+  expectedElements.forEach((el, index) => {
+    if (cardsGrid.children[index] !== el) {
+      cardsGrid.insertBefore(el, cardsGrid.children[index] || null);
     }
   });
 }
@@ -1025,8 +1060,14 @@ window.addEventListener("click", (e) => {
   }
 
   // Collapse checklist cards when clicking outside them
+  const clickedCard = e.target.closest('.card-progress');
+  const clickedBarId = clickedCard ? clickedCard.getAttribute('data-bar-id') : null;
+
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
-    if (!card.contains(e.target)) {
+    const cardBarId = card.getAttribute('data-bar-id');
+    // If the click was inside this card (even if the card was replaced and is now detached),
+    // we match by data-bar-id to avoid collapsing it.
+    if (cardBarId !== clickedBarId && !card.contains(e.target)) {
       collapseCard(card);
     }
   });
@@ -1040,6 +1081,10 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 
 function collapseCard(card) {
+  const barId = card.getAttribute("data-bar-id");
+  if (barId) {
+    expandedCardIds.delete(barId);
+  }
   card.classList.remove("expanded");
   card.querySelectorAll(".collapsible-item").forEach(item => {
     item.style.display = "none";
