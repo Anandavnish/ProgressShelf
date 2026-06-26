@@ -433,6 +433,12 @@ body {
   transition: color var(--transition-speed) ease, transform var(--transition-speed) ease;
 }
 
+.nav-github-link svg {
+  width: 22.65px;
+  height: 22.65px;
+  display: block;
+}
+
 .nav-github-link:hover {
   color: var(--text-primary);
   transform: scale(1.05);
@@ -1980,8 +1986,10 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 9999px;      /* Perfect pill shape */
   padding: 3px 3px 3px 16px;  /* Left padding for text, small padding on right for nested button */
   gap: 8px;
-  width: 360px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 360px;
+  min-width: 158.9px;
+  margin: 0 22.65px;          /* Clean gap from logo and toolbar */
   transition: all var(--transition-speed) ease;
   position: relative;
 }
@@ -2000,6 +2008,30 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   font-size: 0.88rem;
   width: 100%;
   padding: 6px 0;
+}
+
+.nav-search-clear {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #57606a;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.nav-search-clear:hover {
+  color: var(--text-primary);
+}
+
+.nav-search-clear.hidden {
+  display: none !important;
 }
 
 .nav-search-input::placeholder {
@@ -2036,7 +2068,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* --- Mobile Responsive Collapsible Navbar Layout --- */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .navbar {
     padding: 10px 12px;
   }
