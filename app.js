@@ -603,6 +603,285 @@ function filterBars(bars) {
   });
 }
 
+function updateCardElement(card, bar) {
+  const barType = bar.type || "goal";
+  
+  // Check if card type changed
+  if (barType === "checklist" && !card.querySelector(".card-checklist-container")) return false;
+  if (barType === "note" && !card.querySelector(".card-note-text")) return false;
+  if (barType === "goal" && !card.querySelector(".card-body")) return false;
+
+  // Update attributes
+  let lastUpdatedMs = Date.now();
+  if (bar.lastUpdated) {
+    lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
+      ? bar.lastUpdated.toDate().getTime()
+      : bar.lastUpdated;
+  }
+  card.setAttribute("data-last-updated", lastUpdatedMs);
+
+  const diffMinutes = (Date.now() - lastUpdatedMs) / (1000 * 60);
+  if (diffMinutes < 5) {
+    card.classList.add("pulse-glow");
+  } else {
+    card.classList.remove("pulse-glow");
+  }
+
+  // Calculate completion percentage
+  const percent = bar.targetSmallest > 0
+    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+    : 0;
+
+  // Get interpolated color
+  const barColor = getProgressColor(percent);
+  card.style.setProperty("--bar-color", barColor);
+
+  // Update title
+  const titleEl = card.querySelector(".card-title");
+  if (titleEl) {
+    titleEl.textContent = bar.title;
+    titleEl.setAttribute("title", bar.title);
+  }
+
+  // Re-bind action button click listeners with latest bar data
+  // (Clone and replace the buttons to clear old listeners)
+  const btnEdit = card.querySelector(".btn-card-edit");
+  if (btnEdit) {
+    const newBtnEdit = btnEdit.cloneNode(true);
+    btnEdit.replaceWith(newBtnEdit);
+    newBtnEdit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEditModal(bar);
+    });
+  }
+
+  const btnDeleteConfirm = card.querySelector(".btn-delete-confirm-inline");
+  if (btnDeleteConfirm) {
+    const newBtnDeleteConfirm = btnDeleteConfirm.cloneNode(true);
+    btnDeleteConfirm.replaceWith(newBtnDeleteConfirm);
+    newBtnDeleteConfirm.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
+        .then(() => showToast(`Deleted "${bar.title}".`, "success"))
+        .catch(() => showToast("Failed to delete progress bar.", "error"));
+    });
+  }
+
+  if (barType === "goal") {
+    const percentEl = card.querySelector(".card-percent");
+    if (percentEl) percentEl.textContent = `${formatNumber(percent)}%`;
+
+    const fillEl = card.querySelector(".progressbar-fill");
+    if (fillEl) fillEl.style.width = `${percent}%`;
+
+    const labelEl = card.querySelector(".card-label");
+    if (labelEl) {
+      const labelText = formatCardLabel(bar.currentSmallest, bar.targetSmallest, bar.levels);
+      labelEl.textContent = labelText;
+      labelEl.setAttribute("title", labelText);
+    }
+  } else if (barType === "checklist") {
+    const items = bar.items || [];
+    const doneCount = items.filter(item => item.done).length;
+    const totalCount = items.length;
+    const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+    const container = card.querySelector(".card-checklist-container");
+    if (container) {
+      const isExpanded = expandedCardIds.has(bar.id);
+      const itemsHtml = items.map((item, index) => {
+        const collapsibleClass = index >= 3 ? " collapsible-item" : "";
+        const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
+        return `
+          <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
+            <input type="checkbox" ${item.done ? "checked" : ""}>
+            <span class="checklist-item-text">${escapeHtml(item.text)}</span>
+          </label>
+        `;
+      }).join("");
+      container.innerHTML = itemsHtml;
+
+      // Re-register checkbox listeners
+      card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
+        checkbox.addEventListener("click", (e) => {
+          e.stopPropagation();
+        });
+        checkbox.addEventListener("change", async (e) => {
+          const isChecked = e.target.checked;
+          const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
+          if (updatedItems[idx]) {
+            updatedItems[idx].done = isChecked;
+          }
+          
+          const targetSmallest = updatedItems.length;
+          const currentSmallest = updatedItems.filter(item => item.done).length;
+          const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
+          
+          const checklistItemEl = checkbox.closest(".card-checklist-item");
+          if (checklistItemEl) {
+            if (isChecked) {
+              checklistItemEl.classList.add("done");
+            } else {
+              checklistItemEl.classList.remove("done");
+            }
+          }
+          
+          const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+          const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
+          
+          if (progressWrapper) {
+            if (progressPercent === 0) {
+              progressWrapper.innerHTML = "";
+            } else {
+              progressWrapper.innerHTML = `
+                <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
+                <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
+                  <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
+                </div>
+              `;
+            }
+          }
+          
+          const summaryEl = card.querySelector(".checklist-summary-line");
+          if (summaryEl) {
+            summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
+          }
+          
+          try {
+            await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
+              title: bar.title,
+              targetSmallest,
+              currentSmallest,
+              items: updatedItems,
+              completed,
+              updateDeadline: false
+            });
+          } catch (error) {
+            showToast("Failed to update checklist progress.", "error");
+            renderDashboard(currentBars);
+          }
+        });
+      });
+    }
+
+    // Update show more / less indicators
+    const showMoreBtn = card.querySelector(".show-more-indicator");
+    if (showMoreBtn) {
+      if (totalCount > 3) {
+        showMoreBtn.textContent = `Show more (+${totalCount - 3})`;
+        showMoreBtn.style.display = expandedCardIds.has(bar.id) ? "none" : "inline-block";
+      } else {
+        showMoreBtn.style.display = "none";
+      }
+    }
+
+    const showLessBtn = card.querySelector(".show-less-indicator");
+    if (showLessBtn) {
+      const newShowLessBtn = showLessBtn.cloneNode(true);
+      showLessBtn.replaceWith(newShowLessBtn);
+      newShowLessBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        collapseCard(card);
+      });
+      newShowLessBtn.style.display = (totalCount > 3 && expandedCardIds.has(bar.id)) ? "inline-block" : "none";
+    }
+
+    const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+    if (progressWrapper) {
+      if (percentage === 0) {
+        progressWrapper.innerHTML = "";
+      } else {
+        progressWrapper.innerHTML = `
+          <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
+          <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
+            <div class="progressbar-fill" style="width: ${percentage}%;"></div>
+          </div>
+        `;
+      }
+    }
+
+    const summaryEl = card.querySelector(".checklist-summary-line");
+    if (summaryEl) {
+      summaryEl.innerHTML = `<span>✓</span> ${doneCount} / ${totalCount} done`;
+    }
+  } else if (barType === "note") {
+    const textEl = card.querySelector(".card-note-text");
+    if (textEl) textEl.textContent = bar.text || "";
+  }
+
+  // Update deadlines and SVG in-place
+  const isCompleted = isTrackerCompleted(bar);
+  const dMs = getDeadlineMs(bar);
+
+  let divider = card.querySelector(".card-divider");
+  let labelEl = card.querySelector(".card-deadline-label");
+
+  if (isCompleted || dMs) {
+    if (!divider) {
+      divider = document.createElement("hr");
+      divider.className = "card-divider";
+      card.appendChild(divider);
+    }
+    if (!labelEl) {
+      labelEl = document.createElement("div");
+      labelEl.className = "card-deadline-label";
+      labelEl.style.marginTop = "10px";
+      labelEl.style.fontSize = "0.8rem";
+      labelEl.style.color = "var(--text-muted)";
+      card.appendChild(labelEl);
+    }
+
+    if (isCompleted) {
+      labelEl.setAttribute("data-completed", "true");
+      labelEl.setAttribute("data-deadline-ms", dMs || "");
+      labelEl.classList.remove("overdue");
+      labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
+    } else {
+      const { label, isOverdue } = formatTimeLeft(dMs);
+      labelEl.setAttribute("data-completed", "false");
+      labelEl.setAttribute("data-deadline-ms", dMs);
+      labelEl.setAttribute("data-percent", percent);
+      labelEl.innerHTML = `<span class="deadline-text-val">⏱ ${label}</span>`;
+      if (isOverdue) {
+        labelEl.classList.add("overdue");
+      } else {
+        labelEl.classList.remove("overdue");
+      }
+    }
+
+    // Update/Attach SVG
+    let svg = card.querySelector(".deadline-svg");
+    if (dMs) {
+      if (!svg) {
+        attachDeadlineBorder(card, bar);
+      } else {
+        const barEl = svg.querySelector(".deadline-bar");
+        if (barEl) {
+          barEl.dataset.deadlineMs = dMs;
+          let deadlineSetMs = typeof bar.deadlineSetAt?.toDate === 'function'
+            ? bar.deadlineSetAt.toDate().getTime()
+            : (Number(bar.deadlineSetAt) || null);
+          if (!deadlineSetMs) {
+            deadlineSetMs = typeof bar.createdAt?.toDate === 'function'
+              ? bar.createdAt.toDate().getTime()
+              : (Number(bar.createdAt) || Date.now());
+          }
+          barEl.dataset.deadlineSetMs = deadlineSetMs;
+          applyDeadlineTick(barEl);
+        }
+      }
+    } else {
+      svg?.remove();
+    }
+  } else {
+    divider?.remove();
+    labelEl?.remove();
+    card.querySelector(".deadline-svg")?.remove();
+  }
+
+  return true;
+}
+
 function createCardElement(bar) {
   const card = document.createElement("div");
   card.className = "card-progress";
@@ -950,11 +1229,17 @@ function renderDashboard(bars) {
   // Render / reconcile card elements
   filtered.reverse().forEach((bar) => {
     const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
-    const newCard = createCardElement(bar);
     if (oldCard) {
-      oldCard.replaceWith(newCard);
-      expectedElements.push(newCard);
+      const updated = updateCardElement(oldCard, bar);
+      if (updated) {
+        expectedElements.push(oldCard);
+      } else {
+        const newCard = createCardElement(bar);
+        oldCard.replaceWith(newCard);
+        expectedElements.push(newCard);
+      }
     } else {
+      const newCard = createCardElement(bar);
       expectedElements.push(newCard);
     }
   });
