@@ -2700,17 +2700,6 @@ const setupGlobalSearchListener = () => {
         }
       }
     });
-
-    // Collapse search when clicking outside
-    document.addEventListener("click", (e) => {
-      if (window.innerWidth <= 768) {
-        if (searchContainer.classList.contains("expanded") && !searchContainer.contains(e.target)) {
-          searchContainer.classList.remove("expanded");
-          searchClosedViaPopState = true;
-          history.back();
-        }
-      }
-    });
   }
 };
 setupGlobalSearchListener();
