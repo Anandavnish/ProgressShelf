@@ -183,6 +183,7 @@ let activeUnsubscribe = null;
 let authInitialized = false;
 let currentFilter = "all";
 const expandedCardIds = new Set();
+let closedViaPopState = false;
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -1326,11 +1327,33 @@ setInterval(() => {
 
 function openModal(modal) {
   modal.classList.add("active");
+  // Push a state to browser history stack to intercept back button
+  history.pushState({ modalId: modal.id }, "");
 }
 
-function closeModal(modal) {
+function closeModal(modal, isPopState = false) {
+  if (!modal.classList.contains("active")) return;
   modal.classList.remove("active");
+  
+  if (!isPopState) {
+    closedViaPopState = true;
+    history.back();
+  }
 }
+
+// Intercept system back button / gestures to close active modals
+window.addEventListener("popstate", (e) => {
+  if (closedViaPopState) {
+    closedViaPopState = false;
+    return;
+  }
+
+  // Close any open modals
+  const activeModal = document.querySelector(".modal-overlay.active");
+  if (activeModal) {
+    closeModal(activeModal, true);
+  }
+});
 
 // Global modal close triggers
 document.querySelectorAll("[data-close]").forEach((btn) => {
