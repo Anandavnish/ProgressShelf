@@ -1865,6 +1865,15 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Modal Deadline Input Styles */
+.deadline-box {
+  margin-top: 28px !important;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .form-label-optional {
   font-size: 11px;
   color: #8B949E;
@@ -1923,9 +1932,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @media (max-width: 480px) {
-  .deadline-absolute-inputs {
-    flex-direction: column;
-  }
 
   .nav-logo-text {
     display: none;
