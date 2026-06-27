@@ -1932,6 +1932,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @media (max-width: 480px) {
+  .deadline-absolute-inputs {
+    flex-direction: column;
+  }
 
   .nav-logo-text {
     display: none;
