@@ -3233,7 +3233,7 @@ setupDeadlineMutualExclusion("edit-"); // For Edit modal
 // FCM Push Notification Settings & Calculation
 // ==========================================
 
-const FCM_VAPID_KEY = "YOUR_VAPID_KEY"; // Placeholder for VAPID Key
+const FCM_VAPID_KEY = "BBMQHPcnjNhugmwdap8XCS8fKkWcS6MhYFCDfEsibb_tLTWFhvRi_CukIA4l9xJDhrDMmlciipfbvs8iRRRglrk";
 
 /**
  * Calculates notifyAt based on modal prefix and deadline.
