@@ -1,13 +1,14 @@
 // app.js
 import { isConfigured } from "./firebase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar } from "./db.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData } from "./db.js";
 
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
 const cardsGrid = document.getElementById("cards-grid");
 const btnLogout = document.getElementById("btn-logout");
+const btnDeleteAccount = document.getElementById("btn-delete-account");
 const userAvatar = document.getElementById("user-avatar");
 const userName = document.getElementById("user-name");
 const btnProfileBadge = document.getElementById("btn-profile-badge");
@@ -2905,6 +2906,41 @@ btnLogout.addEventListener("click", async () => {
     }
   } catch (error) {
     showToast("Sign out failed. Please try again.", "error");
+  }
+});
+
+btnDeleteAccount.addEventListener("click", async () => {
+  const message = "WARNING: Are you absolutely sure you want to permanently delete your account?\n\nThis will destroy all of your progress bars and data from the database forever. This action cannot be undone.";
+  if (!window.confirm(message)) {
+    return;
+  }
+
+  try {
+    const isGuest = isGuestMode();
+    const uid = isGuest ? null : (currentUser ? currentUser.uid : null);
+
+    // Show loading toast (persist it)
+    const toast = showToast("Deleting account data...", "info", 0);
+
+    // 1. Delete all user bars from database (Firestore or LocalStorage)
+    await deleteUserData(uid);
+
+    if (isGuest) {
+      exitGuestMode();
+      if (toast) dismissToast(toast);
+      window.location.href = "index.html";
+    } else {
+      // 2. Delete user account from Firebase Auth
+      await deleteCurrentUserAccount();
+      
+      // 3. Clear session states and logout
+      await logout();
+      if (toast) dismissToast(toast);
+      window.location.href = "index.html";
+    }
+  } catch (error) {
+    console.error("Account deletion failed:", error);
+    showToast("Failed to delete account. You may need to sign out and log back in again to perform this sensitive action.", "error");
   }
 });
 

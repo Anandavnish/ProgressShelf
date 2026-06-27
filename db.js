@@ -10,7 +10,8 @@ import {
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Helper to get/set local storage bars for Sandbox mode
@@ -265,6 +266,27 @@ export async function editBar(uid, barId, {
     await updateDoc(barDocRef, updates);
   } catch (error) {
     console.error("Error editing bar:", error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes all database progress bars for a specific user ID.
+ * @param {string} uid User ID to delete data for.
+ */
+export async function deleteUserData(uid) {
+  if (!isConfigured || isGuestMode()) {
+    localStorage.removeItem("progress_shelf_bars");
+    return;
+  }
+
+  try {
+    const barsCollRef = collection(db, "users", uid, "bars");
+    const snapshot = await getDocs(barsCollRef);
+    const deletePromises = snapshot.docs.map(docRef => deleteDoc(docRef.ref));
+    await Promise.all(deletePromises);
+  } catch (error) {
+    console.error("Error deleting user Firestore bars:", error);
     throw error;
   }
 }

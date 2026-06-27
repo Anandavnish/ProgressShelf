@@ -123,6 +123,14 @@ To reorder items when editing/creating a checklist card:
 ### I. Stats Filter Button Accessibility (a11y)
 - Segmented stats tracker buttons toggle custom `aria-pressed="true" | "false"` state tags in-place when user selection changes, allowing screen readers to accurately broadcast active statistics views.
 
+### J. Permanent User Account Deletion
+- A dedicated **Delete Account** option is added to the user avatar dropdown menu.
+- When clicked, a verification confirmation prompt is shown to prevent accidental triggers.
+- Once confirmed:
+  - Deletes all user-owned progress bar documents from the Firestore database collection (`users/{uid}/bars`) first (to comply with authenticated user security rules).
+  - Deletes the Firebase Authentication credential profile using `deleteUser()`.
+  - Clears local storage state, logs out the user session, and performs a clean redirection to the landing page.
+
 ---
 
 ## 5. Main Script Function Blueprint (`app.js`)

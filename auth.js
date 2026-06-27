@@ -4,7 +4,8 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  deleteUser
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 const isDashboard = window.location.pathname.endsWith("dashboard.html");
@@ -129,5 +130,25 @@ export function initAuthProtection(onUserActive) {
       }
     }
   });
+}
+
+/**
+ * Deletes the currently authenticated user's account from Firebase Auth.
+ */
+export async function deleteCurrentUserAccount() {
+  if (!isConfigured) {
+    localStorage.removeItem("progress_shelf_demo");
+    return;
+  }
+  
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      await deleteUser(user);
+    } catch (error) {
+      console.error("Firebase Auth deleteUser Error:", error);
+      throw error;
+    }
+  }
 }
 
