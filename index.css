@@ -1977,39 +1977,111 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   line-height: 1.45;
 }
 
-/* --- Global Navbar Search Bar (Mockup Style) --- */
+/* --- Global Navbar Search Bar (Icon-only / Collapsed by default) --- */
 .nav-search-container {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 0;
+  min-width: 0;
   display: flex;
   align-items: center;
-  background-color: #0b0d10; /* Very dark background matching the mock */
-  border: 1px solid #21262d;  /* Sleek thin border */
-  border-radius: 9999px;      /* Perfect pill shape */
-  padding: 3px 3px 3px 16px;  /* Left padding for text, small padding on right for nested button */
-  gap: 8px;
-  width: 100%;
-  max-width: 360px;
-  min-width: 158.9px;
-  margin: 0 22.65px;          /* Clean gap from logo and toolbar */
-  transition: all var(--transition-speed) ease;
-  position: relative;
+  flex-shrink: 0;
 }
 
-.nav-search-container:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.nav-search-input {
+/* Invisible input when collapsed */
+.nav-search-container .nav-search-input {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  padding: 0;
   background: transparent;
   border: none;
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-family);
   font-size: 0.88rem;
+  transition: opacity 0.2s ease;
+}
+
+/* Position button absolute to occupy full area when collapsed */
+.nav-search-container .nav-search-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-search-container .nav-search-btn:hover {
+  background-color: #30363d;
+  color: #fff;
+}
+
+.nav-search-container .nav-search-btn:active {
+  transform: scale(0.95);
+}
+
+.search-icon {
+  stroke: currentColor;
+  display: block;
+}
+
+/* --- Pill Mode (Expanded on Desktop / Wide screens) --- */
+.nav-search-container.search-pill-mode {
+  display: flex;
+  align-items: center;
+  background-color: #0b0d10;  /* Slate/dark theme background */
+  border: 1px solid #21262d;   /* Sleek thin border */
+  border-radius: 9999px;       /* Perfect pill shape */
+  padding: 3px 3px 3px 16px;   /* Left padding for text, small padding on right for nested button */
+  gap: 8px;
   width: 100%;
+  max-width: 360px;
+  min-width: 0;                /* Dynamic width */
+  margin: 0 22.65px;           /* Spacing logo (left) and toolbar (right) */
+  height: 38px;
+  cursor: default;
+  overflow: visible;
+  flex-shrink: 1;
+}
+
+.nav-search-container.search-pill-mode:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.nav-search-container.search-pill-mode .nav-search-input {
+  width: 100%;
+  opacity: 1;
+  pointer-events: auto;
   padding: 6px 0;
 }
 
+.nav-search-container.search-pill-mode .nav-search-btn {
+  position: relative;
+  right: auto;
+  top: auto;
+  background-color: #1f242c;
+}
+
+/* Clear button */
 .nav-search-clear {
   background: transparent;
   border: none;
@@ -2038,33 +2110,38 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   color: #57606a; /* Muted placeholder color */
 }
 
-.nav-search-btn {
-  background-color: #1f242c; /* Distinct lighter circular background */
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+/* --- Mobile Expanded State Overlaying Entire Navbar --- */
+.nav-search-container.expanded {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  width: calc(100% - 16px);
+  height: 38px;
+  background-color: #0b0d10;
+  border: 1px solid var(--accent);
+  border-radius: 9999px;
+  padding: 3px 3px 3px 16px;
+  z-index: 105;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  margin: 0;
+  min-width: 0;
+  overflow: visible;
+  cursor: default;
   flex-shrink: 0;
 }
 
-.nav-search-btn:hover {
-  background-color: #30363d;
-  color: #fff;
+.nav-search-container.expanded .nav-search-input {
+  width: calc(100% - 40px);
+  opacity: 1;
+  pointer-events: auto;
+  padding: 6px 0;
 }
 
-.nav-search-btn:active {
-  transform: scale(0.95);
-}
-
-.search-icon {
-  stroke: currentColor;
-  display: block;
+.nav-search-container.expanded .nav-search-btn {
+  position: relative;
+  right: auto;
+  top: auto;
+  background-color: #1f242c;
 }
 
 /* --- Mobile Responsive Collapsible Navbar Layout --- */
@@ -2104,62 +2181,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   .nav-github-link svg {
     width: 18px !important;
     height: 18px !important;
-  }
-
-  /* Default collapsed search container on mobile (acts as a button in toolbar) */
-  .nav-search-container {
-    position: relative;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .nav-search-input {
-    width: 0;
-    opacity: 0;
-    pointer-events: none;
-    padding: 0;
-  }
-
-  .nav-search-btn {
-    position: absolute;
-    right: 0;
-    top: 0;
-    background-color: transparent;
-  }
-
-  /* Expanded state overlaying the entire navbar */
-  .nav-search-container.expanded {
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    width: calc(100% - 16px);
-    height: 38px;
-    background-color: #0b0d10;
-    border: 1px solid var(--accent);
-    border-radius: 9999px;
-    padding: 3px 3px 3px 16px;
-    z-index: 105;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  }
-
-  .nav-search-container.expanded .nav-search-input {
-    width: calc(100% - 40px);
-    opacity: 1;
-    pointer-events: auto;
-    padding: 6px 0;
-  }
-
-  .nav-search-container.expanded .nav-search-btn {
-    position: relative;
-    right: auto;
-    top: auto;
-    background-color: #1f242c;
   }
 }
 
@@ -2351,6 +2372,36 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   transform: scale(1.15);
 }
 
+.btn-reorder-item {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: grab;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.btn-reorder-item:hover {
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.btn-reorder-item:active {
+  cursor: grabbing;
+}
+
+.checklist-builder-item.dragging {
+  opacity: 0.5;
+  border-style: dashed;
+  border-color: var(--accent);
+  background: rgba(74, 144, 217, 0.05);
+}
+
 /* --- Card Checklist styles --- */
 .card-checklist-container {
   margin-top: 12px;
@@ -2396,7 +2447,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .checklist-summary-line {
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin-top: 10px;
+  margin-top: 0;
   font-weight: 600;
   display: flex;
   align-items: center;

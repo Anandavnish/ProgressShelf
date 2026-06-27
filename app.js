@@ -732,16 +732,11 @@ function updateCardElement(card, bar) {
           const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
           
           if (progressWrapper) {
-            if (progressPercent === 0) {
-              progressWrapper.innerHTML = "";
-            } else {
-              progressWrapper.innerHTML = `
-                <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
-                <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-                  <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
-                </div>
-              `;
-            }
+            const percentEl = progressWrapper.querySelector(".checklist-percent");
+            if (percentEl) percentEl.textContent = `${progressPercent}%`;
+            
+            const fillEl = progressWrapper.querySelector(".progressbar-fill");
+            if (fillEl) fillEl.style.width = `${progressPercent}%`;
           }
           
           const summaryEl = card.querySelector(".checklist-summary-line");
@@ -790,16 +785,11 @@ function updateCardElement(card, bar) {
 
     const progressWrapper = card.querySelector(".checklist-progress-wrapper");
     if (progressWrapper) {
-      if (percentage === 0) {
-        progressWrapper.innerHTML = "";
-      } else {
-        progressWrapper.innerHTML = `
-          <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
-          <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-            <div class="progressbar-fill" style="width: ${percentage}%;"></div>
-          </div>
-        `;
-      }
+      const percentEl = progressWrapper.querySelector(".checklist-percent");
+      if (percentEl) percentEl.textContent = `${percentage}%`;
+      
+      const fillEl = progressWrapper.querySelector(".progressbar-fill");
+      if (fillEl) fillEl.style.width = `${percentage}%`;
     }
 
     const summaryEl = card.querySelector(".checklist-summary-line");
@@ -956,11 +946,18 @@ function createCardElement(bar) {
     }).join("");
 
     let pbarHtml = "";
-    if (percentage !== 0) {
+    if (totalCount > 0) {
       pbarHtml = `
-        <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${percentage}%</div>
-        <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-          <div class="progressbar-fill" style="width: ${percentage}%;"></div>
+        <div class="checklist-progress-wrapper" style="margin-top: 14px;">
+          <div class="progressbar-track" style="margin-bottom: 8px;">
+            <div class="progressbar-fill" style="width: ${percentage}%;"></div>
+          </div>
+          <div class="checklist-footer-row" style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="checklist-summary-line" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 6px;">
+              <span>✓</span> ${doneCount} / ${totalCount} done
+            </span>
+            <span class="checklist-percent" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">${percentage}%</span>
+          </div>
         </div>
       `;
     }
@@ -970,12 +967,7 @@ function createCardElement(bar) {
         ${itemsHtml}
       </div>
       ${showMoreBtnHtml}
-      <div class="checklist-progress-wrapper">
-        ${pbarHtml}
-      </div>
-      <div class="checklist-summary-line">
-        <span>✓</span> ${doneCount} / ${totalCount} done
-      </div>
+      ${pbarHtml}
     `;
   } else if (barType === "note") {
     const text = bar.text || "";
@@ -1098,19 +1090,13 @@ function createCardElement(bar) {
         const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
         
         if (progressWrapper) {
-          if (progressPercent === 0) {
-            progressWrapper.innerHTML = "";
-          } else {
-            progressWrapper.innerHTML = `
-              <div class="checklist-percent" style="text-align: right; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-top: 14px; margin-bottom: 6px;">${progressPercent}%</div>
-              <div class="progressbar-track" style="margin-top: 0px; margin-bottom: 0px;">
-                <div class="progressbar-fill" style="width: ${progressPercent}%;"></div>
-              </div>
-            `;
-          }
+          const percentEl = progressWrapper.querySelector(".checklist-percent");
+          if (percentEl) percentEl.textContent = `${progressPercent}%`;
+          
+          const fillEl = progressWrapper.querySelector(".progressbar-fill");
+          if (fillEl) fillEl.style.width = `${progressPercent}%`;
         }
         
-        // Optimistically update summary text
         const summaryEl = card.querySelector(".checklist-summary-line");
         if (summaryEl) {
           summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
@@ -1363,6 +1349,9 @@ window.addEventListener("popstate", (e) => {
       searchInput.value = "";
       if (clearBtn) clearBtn.classList.add("hidden");
     }
+    if (typeof adjustSearchLayout === "function") {
+      adjustSearchLayout();
+    }
     renderDashboard(currentBars);
     return;
   }
@@ -1452,6 +1441,92 @@ function toggleCreateTypeFields(type) {
   }
 }
 
+// Reusable helper to set up drag-and-drop and touch reordering for checklist items in modals
+function setupChecklistReordering(listContainer, itemsArray, renderFn, setArrayCallback) {
+  let touchDraggingLi = null;
+
+  listContainer.querySelectorAll(".checklist-builder-item").forEach((li, index) => {
+    const dragHandle = li.querySelector(".btn-reorder-item");
+    if (!dragHandle) return;
+
+    // --- Desktop HTML5 Drag & Drop ---
+    // Enable dragging only when clicking/dragging the drag handle
+    dragHandle.addEventListener("mousedown", () => {
+      li.setAttribute("draggable", "true");
+    });
+    dragHandle.addEventListener("mouseup", () => {
+      li.removeAttribute("draggable");
+    });
+
+    li.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", index);
+      li.classList.add("dragging");
+    });
+
+    li.addEventListener("dragend", () => {
+      li.classList.remove("dragging");
+      li.removeAttribute("draggable");
+    });
+
+    li.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      const draggingLi = listContainer.querySelector(".dragging");
+      if (!draggingLi || draggingLi === li) return;
+
+      const rect = li.getBoundingClientRect();
+      const next = (e.clientY - rect.top) / rect.height > 0.5;
+      listContainer.insertBefore(draggingLi, next ? li.nextSibling : li);
+    });
+
+    li.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const inputs = Array.from(listContainer.querySelectorAll(".item-text-input"));
+      const newItems = inputs.map(input => {
+        const origIndex = parseInt(input.getAttribute("data-index"), 10);
+        return itemsArray[origIndex];
+      });
+      setArrayCallback(newItems);
+      renderFn();
+    });
+
+    // --- Mobile Touch Reordering ---
+    dragHandle.addEventListener("touchstart", (e) => {
+      touchDraggingLi = li;
+      li.classList.add("dragging");
+    }, { passive: false });
+
+    dragHandle.addEventListener("touchmove", (e) => {
+      if (!touchDraggingLi) return;
+      e.preventDefault(); // Stop screen scrolling while dragging
+
+      const touch = e.touches[0];
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (!targetEl) return;
+
+      const targetLi = targetEl.closest(".checklist-builder-item");
+      if (!targetLi || targetLi === touchDraggingLi || targetLi.parentNode !== listContainer) return;
+
+      const rect = targetLi.getBoundingClientRect();
+      const next = (touch.clientY - rect.top) / rect.height > 0.5;
+      listContainer.insertBefore(touchDraggingLi, next ? targetLi.nextSibling : targetLi);
+    }, { passive: false });
+
+    dragHandle.addEventListener("touchend", () => {
+      if (!touchDraggingLi) return;
+      touchDraggingLi.classList.remove("dragging");
+      touchDraggingLi = null;
+
+      const inputs = Array.from(listContainer.querySelectorAll(".item-text-input"));
+      const newItems = inputs.map(input => {
+        const origIndex = parseInt(input.getAttribute("data-index"), 10);
+        return itemsArray[origIndex];
+      });
+      setArrayCallback(newItems);
+      renderFn();
+    });
+  });
+}
+
 function renderCreateChecklist() {
   const listContainer = document.getElementById("create-checklist-items-list");
   listContainer.innerHTML = "";
@@ -1460,6 +1535,16 @@ function renderCreateChecklist() {
     li.className = "checklist-builder-item";
     li.innerHTML = `
       <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
+          <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="19" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="5" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="19" r="1.5" fill="currentColor"></circle>
+        </svg>
+      </button>
       <button type="button" class="btn-remove-item" data-index="${index}">&times;</button>
     `;
     listContainer.appendChild(li);
@@ -1472,6 +1557,11 @@ function renderCreateChecklist() {
       createChecklistItems.splice(index, 1);
       renderCreateChecklist();
     });
+  });
+
+  // Attach reordering controls
+  setupChecklistReordering(listContainer, createChecklistItems, renderCreateChecklist, (newItems) => {
+    createChecklistItems = newItems;
   });
 }
 
@@ -1986,6 +2076,16 @@ function renderEditChecklist() {
     li.className = "checklist-builder-item";
     li.innerHTML = `
       <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
+          <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="19" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="5" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="19" r="1.5" fill="currentColor"></circle>
+        </svg>
+      </button>
       <button type="button" class="btn-remove-item" data-index="${index}">&times;</button>
     `;
     listContainer.appendChild(li);
@@ -1998,6 +2098,11 @@ function renderEditChecklist() {
       editChecklistItems.splice(index, 1);
       renderEditChecklist();
     });
+  });
+
+  // Attach reordering controls
+  setupChecklistReordering(listContainer, editChecklistItems, renderEditChecklist, (newItems) => {
+    editChecklistItems = newItems;
   });
 }
 
@@ -2632,12 +2737,15 @@ const setupStatsFilterListeners = () => {
             const clearBtn = document.getElementById("btn-clear-search");
             if (clearBtn) clearBtn.classList.add("hidden");
 
-            // Collapse search overlay on mobile
+            // Collapse search overlay if expanded
             const searchContainer = document.querySelector(".nav-search-container");
-            if (window.innerWidth <= 768 && searchContainer && searchContainer.classList.contains("expanded")) {
-              searchContainer.classList.remove("expanded");
-              searchClosedViaPopState = true;
-              history.back();
+            if (searchContainer) {
+              if (searchContainer.classList.contains("expanded")) {
+                searchContainer.classList.remove("expanded");
+                searchClosedViaPopState = true;
+                history.back();
+              }
+              adjustSearchLayout();
             }
           }
         }
@@ -2648,6 +2756,57 @@ const setupStatsFilterListeners = () => {
   });
 };
 setupStatsFilterListeners();
+
+// Helper to measure text width of placeholder dynamically
+function getPlaceholderWidth(input) {
+  const text = input.placeholder || "Search for title...";
+  const canvas = getPlaceholderWidth.canvas || (getPlaceholderWidth.canvas = document.createElement("canvas"));
+  const context = canvas.getContext("2d");
+  const style = window.getComputedStyle(input);
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return context.measureText(text).width;
+}
+
+// Adjusts the search layout dynamically based on available screen space
+function adjustSearchLayout() {
+  const searchInput = document.getElementById("global-search");
+  const searchContainer = document.querySelector(".nav-search-container");
+  const navContainer = document.querySelector(".nav-container");
+  const logo = document.querySelector(".nav-logo");
+  const toolbar = document.querySelector(".nav-toolbar");
+
+  if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar) return;
+
+  // If mobile overlay is currently expanded, don't collapse it
+  if (searchContainer.classList.contains("expanded")) {
+    return;
+  }
+
+  // If there's an active query, keep pill mode so user can see it
+  if (searchInput.value.trim() !== "") {
+    searchContainer.classList.add("search-pill-mode");
+    return;
+  }
+
+  // Calculate available space in nav bar for search pill (excluding search bar itself)
+  const navWidth = navContainer.clientWidth;
+  const logoWidth = logo.getBoundingClientRect().width;
+  const toolbarWidth = toolbar.getBoundingClientRect().width;
+  
+  // Space available = total navbar width - logo - toolbar - two gaps of 22.65px (45.3px)
+  const availableWidth = navWidth - logoWidth - toolbarWidth - 45.3;
+
+  // Minimum required width for pill-mode (placeholder text + paddings/buttons gap)
+  // Left padding 16px, search button 32px, gap 8px, right padding 3px = 59px. Let's add 5px safety buffer.
+  const placeholderWidth = getPlaceholderWidth(searchInput);
+  const minRequiredWidth = placeholderWidth + 64; 
+
+  if (availableWidth >= minRequiredWidth) {
+    searchContainer.classList.add("search-pill-mode");
+  } else {
+    searchContainer.classList.remove("search-pill-mode");
+  }
+}
 
 // Setup global search input listener
 const setupGlobalSearchListener = () => {
@@ -2667,6 +2826,7 @@ const setupGlobalSearchListener = () => {
   if (searchInput) {
     searchInput.addEventListener("input", () => {
       toggleClearBtn();
+      adjustSearchLayout();
       renderDashboard(currentBars);
     });
   }
@@ -2676,10 +2836,11 @@ const setupGlobalSearchListener = () => {
       e.stopPropagation();
       searchInput.value = "";
       toggleClearBtn();
+      adjustSearchLayout();
       renderDashboard(currentBars);
 
       // If expanded on mobile, collapse search and pop history state
-      if (window.innerWidth <= 768 && searchContainer && searchContainer.classList.contains("expanded")) {
+      if (searchContainer && searchContainer.classList.contains("expanded")) {
         searchContainer.classList.remove("expanded");
         searchClosedViaPopState = true;
         history.back();
@@ -2689,7 +2850,7 @@ const setupGlobalSearchListener = () => {
 
   if (searchContainer && searchBtn && searchInput) {
     searchBtn.addEventListener("click", (e) => {
-      if (window.innerWidth <= 768) {
+      if (!searchContainer.classList.contains("search-pill-mode")) {
         if (!searchContainer.classList.contains("expanded")) {
           e.preventDefault();
           e.stopPropagation();
@@ -2698,9 +2859,20 @@ const setupGlobalSearchListener = () => {
           // Push state to browser history stack to intercept back button
           history.pushState({ searchExpanded: true }, "");
         }
+      } else {
+        searchInput.focus();
       }
     });
   }
+
+  window.addEventListener("resize", adjustSearchLayout);
+
+  if (document.fonts) {
+    document.fonts.ready.then(adjustSearchLayout);
+  }
+
+  // Run initial layout check
+  adjustSearchLayout();
 };
 setupGlobalSearchListener();
 
