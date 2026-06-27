@@ -131,6 +131,13 @@ To reorder items when editing/creating a checklist card:
   - Deletes the Firebase Authentication credential profile using `deleteUser()`.
   - Clears local storage state, logs out the user session, and performs a clean redirection to the landing page.
 
+### K. Back Button Intercept & Popstate Gestures
+- Integrates browser back button / system gesture listeners (`popstate` events) to improve mobile PWA UX.
+- When modals (Create, Edit, Update), mobile search overlays, or the **User Profile Dropdown** are opened, a new virtual history state is pushed via `history.pushState()`.
+- If the user uses the browser's back button or swipe-to-back gesture on mobile:
+  - Intercepts the event, closes the active UI overlay in-place (modals, search, or dropdown), and prevents navigation back to the landing page or previous site.
+  - Toggles state flags (`ClosedViaPopState`, `profileClosedViaPopState`) so manual closing triggers (like close buttons or clicking outside) can pop the history stack clean without triggering duplicate close callbacks.
+
 ---
 
 ## 5. Main Script Function Blueprint (`app.js`)

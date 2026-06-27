@@ -1140,6 +1140,12 @@ function createCardElement(bar) {
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
+        
+        // Update show more / less button visibility immediately
+        const showMoreBtn = card.querySelector(".show-more-indicator");
+        const showLessBtn = card.querySelector(".show-less-indicator");
+        if (showMoreBtn) showMoreBtn.style.display = "none";
+        if (showLessBtn) showLessBtn.style.display = "inline-block";
       }
     } else {
       if (isTruncatable && !card.classList.contains("expanded")) {
@@ -1148,6 +1154,12 @@ function createCardElement(bar) {
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
+        
+        // Update show more / less button visibility immediately
+        const showMoreBtn = card.querySelector(".show-more-indicator");
+        const showLessBtn = card.querySelector(".show-less-indicator");
+        if (showMoreBtn) showMoreBtn.style.display = "none";
+        if (showLessBtn) showLessBtn.style.display = "inline-block";
       } else {
         openUpdateModal(bar);
       }
@@ -1345,6 +1357,16 @@ window.addEventListener("popstate", (e) => {
     searchClosedViaPopState = false;
     return;
   }
+  if (profileClosedViaPopState) {
+    profileClosedViaPopState = false;
+    return;
+  }
+
+  // Close profile dropdown if active
+  if (profileDropdown && profileDropdown.classList.contains("active")) {
+    profileDropdown.classList.remove("active");
+    return;
+  }
 
   // Close mobile search overlay if active
   const searchContainer = document.querySelector(".nav-search-container");
@@ -1412,6 +1434,19 @@ function collapseCard(card) {
   card.querySelectorAll(".collapsible-item").forEach(item => {
     item.style.display = "none";
   });
+
+  // Visually sync show more / less button visibility immediately
+  const showMoreBtn = card.querySelector(".show-more-indicator");
+  const showLessBtn = card.querySelector(".show-less-indicator");
+  if (showMoreBtn) {
+    const totalCount = card.querySelectorAll(".card-checklist-item").length;
+    if (totalCount > 3) {
+      showMoreBtn.style.display = "inline-block";
+    }
+  }
+  if (showLessBtn) {
+    showLessBtn.style.display = "none";
+  }
 }
 
 // Close active modals on Escape key press
@@ -2884,15 +2919,33 @@ const setupGlobalSearchListener = () => {
 setupGlobalSearchListener();
 
 // Toggle profile dropdown menu
+let profileClosedViaPopState = false;
+
 btnProfileBadge?.addEventListener("click", (e) => {
   e.stopPropagation();
-  profileDropdown?.classList.toggle("active");
+  if (profileDropdown) {
+    const wasActive = profileDropdown.classList.contains("active");
+    if (!wasActive) {
+      profileDropdown.classList.add("active");
+      history.pushState({ profileDropdown: true }, "");
+    } else {
+      profileDropdown.classList.remove("active");
+      if (history.state && history.state.profileDropdown) {
+        profileClosedViaPopState = true;
+        history.back();
+      }
+    }
+  }
 });
 
 // Close profile dropdown when clicking outside
 window.addEventListener("click", (e) => {
-  if (profileDropdown && !profileDropdown.contains(e.target) && e.target !== btnProfileBadge) {
+  if (profileDropdown && profileDropdown.classList.contains("active") && !profileDropdown.contains(e.target) && e.target !== btnProfileBadge) {
     profileDropdown.classList.remove("active");
+    if (history.state && history.state.profileDropdown) {
+      profileClosedViaPopState = true;
+      history.back();
+    }
   }
 });
 
@@ -3112,6 +3165,18 @@ if ('serviceWorker' in navigator) {
       .then((reg) => {
         console.log('Service Worker registered:', reg.scope);
         
+        // Force SW update check when page visibility changes (switching tabs, unlocking phone)
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(err => console.log('SW update check failed:', err));
+          }
+        });
+
+        // Also check for updates periodically every 60 seconds
+        setInterval(() => {
+          reg.update().catch(err => console.log('SW update check failed:', err));
+        }, 60000);
+
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (newWorker) {
