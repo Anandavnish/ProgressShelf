@@ -555,8 +555,10 @@ function updateOverallStats(bars) {
     if (btn) {
       if (btn.getAttribute("data-filter") === currentFilter) {
         btn.classList.add("active");
+        btn.setAttribute("aria-pressed", "true");
       } else {
         btn.classList.remove("active");
+        btn.setAttribute("aria-pressed", "false");
       }
     }
   });
@@ -3061,4 +3063,35 @@ function setupDeadlineMutualExclusion(prefix = "") {
 setupDeadlineMutualExclusion(""); // For Create modal
 setupDeadlineMutualExclusion("edit-"); // For Edit modal
 
+// ==========================================
+// Service Worker Registration & Updates
+// ==========================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then((reg) => {
+        console.log('Service Worker registered:', reg.scope);
+        
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                showToast("A new version of ProgressShelf is available! Please refresh to update.", "info");
+              }
+            });
+          }
+        });
+      })
+      .catch((err) => console.error('Service Worker registration failed:', err));
+  });
 
+  // Automatically refresh the page when the service worker updates and takes control
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+}

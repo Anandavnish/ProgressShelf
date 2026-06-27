@@ -3,10 +3,11 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=1.7">
+  <link rel="stylesheet" href="index.css?v=1.8">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -151,7 +152,7 @@
       <div class="stats-container">
 
         <!-- All Trackers -->
-        <button class="stats-btn active" data-filter="all" id="btn-stat-all">
+        <button class="stats-btn active" data-filter="all" id="btn-stat-all" aria-pressed="true">
           <div class="stats-icon-wrapper val-blue">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -172,7 +173,7 @@
         <div class="stats-divider" id="div-stat-deadlines"></div>
 
         <!-- Active Deadlines -->
-        <button class="stats-btn" data-filter="deadlines" id="btn-stat-deadlines">
+        <button class="stats-btn" data-filter="deadlines" id="btn-stat-deadlines" aria-pressed="false">
           <div class="stats-icon-wrapper val-orange">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -193,7 +194,7 @@
         <div class="stats-divider" id="div-stat-overdue"></div>
 
         <!-- Overdue -->
-        <button class="stats-btn" data-filter="overdue" id="btn-stat-overdue">
+        <button class="stats-btn" data-filter="overdue" id="btn-stat-overdue" aria-pressed="false">
           <div class="stats-icon-wrapper val-red">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -213,7 +214,7 @@
         <div class="stats-divider" id="div-stat-completed"></div>
 
         <!-- Completed -->
-        <button class="stats-btn" data-filter="completed" id="btn-stat-completed">
+        <button class="stats-btn" data-filter="completed" id="btn-stat-completed" aria-pressed="false">
           <div class="stats-icon-wrapper val-green">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -230,7 +231,7 @@
         <div class="stats-divider" id="div-stat-flexible"></div>
 
         <!-- Flexible Goals (Without Deadlines) -->
-        <button class="stats-btn" data-filter="flexible" id="btn-stat-flexible">
+        <button class="stats-btn" data-filter="flexible" id="btn-stat-flexible" aria-pressed="false">
           <div class="stats-icon-wrapper val-purple">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -644,19 +645,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Application Logic -->
-  <script type="module" src="app.js?v=2.2"></script>
-
-  <!-- Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then((reg) => console.log('Service Worker registered:', reg.scope))
-          .catch((err) => console.error('Service Worker registration failed:', err));
-      });
-    }
-  </script>
+  <script type="module" src="app.js?v=2.3"></script>
 </body>
-
-
 </html>

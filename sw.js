@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v9';
+const CACHE_NAME = 'progressshelf-cache-v10';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -7,6 +7,7 @@ const ASSETS_TO_CACHE = [
   'app.js',
   'auth.js',
   'db.js',
+  'login.js',
   'firebase-config.js',
   'favicon.svg',
   'logo.svg',
