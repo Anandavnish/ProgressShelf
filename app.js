@@ -277,10 +277,10 @@ function formatTimeLeft(deadlineMs) {
     return { label: "Due now", isOverdue: false };
   }
 
-  const totalSecs  = Math.floor(diff / 1000);
-  const totalMins  = Math.floor(totalSecs / 60);
+  const totalSecs = Math.floor(diff / 1000);
+  const totalMins = Math.floor(totalSecs / 60);
   const totalHours = Math.floor(totalMins / 60);
-  const totalDays  = Math.floor(totalHours / 24);
+  const totalDays = Math.floor(totalHours / 24);
 
   // Helper to format values with optional singular/plural formatting
   const fmt = (val, singular, plural) => {
@@ -614,7 +614,7 @@ function filterBars(bars) {
 
 function updateCardElement(card, bar) {
   const barType = bar.type || "goal";
-  
+
   // Check if card type changed
   if (barType === "checklist" && !card.querySelector(".card-checklist-container")) return false;
   if (barType === "note" && !card.querySelector(".card-note-text")) return false;
@@ -721,11 +721,11 @@ function updateCardElement(card, bar) {
           if (updatedItems[idx]) {
             updatedItems[idx].done = isChecked;
           }
-          
+
           const targetSmallest = updatedItems.length;
           const currentSmallest = updatedItems.filter(item => item.done).length;
           const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
-          
+
           const checklistItemEl = checkbox.closest(".card-checklist-item");
           if (checklistItemEl) {
             if (isChecked) {
@@ -734,23 +734,23 @@ function updateCardElement(card, bar) {
               checklistItemEl.classList.remove("done");
             }
           }
-          
+
           const progressWrapper = card.querySelector(".checklist-progress-wrapper");
           const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
-          
+
           if (progressWrapper) {
             const percentEl = progressWrapper.querySelector(".checklist-percent");
             if (percentEl) percentEl.textContent = `${progressPercent}%`;
-            
+
             const fillEl = progressWrapper.querySelector(".progressbar-fill");
             if (fillEl) fillEl.style.width = `${progressPercent}%`;
           }
-          
+
           const summaryEl = card.querySelector(".checklist-summary-line");
           if (summaryEl) {
             summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
           }
-          
+
           try {
             await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
               title: bar.title,
@@ -794,7 +794,7 @@ function updateCardElement(card, bar) {
     if (progressWrapper) {
       const percentEl = progressWrapper.querySelector(".checklist-percent");
       if (percentEl) percentEl.textContent = `${percentage}%`;
-      
+
       const fillEl = progressWrapper.querySelector(".progressbar-fill");
       if (fillEl) fillEl.style.width = `${percentage}%`;
     }
@@ -933,12 +933,12 @@ function createCardElement(bar) {
     const items = bar.items || [];
     const doneCount = items.filter(item => item.done).length;
     const totalCount = items.length;
-    
+
     const showMoreBtnHtml = totalCount > 3 ? `
       <div class="show-more-indicator">Show more (+${totalCount - 3})</div>
       <div class="show-less-indicator">Collapse</div>
     ` : "";
-    
+
     const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     const itemsHtml = items.map((item, index) => {
@@ -1070,18 +1070,18 @@ function createCardElement(bar) {
       checkbox.addEventListener("click", (e) => {
         e.stopPropagation(); // Stop click from opening update modal / expanding card
       });
-      
+
       checkbox.addEventListener("change", async (e) => {
         const isChecked = e.target.checked;
         const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
         if (updatedItems[idx]) {
           updatedItems[idx].done = isChecked;
         }
-        
+
         const targetSmallest = updatedItems.length;
         const currentSmallest = updatedItems.filter(item => item.done).length;
         const completed = updatedItems.length > 0 && updatedItems.every(item => item.done);
-        
+
         // Optimistically update card item styling
         const checklistItemEl = checkbox.closest(".card-checklist-item");
         if (checklistItemEl) {
@@ -1091,24 +1091,24 @@ function createCardElement(bar) {
             checklistItemEl.classList.remove("done");
           }
         }
-        
+
         // Optimistically update progress wrapper HTML (percentage and bar)
         const progressWrapper = card.querySelector(".checklist-progress-wrapper");
         const progressPercent = targetSmallest > 0 ? Math.round((currentSmallest / targetSmallest) * 100) : 0;
-        
+
         if (progressWrapper) {
           const percentEl = progressWrapper.querySelector(".checklist-percent");
           if (percentEl) percentEl.textContent = `${progressPercent}%`;
-          
+
           const fillEl = progressWrapper.querySelector(".progressbar-fill");
           if (fillEl) fillEl.style.width = `${progressPercent}%`;
         }
-        
+
         const summaryEl = card.querySelector(".checklist-summary-line");
         if (summaryEl) {
           summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
         }
-        
+
         try {
           await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
             title: bar.title,
@@ -1128,7 +1128,7 @@ function createCardElement(bar) {
 
   // Expansion & click interaction
   const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
-                        (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
+    (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
 
   card.addEventListener("click", () => {
     if (!deleteConfirmPanel.classList.contains('hidden')) return;
@@ -1140,7 +1140,7 @@ function createCardElement(bar) {
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
-        
+
         // Update show more / less button visibility immediately
         const showMoreBtn = card.querySelector(".show-more-indicator");
         const showLessBtn = card.querySelector(".show-less-indicator");
@@ -1154,7 +1154,7 @@ function createCardElement(bar) {
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
-        
+
         // Update show more / less button visibility immediately
         const showMoreBtn = card.querySelector(".show-more-indicator");
         const showLessBtn = card.querySelector(".show-less-indicator");
@@ -1232,7 +1232,7 @@ function renderDashboard(bars) {
 
   // Compile list of expected elements in order
   const expectedElements = [addCard];
-  
+
   // Render / reconcile card elements
   filtered.reverse().forEach((bar) => {
     const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
@@ -1340,7 +1340,7 @@ function openModal(modal) {
 function closeModal(modal, isPopState = false) {
   if (!modal.classList.contains("active")) return;
   modal.classList.remove("active");
-  
+
   if (!isPopState) {
     closedViaPopState = true;
     history.back();
@@ -2283,11 +2283,11 @@ function openEditModal(bar) {
   const editNotifyHrs = document.getElementById('edit-notify-hrs');
   const editNotifyMins = document.getElementById('edit-notify-mins');
   const editNotifyPercent = document.getElementById('edit-notify-percent');
-  
+
   if (editNotifyHrs) editNotifyHrs.value = "";
   if (editNotifyMins) editNotifyMins.value = "";
   if (editNotifyPercent) editNotifyPercent.value = "";
-  
+
   // Set default radio back to fixed
   const defaultRadio = document.querySelector('input[name="edit-notify-mode"][value="fixed"]');
   if (defaultRadio) defaultRadio.checked = true;
@@ -2465,8 +2465,8 @@ formCreate.addEventListener("submit", async (e) => {
   const completed = type === "goal"
     ? (currentSmallest >= targetSmallest)
     : (type === "checklist"
-        ? (items && items.length > 0 && items.every(item => item.done))
-        : false);
+      ? (items && items.length > 0 && items.every(item => item.done))
+      : false);
 
   // Handle notification calculation
   let notifyAt = null;
@@ -2620,8 +2620,8 @@ formEdit.addEventListener("submit", async (e) => {
   const completed = barType === "goal"
     ? (currentSmallest >= targetSmallest)
     : (barType === "checklist"
-        ? (items && items.length > 0 && items.every(item => item.done))
-        : (barType === "note" ? selectedBar.completed : false));
+      ? (items && items.length > 0 && items.every(item => item.done))
+      : (barType === "note" ? selectedBar.completed : false));
 
   let notifyAt = selectedBar.notifyAt || null;
   let notified = selectedBar.notified || false;
@@ -2907,14 +2907,14 @@ function adjustSearchLayout() {
   const navWidth = navContainer.clientWidth;
   const logoWidth = logo.getBoundingClientRect().width;
   const toolbarWidth = toolbar.getBoundingClientRect().width;
-  
+
   // Space available = total navbar width - logo - toolbar - two gaps of 22.65px (45.3px)
   const availableWidth = navWidth - logoWidth - toolbarWidth - 45.3;
 
   // Minimum required width for pill-mode (placeholder text + paddings/buttons gap)
   // Left padding 16px, search button 32px, gap 8px, right padding 3px = 59px. Let's add 5px safety buffer.
   const placeholderWidth = getPlaceholderWidth(searchInput);
-  const minRequiredWidth = placeholderWidth + 64; 
+  const minRequiredWidth = placeholderWidth + 64;
 
   if (availableWidth >= minRequiredWidth) {
     searchContainer.classList.add("search-pill-mode");
@@ -3058,7 +3058,7 @@ btnDeleteAccount.addEventListener("click", async () => {
     } else {
       // 2. Delete user account from Firebase Auth
       await deleteCurrentUserAccount();
-      
+
       // 3. Clear session states and logout
       await logout();
       if (toast) dismissToast(toast);
@@ -3258,7 +3258,7 @@ function calculateNotifyAt(prefix) {
     const timeVal = timeInput?.value || "23:59";
     const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
     deadlineAt = deadlineDate.getTime();
-    
+
     if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
       deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
     } else {
@@ -3270,7 +3270,7 @@ function calculateNotifyAt(prefix) {
     if (hrs > 0 || mins > 0) {
       const now = Date.now();
       deadlineAt = now + (hrs * 3600000) + (mins * 60000);
-      
+
       if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
         deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
       } else {
@@ -3289,7 +3289,7 @@ function calculateNotifyAt(prefix) {
   if (mode === "fixed") {
     const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
     const notifyMinsInput = document.getElementById(prefix + 'notify-mins');
-    
+
     const hStr = notifyHrsInput ? notifyHrsInput.value : "";
     const mStr = notifyMinsInput ? notifyMinsInput.value : "";
 
@@ -3355,7 +3355,7 @@ function calculateNotifyAt(prefix) {
 function updateNotificationPreview(prefix) {
   const section = document.getElementById(prefix + 'notification-section');
   const previewEl = document.getElementById(prefix + 'notify-preview');
-  
+
   if (!section || !previewEl) return;
 
   const dateInput = document.getElementById(prefix + 'deadline-date');
@@ -3363,8 +3363,8 @@ function updateNotificationPreview(prefix) {
   const minsInput = document.getElementById(prefix + 'deadline-mins');
   const clearCheckbox = document.getElementById(prefix + 'deadline-clear');
 
-  const hasDeadline = (dateInput?.value) || 
-                      (parseFloat(hrsInput?.value) > 0 || parseFloat(minsInput?.value) > 0);
+  const hasDeadline = (dateInput?.value) ||
+    (parseFloat(hrsInput?.value) > 0 || parseFloat(minsInput?.value) > 0);
   const isCleared = prefix === "edit-" && clearCheckbox?.checked;
 
   if (!hasDeadline || isCleared) {
@@ -3386,14 +3386,14 @@ function updateNotificationPreview(prefix) {
     previewEl.classList.remove("hidden", "invalid");
     previewEl.classList.add("valid");
 
-    const options = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric', 
-      hour: 'numeric', 
-      minute: 'numeric', 
-      hour12: true 
+    const options = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
     };
     const formattedDate = new Date(notifyAt).toLocaleDateString('en-US', options);
     previewEl.textContent = `You'll be notified on ${formattedDate}`;
@@ -3510,7 +3510,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then((reg) => {
         console.log('Service Worker registered:', reg.scope);
-        
+
         // Force SW update check when page visibility changes (switching tabs, unlocking phone)
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
@@ -3542,11 +3542,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
-      
+
       let countdown = 8;
       const toast = showToast(`A new version is available! Auto-refreshing in ${countdown}s...`, "info", 0);
       const messageEl = toast.querySelector(".toast-message");
-      
+
       const interval = setInterval(() => {
         countdown--;
         if (countdown > 0) {
