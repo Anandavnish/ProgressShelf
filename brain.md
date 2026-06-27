@@ -14,6 +14,7 @@ ProgressShelf/
 ├── app.js                # Core frontend client logic and DOM controller
 ├── auth.js               # Firebase authentication & guest/sandbox router
 ├── db.js                 # Unified database layer (Firestore + LocalStorage mock)
+├── login.js              # Landing page auth logic & startup SW registration
 ├── sw.js                 # PWA service worker (offline shell caching)
 ├── manifest.json         # PWA app manifest configuration
 ├── logo.svg              # SVG vector logo asset
@@ -30,7 +31,9 @@ ProgressShelf/
    - **Cloud Mode:** Firebase Firestore real-time collection updates.
    - **Sandbox Mode:** LocalStorage mock state database with custom array-observer registers.
 4. **Authentication:** Firebase Client SDK for Google Auth Popup with automatic local Sandbox redirects if configuration credentials are empty.
-5. **Mobile PWA:** PWA manifest registration, cache-first Service Worker cache invalidation (`v7`+), mobile install capability, and mobile back button (`popstate`) gesture interception.
+5. **Mobile PWA:** PWA manifest registration, cache-first Service Worker cache invalidation (`v10`+), mobile install capability, and mobile back button (`popstate`) gesture interception.
+6. **Strict Security Posture:** Content Security Policy (CSP) implementation via meta tags to mitigate XSS vectors. Direct elimination of all inline scripting (fully externalized code assets).
+7. **Accessibility (a11y):** Screen-reader indicators (`aria-pressed`) mapped dynamically to layout actions and segmented statistics buttons.
 
 ---
 
@@ -106,6 +109,19 @@ To reorder items when editing/creating a checklist card:
   - **Desktop:** HTML5 Drag & Drop event mapping. The list item `li` has its `draggable` attribute set to `true` on handle `mousedown` and removed on `mouseup`, keeping text inputs interactively selectable.
   - **Mobile:** Touch event listeners (`touchstart`, `touchmove`, `touchend`). On move, it detects hover coordinates using `document.elementFromPoint()`, searches for the closest `.checklist-builder-item` in the list, and shifts the dragged element visually using `insertBefore`.
 - On drop or touch release, the array of items is reconstructed by traversing the child nodes in the DOM to preserve the new visual order.
+
+### G. Strict Content Security Policy (CSP) & XSS Mitigation
+- Active meta tags declare restrictions on asset sources.
+- Script execution requires whitelisted sources (`'self'` and official Google/Firebase domains). Inline scripting is strictly forbidden. 
+- Style rendering whitelists local files, dynamic stylesheet hashes, and Google Fonts. Avatars are restricted to Google and Gravatar servers.
+
+### H. Service Worker Lifecycle & Automatic Controller Activation
+- Script files (`app.js` and `login.js`) register `sw.js` and subscribe to `updatefound` change states.
+- If a new Service Worker compiles, it alerts the user on the dashboard. Once installation finishes, `self.skipWaiting()` is executed.
+- The `controllerchange` event triggers an automatic, instant reload (`window.location.reload()`) to force clients onto the latest PWA asset shell caching (`progressshelf-cache-v10`+).
+
+### I. Stats Filter Button Accessibility (a11y)
+- Segmented stats tracker buttons toggle custom `aria-pressed="true" | "false"` state tags in-place when user selection changes, allowing screen readers to accurately broadcast active statistics views.
 
 ---
 
