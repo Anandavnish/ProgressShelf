@@ -113,7 +113,7 @@ To reorder items when editing/creating a checklist card:
 ### G. Strict Content Security Policy (CSP) & XSS Mitigation
 - Active meta tags declare restrictions on asset sources.
 - Script execution requires whitelisted sources (`'self'` and official Google/Firebase domains). Inline scripting is strictly forbidden. 
-- Style rendering whitelists local files, dynamic stylesheet hashes, and Google Fonts. Avatars are restricted to Google and Gravatar servers.
+- Style rendering whitelists local files, dynamic stylesheet hashes, and Google Fonts. Avatars and static SVG assets are restricted to Google, Gravatar, and gstatic servers. Frame sources whitelist Firebase app authentication frames and Google APIs to support secure user login communication.
 
 ### H. Service Worker Lifecycle & Automatic Controller Activation
 - Script files (`app.js` and `login.js`) register `sw.js` and subscribe to `updatefound` change states.
