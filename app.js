@@ -2959,18 +2959,28 @@ initAuthProtection(async (user) => {
   }
 
   // Show application content, hide splash screen
-  if (navLogoSvg) {
-    navLogoSvg.classList.remove("logo-loading");
-  }
   appContent.classList.remove("hidden");
 
   // Subscribe to progress bars collection
+  let firstLoad = true;
   startSubscription(
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
+      if (firstLoad) {
+        firstLoad = false;
+        if (navLogoSvg) {
+          navLogoSvg.classList.remove("logo-loading");
+        }
+      }
     },
     (error) => {
+      if (firstLoad) {
+        firstLoad = false;
+        if (navLogoSvg) {
+          navLogoSvg.classList.remove("logo-loading");
+        }
+      }
       showToast("Error loading progress bars. You may be offline.", "error");
       if (cardsGrid.querySelectorAll(".card-skeleton").length > 0) {
         cardsGrid.innerHTML = `
