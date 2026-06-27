@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v17';
+const CACHE_NAME = 'progressshelf-cache-v18';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -86,5 +86,35 @@ self.addEventListener('fetch', (event) => {
         console.error('[Service Worker] Fetch failed:', err);
       });
     })
+  );
+});
+
+// --- FCM Push Notification Listeners ---
+self.addEventListener('push', event => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: "ProgressShelf Alert", body: event.data.text() };
+    }
+  }
+
+  const title = data.title || "Deadline Approaching!";
+  const body = data.body || "Your tracker deadline is coming up.";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: body,
+      icon: './logo.svg',
+      badge: './favicon.svg'
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow('/')
   );
 });

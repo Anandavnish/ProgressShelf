@@ -426,6 +426,44 @@
                   <input type="time" class="form-input" id="deadline-time">
                 </div>
               </div>
+              <!-- Notification Settings -->
+              <div class="notification-section disabled" id="notification-section">
+                <div class="notification-section-header">
+                  🔔 Notify me before deadline
+                </div>
+                
+                <div class="notify-mode-a">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="notify-mode" value="fixed" checked>
+                    <span>Fixed time</span>
+                  </label>
+                  <div class="notify-mode-a-inputs">
+                    <input type="number" step="any" min="0" class="form-input" id="notify-hrs" placeholder="0">
+                    <span class="notify-sep">hr</span>
+                    <input type="number" step="any" min="0" class="form-input" id="notify-mins" placeholder="0">
+                    <span class="notify-sep">min</span>
+                    <span class="notify-suffix">before deadline</span>
+                  </div>
+                </div>
+
+                <div class="or-divider">
+                  <hr><span>or</span><hr>
+                </div>
+
+                <div class="notify-mode-b">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="notify-mode" value="percent">
+                    <span>Percentage of time left</span>
+                  </label>
+                  <div class="notify-mode-b-inputs">
+                    <span class="notify-prefix">notify when</span>
+                    <input type="number" min="0" max="100" class="form-input" id="notify-percent" placeholder="0">
+                    <span class="notify-suffix">% of time remains</span>
+                  </div>
+                </div>
+
+                <div class="notify-preview hidden" id="notify-preview"></div>
+              </div>
             </div>
 
           </div>
@@ -547,6 +585,44 @@
                   <input type="time" class="form-input" id="edit-deadline-time">
                 </div>
               </div>
+              <!-- Notification Settings -->
+              <div class="notification-section disabled" id="edit-notification-section">
+                <div class="notification-section-header">
+                  🔔 Notify me before deadline
+                </div>
+                
+                <div class="notify-mode-a">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="edit-notify-mode" value="fixed" checked>
+                    <span>Fixed time</span>
+                  </label>
+                  <div class="notify-mode-a-inputs">
+                    <input type="number" step="any" min="0" class="form-input" id="edit-notify-hrs" placeholder="0">
+                    <span class="notify-sep">hr</span>
+                    <input type="number" step="any" min="0" class="form-input" id="edit-notify-mins" placeholder="0">
+                    <span class="notify-sep">min</span>
+                    <span class="notify-suffix">before deadline</span>
+                  </div>
+                </div>
+
+                <div class="or-divider">
+                  <hr><span>or</span><hr>
+                </div>
+
+                <div class="notify-mode-b">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="edit-notify-mode" value="percent">
+                    <span>Percentage of time left</span>
+                  </label>
+                  <div class="notify-mode-b-inputs">
+                    <span class="notify-prefix">notify when</span>
+                    <input type="number" min="0" max="100" class="form-input" id="edit-notify-percent" placeholder="0">
+                    <span class="notify-suffix">% of time remains</span>
+                  </div>
+                </div>
+
+                <div class="notify-preview hidden" id="edit-notify-preview"></div>
+              </div>
 
               <!-- Remove deadline checkbox -->
               <div class="deadline-clear-row"
@@ -655,6 +731,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Application Logic -->
-  <script type="module" src="app.js?v=2.8"></script>
+  <script type="module" src="app.js?v=2.9"></script>
 </body>
 </html>

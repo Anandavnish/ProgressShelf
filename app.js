@@ -1,7 +1,7 @@
-// app.js
-import { isConfigured } from "./firebase-config.js";
+import { isConfigured, messaging } from "./firebase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData } from "./db.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken } from "./db.js";
+import { getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
@@ -2279,6 +2279,34 @@ function openEditModal(bar) {
     }
   }
 
+  // Pre-fill notification settings if bar has one
+  const editNotifyHrs = document.getElementById('edit-notify-hrs');
+  const editNotifyMins = document.getElementById('edit-notify-mins');
+  const editNotifyPercent = document.getElementById('edit-notify-percent');
+  
+  if (editNotifyHrs) editNotifyHrs.value = "";
+  if (editNotifyMins) editNotifyMins.value = "";
+  if (editNotifyPercent) editNotifyPercent.value = "";
+  
+  // Set default radio back to fixed
+  const defaultRadio = document.querySelector('input[name="edit-notify-mode"][value="fixed"]');
+  if (defaultRadio) defaultRadio.checked = true;
+
+  if (bar.notifyAt && deadlineMs) {
+    const notifyAt = Number(bar.notifyAt);
+    const diffMs = deadlineMs - notifyAt;
+    if (diffMs > 0) {
+      const diffMins = Math.round(diffMs / 60000);
+      const hrs = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      if (editNotifyHrs) editNotifyHrs.value = hrs;
+      if (editNotifyMins) editNotifyMins.value = mins;
+    }
+  }
+
+  // Force layout update for Edit modal notifications
+  updateNotificationPreview("edit-");
+
   // Store initial state to detect user touches later
   window.editModalInitialDeadline = {
     date: document.getElementById('edit-deadline-date').value || "",
@@ -2440,9 +2468,23 @@ formCreate.addEventListener("submit", async (e) => {
         ? (items && items.length > 0 && items.every(item => item.done))
         : false);
 
+  // Handle notification calculation
+  let notifyAt = null;
+  let notified = false;
+  if (deadlineAt && !completed) {
+    const notifyRes = calculateNotifyAt("");
+    if (notifyRes.isValid && notifyRes.notifyAt) {
+      notifyAt = notifyRes.notifyAt;
+    }
+  }
+
   try {
     closeModal(modalCreate);
-    await createBar(isGuestMode() ? null : currentUser.uid, {
+    const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+    if (notifyAt && targetUid) {
+      handleFCMSession(targetUid);
+    }
+    await createBar(targetUid, {
       title,
       type,
       preset,
@@ -2452,7 +2494,9 @@ formCreate.addEventListener("submit", async (e) => {
       items,
       text,
       completed,
-      deadlineAt
+      deadlineAt,
+      notifyAt,
+      notified
     });
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
@@ -2573,18 +2617,47 @@ formEdit.addEventListener("submit", async (e) => {
     }
   }
 
+  const completed = barType === "goal"
+    ? (currentSmallest >= targetSmallest)
+    : (barType === "checklist"
+        ? (items && items.length > 0 && items.every(item => item.done))
+        : (barType === "note" ? selectedBar.completed : false));
+
+  let notifyAt = selectedBar.notifyAt || null;
+  let notified = selectedBar.notified || false;
+
+  if (completed) {
+    notifyAt = null;
+    notified = false;
+  } else {
+    const notifyRes = calculateNotifyAt("edit-");
+    if (notifyRes.isValid && notifyRes.notifyAt) {
+      notifyAt = notifyRes.notifyAt;
+      notified = false;
+    } else if (notifyRes.errorMsg || !notifyRes.notifyAt) {
+      notifyAt = null;
+      notified = false;
+    }
+  }
+
   try {
     closeModal(modalEdit);
-    await editBar(isGuestMode() ? null : currentUser.uid, selectedBar.id, {
+    const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+    if (notifyAt && notifyAt !== selectedBar.notifyAt && targetUid) {
+      handleFCMSession(targetUid);
+    }
+    await editBar(targetUid, selectedBar.id, {
       title,
       levels: barType === "goal" ? levels : null,
       targetSmallest,
       currentSmallest,
       items: barType === "checklist" ? items : null,
       text: barType === "note" ? text : null,
-      completed: barType === "goal" ? (currentSmallest >= targetSmallest) : (barType === "checklist" ? (items.length > 0 && items.every(i => i.done)) : (barType === "note" ? selectedBar.completed : undefined)),
+      completed,
       deadlineAt,
-      updateDeadline
+      updateDeadline,
+      notifyAt,
+      notified
     });
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
@@ -3155,6 +3228,279 @@ function setupDeadlineMutualExclusion(prefix = "") {
 
 setupDeadlineMutualExclusion(""); // For Create modal
 setupDeadlineMutualExclusion("edit-"); // For Edit modal
+
+// ==========================================
+// FCM Push Notification Settings & Calculation
+// ==========================================
+
+const FCM_VAPID_KEY = "YOUR_VAPID_KEY"; // Placeholder for VAPID Key
+
+/**
+ * Calculates notifyAt based on modal prefix and deadline.
+ * @param {string} prefix "" or "edit-"
+ * @returns {{ notifyAt: number | null, isValid: boolean, errorMsg: string | null }}
+ */
+function calculateNotifyAt(prefix) {
+  const dateInput = document.getElementById(prefix + 'deadline-date');
+  const timeInput = document.getElementById(prefix + 'deadline-time');
+  const hrsInput = document.getElementById(prefix + 'deadline-hrs');
+  const minsInput = document.getElementById(prefix + 'deadline-mins');
+  const clearCheckbox = document.getElementById(prefix + 'deadline-clear'); // only in edit- modal
+
+  if (prefix === "edit-" && clearCheckbox && clearCheckbox.checked) {
+    return { notifyAt: null, isValid: false, errorMsg: null };
+  }
+
+  let deadlineAt = null;
+  let deadlineSetAt = null;
+
+  if (dateInput?.value) {
+    const timeVal = timeInput?.value || "23:59";
+    const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
+    deadlineAt = deadlineDate.getTime();
+    
+    if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
+      deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
+    } else {
+      deadlineSetAt = Date.now();
+    }
+  } else if (hrsInput?.value || minsInput?.value) {
+    const hrs = parseFloat(hrsInput.value) || 0;
+    const mins = parseFloat(minsInput.value) || 0;
+    if (hrs > 0 || mins > 0) {
+      const now = Date.now();
+      deadlineAt = now + (hrs * 3600000) + (mins * 60000);
+      
+      if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
+        deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
+      } else {
+        deadlineSetAt = now;
+      }
+    }
+  }
+
+  if (!deadlineAt) {
+    return { notifyAt: null, isValid: false, errorMsg: null };
+  }
+
+  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
+  const mode = modeRadio ? modeRadio.value : "fixed";
+
+  if (mode === "fixed") {
+    const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
+    const notifyMinsInput = document.getElementById(prefix + 'notify-mins');
+    
+    const hStr = notifyHrsInput ? notifyHrsInput.value : "";
+    const mStr = notifyMinsInput ? notifyMinsInput.value : "";
+
+    if (!hStr.trim() && !mStr.trim()) {
+      return { notifyAt: null, isValid: false, errorMsg: null };
+    }
+
+    const hrs = parseFloat(hStr) || 0;
+    const mins = parseFloat(mStr) || 0;
+
+    if (hrs < 0 || mins < 0) {
+      return { notifyAt: null, isValid: false, errorMsg: "⚠ Notification time is outside the valid range" };
+    }
+
+    if (hrs === 0 && mins === 0) {
+      return { notifyAt: null, isValid: false, errorMsg: null };
+    }
+
+    const totalMs = (hrs * 3600000) + (mins * 60000);
+    const notifyAt = deadlineAt - totalMs;
+
+    const now = Date.now();
+    if (notifyAt <= now || notifyAt >= deadlineAt) {
+      return { notifyAt: notifyAt, isValid: false, errorMsg: "⚠ Notification time is outside the valid range" };
+    }
+
+    return { notifyAt: notifyAt, isValid: true, errorMsg: null };
+  } else {
+    const percentInput = document.getElementById(prefix + 'notify-percent');
+    const pStr = percentInput ? percentInput.value : "";
+
+    if (!pStr.trim()) {
+      return { notifyAt: null, isValid: false, errorMsg: null };
+    }
+
+    const percent = parseFloat(pStr);
+
+    if (isNaN(percent) || percent < 0 || percent > 100) {
+      return { notifyAt: null, isValid: false, errorMsg: "⚠ Notification time is outside the valid range" };
+    }
+
+    if (percent === 0) {
+      return { notifyAt: null, isValid: false, errorMsg: null };
+    }
+
+    const setAt = deadlineSetAt || Date.now();
+    const totalDuration = deadlineAt - setAt;
+    const notifyAt = deadlineAt - (totalDuration * (percent / 100));
+
+    const now = Date.now();
+    if (notifyAt <= now || notifyAt >= deadlineAt) {
+      return { notifyAt: notifyAt, isValid: false, errorMsg: "⚠ Notification time is outside the valid range" };
+    }
+
+    return { notifyAt: notifyAt, isValid: true, errorMsg: null };
+  }
+}
+
+/**
+ * Updates the disabled state and calculated preview inside modals.
+ * @param {string} prefix "" or "edit-"
+ */
+function updateNotificationPreview(prefix) {
+  const section = document.getElementById(prefix + 'notification-section');
+  const previewEl = document.getElementById(prefix + 'notify-preview');
+  
+  if (!section || !previewEl) return;
+
+  const dateInput = document.getElementById(prefix + 'deadline-date');
+  const hrsInput = document.getElementById(prefix + 'deadline-hrs');
+  const minsInput = document.getElementById(prefix + 'deadline-mins');
+  const clearCheckbox = document.getElementById(prefix + 'deadline-clear');
+
+  const hasDeadline = (dateInput?.value) || 
+                      (parseFloat(hrsInput?.value) > 0 || parseFloat(minsInput?.value) > 0);
+  const isCleared = prefix === "edit-" && clearCheckbox?.checked;
+
+  if (!hasDeadline || isCleared) {
+    section.classList.add("disabled");
+    previewEl.classList.add("hidden");
+    previewEl.textContent = "";
+    return;
+  }
+
+  section.classList.remove("disabled");
+
+  const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
+
+  if (errorMsg) {
+    previewEl.classList.remove("hidden", "valid");
+    previewEl.classList.add("invalid");
+    previewEl.textContent = errorMsg;
+  } else if (isValid && notifyAt) {
+    previewEl.classList.remove("hidden", "invalid");
+    previewEl.classList.add("valid");
+
+    const options = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric', 
+      hour: 'numeric', 
+      minute: 'numeric', 
+      hour12: true 
+    };
+    const formattedDate = new Date(notifyAt).toLocaleDateString('en-US', options);
+    previewEl.textContent = `You'll be notified on ${formattedDate}`;
+  } else {
+    previewEl.classList.add("hidden");
+    previewEl.textContent = "";
+  }
+}
+
+/**
+ * Requests FCM notification permissions, generates client token, and stores it.
+ * @param {string} uid User ID.
+ */
+async function handleFCMSession(uid) {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      const isGuest = isGuestMode();
+      if (isGuest) {
+        localStorage.setItem("ps_fcm_token", "sandbox-mock-token");
+        return;
+      }
+
+      if (typeof messaging !== "undefined" && messaging) {
+        const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+        if (token) {
+          await saveFCMToken(uid, token);
+        } else {
+          console.warn("No FCM registration token available.");
+        }
+      }
+    }
+  } catch (error) {
+    console.error("FCM Token capture failed:", error);
+  }
+}
+
+/**
+ * Sets up dynamic validation listeners on notification fields.
+ * @param {string} prefix "" or "edit-"
+ */
+function setupNotificationListeners(prefix = "") {
+  const dateInput = document.getElementById(prefix + 'deadline-date');
+  const timeInput = document.getElementById(prefix + 'deadline-time');
+  const hrsInput = document.getElementById(prefix + 'deadline-hrs');
+  const minsInput = document.getElementById(prefix + 'deadline-mins');
+  const clearCheckbox = document.getElementById(prefix + 'deadline-clear');
+
+  const notifyHrs = document.getElementById(prefix + 'notify-hrs');
+  const notifyMins = document.getElementById(prefix + 'notify-mins');
+  const notifyPercent = document.getElementById(prefix + 'notify-percent');
+
+  const modeRadios = document.querySelectorAll(`input[name="${prefix}notify-mode"]`);
+
+  const runUpdate = () => updateNotificationPreview(prefix);
+
+  const clearNotificationInputs = () => {
+    if (notifyHrs) notifyHrs.value = "";
+    if (notifyMins) notifyMins.value = "";
+    if (notifyPercent) notifyPercent.value = "";
+  };
+
+  // Bind change/input listeners
+  dateInput?.addEventListener('input', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  dateInput?.addEventListener('change', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  timeInput?.addEventListener('input', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  timeInput?.addEventListener('change', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  hrsInput?.addEventListener('input', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  minsInput?.addEventListener('input', () => {
+    if (prefix === "edit-") clearNotificationInputs();
+    runUpdate();
+  });
+  if (clearCheckbox) {
+    clearCheckbox.addEventListener('change', () => {
+      if (prefix === "edit-") clearNotificationInputs();
+      runUpdate();
+    });
+  }
+
+  notifyHrs?.addEventListener('input', runUpdate);
+  notifyMins?.addEventListener('input', runUpdate);
+  notifyPercent?.addEventListener('input', runUpdate);
+
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', runUpdate);
+  });
+
+  runUpdate();
+}
+
+setupNotificationListeners("");
+setupNotificationListeners("edit-");
 
 // ==========================================
 // Service Worker Registration & Updates

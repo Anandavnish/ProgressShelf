@@ -2572,4 +2572,108 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   min-height: 180px;
 }
 
+/* --- Notification Settings Panel inside Deadline Box --- */
+.notification-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--card-border);
+  transition: opacity 0.2s ease;
+}
+
+.notification-section.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.notification-section-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.notify-mode-a, .notify-mode-b {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.notify-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.notify-radio-label input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.notify-mode-a-inputs, .notify-mode-b-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 22px;
+  flex-wrap: wrap;
+}
+
+.notify-mode-a-inputs .form-input,
+.notify-mode-b-inputs .form-input {
+  width: 64px;
+  text-align: center;
+  padding: 6px;
+  font-size: 0.85rem;
+}
+
+.notify-sep, .notify-suffix, .notify-prefix {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Or Divider */
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #444C56;
+  font-size: 11px;
+  margin: 12px 0;
+}
+
+.or-divider hr {
+  flex: 1;
+  border: none;
+  height: 1px;
+  background: #30363D;
+}
+
+.or-divider span {
+  padding: 0 4px;
+}
+
+/* Preview Line */
+.notify-preview {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.notify-preview.valid {
+  background: rgba(46, 160, 67, 0.15);
+  border: 1px solid rgba(46, 160, 67, 0.3);
+  color: #56D364; /* Vibrant green */
+}
+
+.notify-preview.invalid {
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  color: #FF7B72; /* Error red */
+}
+
 

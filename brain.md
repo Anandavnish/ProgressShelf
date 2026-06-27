@@ -176,3 +176,16 @@ Wires up desktop and touch-friendly reordering on checklist modal lists.
   - `itemsArray: ChecklistItem[]` (local items array)
   - `renderFn: Function` (rendering list refresh routine)
   - `setArrayCallback: Function` (mutator callback to update state array)
+
+### Function: `calculateNotifyAt(prefix)`
+Computes the notification epoch millisecond timestamp based on selected Mode A (Fixed time) or Mode B (Percentage of time left) inputs.
+- **Parameters:** `prefix: string` ("" or "edit-")
+- **Returns:** `{ notifyAt: number | null, isValid: boolean, errorMsg: string | null }`
+
+### Function: `updateNotificationPreview(prefix)`
+Toggles notification section disabled/enabled states and renders real-time date preview or validation range warnings on keystroke/change.
+- **Parameters:** `prefix: string` ("" or "edit-")
+
+### Function: `handleFCMSession(uid)`
+Triggers browser `Notification.requestPermission()`. If granted, contacts Firebase Cloud Messaging using `getToken` and saves the client token.
+- **Parameters:** `uid: string`

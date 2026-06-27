@@ -11,7 +11,8 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
-  getDocs
+  getDocs,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Helper to get/set local storage bars for Sandbox mode
@@ -89,7 +90,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt }) {
+export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
@@ -107,7 +108,9 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
       createdAt: now,
       lastUpdated: now,
       deadlineAt: deadlineAt || null,
-      deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null
+      deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null,
+      notifyAt: notifyAt || null,
+      notified: notified || false
     };
     bars.push(newBar);
     setLocalBars(bars);
@@ -131,7 +134,9 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp(),
       deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
-      deadlineSetAt: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt) : now) : null
+      deadlineSetAt: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt) : now) : null,
+      notifyAt: notifyAt || null,
+      notified: notified || false
     });
     return docRef.id;
   } catch (error) {
@@ -154,6 +159,9 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
       bars[barIndex].currentSmallest = Number(currentSmallest);
       bars[barIndex].completed = completed;
       bars[barIndex].lastUpdated = Date.now();
+      if (completed) {
+        bars[barIndex].notifyAt = null;
+      }
       setLocalBars(bars);
       triggerMockUpdate();
     } else {
@@ -164,11 +172,15 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
 
   try {
     const barDocRef = doc(db, "users", uid, "bars", barId);
-    await updateDoc(barDocRef, {
+    const updates = {
       currentSmallest: Number(currentSmallest),
       completed: completed,
       lastUpdated: serverTimestamp()
-    });
+    };
+    if (completed) {
+      updates.notifyAt = null;
+    }
+    await updateDoc(barDocRef, updates);
   } catch (error) {
     console.error("Error updating progress bar:", error);
     throw error;
@@ -198,7 +210,7 @@ export async function deleteBar(uid, barId) {
 }
 
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -229,7 +241,9 @@ export async function editBar(uid, barId, {
         completed: completed !== undefined ? completed : original.completed,
         lastUpdated: Date.now(),
         deadlineAt: newDeadlineAt,
-        deadlineSetAt: newDeadlineSetAt
+        deadlineSetAt: newDeadlineSetAt,
+        notifyAt: notifyAt !== undefined ? notifyAt : original.notifyAt,
+        notified: notified !== undefined ? notified : original.notified
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -252,6 +266,8 @@ export async function editBar(uid, barId, {
     if (items !== undefined) updates.items = items;
     if (text !== undefined) updates.text = text;
     if (completed !== undefined) updates.completed = completed;
+    if (notifyAt !== undefined) updates.notifyAt = notifyAt;
+    if (notified !== undefined) updates.notified = notified;
 
     if (updateDeadline) {
       if (deadlineAt) {
@@ -287,6 +303,29 @@ export async function deleteUserData(uid) {
     await Promise.all(deletePromises);
   } catch (error) {
     console.error("Error deleting user Firestore bars:", error);
+    throw error;
+  }
+}
+
+/**
+ * Saves a user's FCM token to /users/{uid}/fcmToken/current (or LocalStorage in guest/sandbox mode).
+ * @param {string} uid User ID.
+ * @param {string} token FCM token value.
+ */
+export async function saveFCMToken(uid, token) {
+  if (!isConfigured || isGuestMode()) {
+    localStorage.setItem("ps_fcm_token", token);
+    return;
+  }
+
+  try {
+    const tokenDocRef = doc(db, "users", uid, "fcmToken", "current");
+    await setDoc(tokenDocRef, {
+      token: token,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error saving FCM token:", error);
     throw error;
   }
 }
