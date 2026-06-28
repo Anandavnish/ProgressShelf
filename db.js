@@ -1,19 +1,6 @@
 // db.js
-import { db, isConfigured } from "./firebase-config.js";
+import { supabase, isConfigured } from "./supabase-config.js";
 import { isGuestMode } from "./auth.js";
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-  getDocs,
-  setDoc
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Helper to get/set local storage bars for Sandbox mode
 export function getLocalBars() {
@@ -60,28 +47,62 @@ export function subscribeToBars(uid, onUpdate, onError) {
     };
   }
 
-  try {
-    const barsRef = collection(db, "users", uid, "bars");
-    const q = query(barsRef, orderBy("createdAt", "asc"));
+  // Initial fetch and callback helper
+  const fetchAndCallback = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trackers')
+        .select('*')
+        .eq('user_id', uid)
+        .order('last_updated', { ascending: false });
 
-    return onSnapshot(q, (snapshot) => {
-      const bars = [];
-      snapshot.forEach((doc) => {
-        bars.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
+      if (error) throw error;
+
+      // Map snake_case columns back to camelCase properties for app.js
+      const bars = (data || []).map(row => ({
+        id: row.id,
+        title: row.title,
+        type: row.type,
+        preset: row.preset,
+        levels: row.levels,
+        targetSmallest: row.target_smallest !== null ? Number(row.target_smallest) : null,
+        currentSmallest: row.current_smallest !== null ? Number(row.current_smallest) : null,
+        items: row.items,
+        text: row.text,
+        completed: row.completed,
+        deadlineAt: row.deadline_at ? new Date(row.deadline_at).getTime() : null,
+        deadlineSetAt: row.deadline_set_at ? new Date(row.deadline_set_at).getTime() : null,
+        notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
+        notified: row.notified,
+        notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
+        lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
+      }));
+
       onUpdate(bars);
-    }, (error) => {
-      console.error("Firestore subscription error:", error);
-      if (onError) onError(error);
-    });
-  } catch (error) {
-    console.error("Failed to setup Firestore subscription:", error);
-    if (onError) onError(error);
-    return () => { };
-  }
+    } catch (err) {
+      console.error("Error fetching trackers:", err);
+      if (onError) onError(err);
+    }
+  };
+
+  // Perform initial fetch
+  fetchAndCallback();
+
+  // Subscribe to real-time changes
+  const channel = supabase
+    .channel(`trackers-user-${uid}`)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'trackers', filter: `user_id=eq.${uid}` },
+      () => {
+        fetchAndCallback();
+      }
+    )
+    .subscribe();
+
+  // Return unsubscribe callback
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 /**
@@ -90,7 +111,9 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent }) {
+export async function createBar(uid, {
+  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent
+}) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
@@ -120,27 +143,32 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
   }
 
   try {
-    const barsRef = collection(db, "users", uid, "bars");
-    const now = new Date();
-    const docRef = await addDoc(barsRef, {
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('trackers').insert({
+      id,
+      user_id: uid,
       title,
       type: type || "goal",
       preset: preset || null,
       levels: levels || null,
-      targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : null,
-      currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : null,
+      target_smallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : 1,
+      current_smallest: current_smallest !== null && current_smallest !== undefined ? Number(current_smallest) : 0,
       items: items || null,
       text: text || null,
       completed: completed || false,
-      createdAt: serverTimestamp(),
-      lastUpdated: serverTimestamp(),
-      deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
-      deadlineSetAt: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt) : now) : null,
-      notifyAt: notifyAt || null,
+      deadline_at: deadlineAt ? new Date(deadlineAt).toISOString() : null,
+      deadline_set_at: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt).toISOString() : now) : null,
+      notify_at: notifyAt ? new Date(notifyAt).toISOString() : null,
       notified: notified || false,
-      notifyPercent: notifyPercent || null
+      notify_percent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
+      last_updated: now
     });
-    return docRef.id;
+    if (error) throw error;
+    return id;
   } catch (error) {
     console.error("Error creating progress bar:", error);
     throw error;
@@ -152,6 +180,7 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
  * @param {string} uid The user ID.
  * @param {string} barId The ID of the progress bar document.
  * @param {number} currentSmallest The new current progress in the smallest unit.
+ * @param {boolean} completed Whether the tracker is marked complete.
  */
 export async function updateBarProgress(uid, barId, currentSmallest, completed) {
   if (!isConfigured || isGuestMode()) {
@@ -173,16 +202,20 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
   }
 
   try {
-    const barDocRef = doc(db, "users", uid, "bars", barId);
     const updates = {
-      currentSmallest: Number(currentSmallest),
+      current_smallest: Number(currentSmallest),
       completed: completed,
-      lastUpdated: serverTimestamp()
+      last_updated: new Date().toISOString()
     };
     if (completed) {
-      updates.notifyAt = null;
+      updates.notify_at = null;
     }
-    await updateDoc(barDocRef, updates);
+    const { error } = await supabase
+      .from('trackers')
+      .update(updates)
+      .eq('id', barId)
+      .eq('user_id', uid);
+    if (error) throw error;
   } catch (error) {
     console.error("Error updating progress bar:", error);
     throw error;
@@ -203,14 +236,21 @@ export async function deleteBar(uid, barId) {
   }
 
   try {
-    const barDocRef = doc(db, "users", uid, "bars", barId);
-    await deleteDoc(barDocRef);
+    const { error } = await supabase
+      .from('trackers')
+      .delete()
+      .eq('id', barId)
+      .eq('user_id', uid);
+    if (error) throw error;
   } catch (error) {
     console.error("Error deleting progress bar:", error);
     throw error;
   }
 }
 
+/**
+ * Edits an existing progress bar document.
+ */
 export async function editBar(uid, barId, {
   title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent
 }) {
@@ -255,35 +295,38 @@ export async function editBar(uid, barId, {
   }
 
   try {
-    const barDocRef = doc(db, "users", uid, "bars", barId);
-    const now = new Date();
-    
+    const now = new Date().toISOString();
     const updates = {
       title,
-      lastUpdated: serverTimestamp()
+      last_updated: now
     };
 
     if (levels !== undefined) updates.levels = levels;
-    if (targetSmallest !== null && targetSmallest !== undefined) updates.targetSmallest = Number(targetSmallest);
-    if (currentSmallest !== null && currentSmallest !== undefined) updates.currentSmallest = Number(currentSmallest);
+    if (targetSmallest !== null && targetSmallest !== undefined) updates.target_smallest = Number(targetSmallest);
+    if (currentSmallest !== null && currentSmallest !== undefined) updates.current_smallest = Number(currentSmallest);
     if (items !== undefined) updates.items = items;
     if (text !== undefined) updates.text = text;
     if (completed !== undefined) updates.completed = completed;
-    if (notifyAt !== undefined) updates.notifyAt = notifyAt;
+    if (notifyAt !== undefined) updates.notify_at = notifyAt ? new Date(notifyAt).toISOString() : null;
     if (notified !== undefined) updates.notified = notified;
-    if (notifyPercent !== undefined) updates.notifyPercent = notifyPercent;
+    if (notifyPercent !== undefined) updates.notify_percent = notifyPercent !== null ? Number(notifyPercent) : null;
 
     if (updateDeadline) {
       if (deadlineAt) {
-        updates.deadlineAt = new Date(deadlineAt);
-        updates.deadlineSetAt = now;
+        updates.deadline_at = new Date(deadlineAt).toISOString();
+        updates.deadline_set_at = now;
       } else {
-        updates.deadlineAt = null;
-        updates.deadlineSetAt = null;
+        updates.deadline_at = null;
+        updates.deadline_set_at = null;
       }
     }
 
-    await updateDoc(barDocRef, updates);
+    const { error } = await supabase
+      .from('trackers')
+      .update(updates)
+      .eq('id', barId)
+      .eq('user_id', uid);
+    if (error) throw error;
   } catch (error) {
     console.error("Error editing bar:", error);
     throw error;
@@ -301,18 +344,19 @@ export async function deleteUserData(uid) {
   }
 
   try {
-    const barsCollRef = collection(db, "users", uid, "bars");
-    const snapshot = await getDocs(barsCollRef);
-    const deletePromises = snapshot.docs.map(docRef => deleteDoc(docRef.ref));
-    await Promise.all(deletePromises);
+    const { error } = await supabase
+      .from('trackers')
+      .delete()
+      .eq('user_id', uid);
+    if (error) throw error;
   } catch (error) {
-    console.error("Error deleting user Firestore bars:", error);
+    console.error("Error deleting user trackers:", error);
     throw error;
   }
 }
 
 /**
- * Saves a user's FCM token to /users/{uid}/fcmToken/current (or LocalStorage in guest/sandbox mode).
+ * Saves a user's FCM token to fcm_tokens (or LocalStorage in guest/sandbox mode).
  * @param {string} uid User ID.
  * @param {string} token FCM token value.
  */
@@ -324,11 +368,13 @@ export async function saveFCMToken(uid, token) {
   }
 
   try {
-    const tokenDocRef = doc(db, "users", uid, "fcmTokens", token);
-    await setDoc(tokenDocRef, {
-      token: token,
-      updatedAt: serverTimestamp()
-    });
+    const { error } = await supabase
+      .from('fcm_tokens')
+      .upsert(
+        { user_id: uid, token, updated_at: new Date().toISOString() },
+        { onConflict: 'token' }
+      );
+    if (error) throw error;
   } catch (error) {
     console.error("Error saving FCM token:", error);
     throw error;
@@ -336,18 +382,20 @@ export async function saveFCMToken(uid, token) {
 }
 
 /**
- * Deletes a user's FCM token from Firestore.
+ * Deletes a user's FCM token from fcm_tokens.
  * @param {string} uid User ID.
  * @param {string} token FCM token value.
  */
 export async function deleteFCMToken(uid, token) {
   if (!isConfigured || isGuestMode() || !uid || !token) return;
   try {
-    const tokenDocRef = doc(db, "users", uid, "fcmTokens", token);
-    await deleteDoc(tokenDocRef);
+    const { error } = await supabase
+      .from('fcm_tokens')
+      .delete()
+      .eq('user_id', uid)
+      .eq('token', token);
+    if (error) throw error;
   } catch (error) {
     console.error("Error deleting FCM token:", error);
   }
 }
-
-

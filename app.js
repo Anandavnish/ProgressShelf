@@ -1,7 +1,29 @@
-import { isConfigured, messaging } from "./firebase-config.js";
+import { isConfigured } from "./supabase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken } from "./db.js";
-import { getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
+
+// Initialize Firebase FCM if configured (keeps FCM token system intact)
+const firebaseConfig = {
+  apiKey: "AIzaSyCDV0zHk8kjcXgLFd5zIpREmwxuMJed7FQ",
+  authDomain: "progressshelf.firebaseapp.com",
+  projectId: "progressshelf",
+  storageBucket: "progressshelf.firebasestorage.app",
+  messagingSenderId: "311368772862",
+  appId: "1:311368772862:web:4806e3f2a41455c2b289af",
+  measurementId: "G-VK2HK44LT1"
+};
+
+let messaging = null;
+if (isConfigured) {
+  try {
+    const firebaseApp = initializeApp(firebaseConfig);
+    messaging = getMessaging(firebaseApp);
+  } catch (error) {
+    console.error("Firebase FCM initialization failed:", error);
+  }
+}
 
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
@@ -3153,7 +3175,7 @@ initAuthProtection(async (user) => {
       banner.style.backgroundColor = "rgba(74, 144, 217, 0.1)";
       banner.style.color = "var(--accent)";
       banner.style.borderBottom = "1px solid var(--card-border)";
-      banner.innerHTML = `<span>ℹ️ <strong>Sandbox Mode:</strong> Running locally. Copy <code>firebase-config.template.js</code> to <code>firebase-config.js</code> and fill in credentials to connect Firebase.</span>`;
+      banner.innerHTML = `<span>ℹ️ <strong>Sandbox Mode:</strong> Running locally. Update <code>supabase-config.js</code> with your project credentials to connect Supabase.</span>`;
       appContent.insertBefore(banner, appContent.firstChild);
     }
   }

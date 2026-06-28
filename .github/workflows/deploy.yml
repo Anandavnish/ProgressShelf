@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - supabase-migration
   workflow_dispatch:
 
 permissions:
@@ -25,40 +25,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Firebase Config
+      - name: Create Supabase Config
         run: |
-          cat << 'EOF' > firebase-config.js
-          const firebaseConfig = {
-            apiKey: "${{ secrets.FIREBASE_API_KEY }}",
-            authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
-            projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
-            storageBucket: "${{ secrets.FIREBASE_STORAGE_BUCKET }}",
-            messagingSenderId: "${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}",
-            appId: "${{ secrets.FIREBASE_APP_ID }}"
-          };
-
-          import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-          import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-          import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-          import { getMessaging } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
-
-          let app, auth, db, messaging;
-          const isConfigured = true;
-
-          try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            messaging = getMessaging(app);
-          } catch (error) {
-            console.error("Firebase initialization failed:", error);
-          }
-
-          export { auth, db, messaging, firebaseConfig, isConfigured };
+          cat << 'EOF' > supabase-config.js
+          import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+          const SUPABASE_URL = '${{ secrets.SUPABASE_URL }}'
+          const SUPABASE_PUBLISHABLE_KEY = '${{ secrets.SUPABASE_PUBLISHABLE_KEY }}'
+          export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+          export const isConfigured = true
           EOF
-
-          mkdir -p versions/v2.0
-          cp firebase-config.js versions/v2.0/firebase-config.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

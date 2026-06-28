@@ -1,12 +1,5 @@
 // auth.js
-import { auth, isConfigured } from "./firebase-config.js";
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  onAuthStateChanged,
-  deleteUser
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { supabase, isConfigured } from "./supabase-config.js";
 
 const isDashboard = window.location.pathname.endsWith("dashboard.html");
 
@@ -17,9 +10,34 @@ const mockUser = {
 };
 
 /**
- * Initiates the Google Sign-In flow using a popup.
- * If Firebase is unconfigured, enters Sandbox Mode.
- * @returns {Promise<User>} The authenticated Firebase User.
+ * Maps Supabase User to Firebase User properties expected by app.js
+ */
+function mapSupabaseUser(supabaseUser) {
+  if (!supabaseUser) return null;
+  return {
+    uid: supabaseUser.id,
+    email: supabaseUser.email,
+    displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email || "Tracker User",
+    photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+  };
+}
+
+/**
+ * Initiates the Google Sign-In flow using OAuth redirect.
+ */
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + '/ProgressShelf/dashboard.html'
+    }
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Backwards compatible name for app.js login trigger.
  */
 export async function loginWithGoogle() {
   if (!isConfigured) {
@@ -29,20 +47,33 @@ export async function loginWithGoogle() {
     }, 100);
     return mockUser;
   }
-
-  const provider = new GoogleAuthProvider();
-
-  try {
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
-  } catch (error) {
-    console.error("Google Sign-In Error:", error);
-    throw error;
-  }
+  return signInWithGoogle();
 }
 
 /**
- * Signs out the current user.
+ * Signs out the current user and cleans up FCM token.
+ */
+export async function signOut() {
+  const token = localStorage.getItem("ps_fcm_token");
+  if (token) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (uid) {
+      try {
+        await supabase.from('fcm_tokens').delete().eq('user_id', uid).eq('token', token);
+      } catch (err) {
+        console.error("Failed to delete FCM token on sign-out:", err);
+      }
+    }
+  }
+  localStorage.removeItem("ps_fcm_token");
+
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+/**
+ * Backwards compatible name for app.js logout trigger.
  */
 export async function logout() {
   if (!isConfigured) {
@@ -50,13 +81,7 @@ export async function logout() {
     window.location.href = "index.html";
     return;
   }
-  
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error("Sign-Out Error:", error);
-    throw error;
-  }
+  await signOut();
 }
 
 // Guest mode: set when user clicks "Continue without login"
@@ -74,8 +99,17 @@ export function exitGuestMode() {
 }
 
 /**
+ * Registers a callback for Supabase auth state changes.
+ */
+export function onAuthStateChange(callback) {
+  return supabase.auth.onAuthStateChange((event, session) => {
+    const user = session ? mapSupabaseUser(session.user) : null;
+    callback(user);
+  });
+}
+
+/**
  * Initializes authentication listener and handles automatic routing redirects.
- * @param {Function} onUserActive Callback invoked on the dashboard if user is authenticated or in guest mode.
  */
 export function initAuthProtection(onUserActive) {
   if (!isConfigured) {
@@ -83,7 +117,6 @@ export function initAuthProtection(onUserActive) {
     const isDemo = localStorage.getItem("progress_shelf_demo") === "true";
 
     if (isGuest) {
-      // Guest takes priority over demo flag
       if (!isDashboard) {
         window.location.href = "dashboard.html";
       } else if (onUserActive) {
@@ -103,51 +136,56 @@ export function initAuthProtection(onUserActive) {
     return;
   }
 
-  onAuthStateChanged(auth, (user) => {
+  // Check initial session state
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    const user = session ? mapSupabaseUser(session.user) : null;
+    const isGuest = isGuestMode();
+
     if (user) {
       if (!isDashboard) {
-        // Logged in user on landing page -> redirect to dashboard
         window.location.href = "dashboard.html";
-      } else {
-        // Logged in user on dashboard -> execute callback
-        if (onUserActive) {
-          onUserActive(user);
-        }
+      } else if (onUserActive) {
+        onUserActive(user);
+      }
+    } else if (isGuest) {
+      if (!isDashboard) {
+        window.location.href = "dashboard.html";
+      } else if (onUserActive) {
+        onUserActive({ uid: null, displayName: "Guest" });
       }
     } else {
-      if (isGuestMode()) {
-        if (!isDashboard) {
-          window.location.href = "dashboard.html";
-        } else if (onUserActive) {
-          onUserActive({ uid: null, displayName: "Guest" });
-        }
-      } else {
-        if (isDashboard) {
-          // Logged out user on dashboard -> redirect to landing
-          window.location.href = "index.html";
-        }
+      if (isDashboard) {
+        window.location.href = "index.html";
+      }
+    }
+  });
+
+  // Track auth changes
+  supabase.auth.onAuthStateChange((event, session) => {
+    const user = session ? mapSupabaseUser(session.user) : null;
+    const isGuest = isGuestMode();
+
+    if (event === 'SIGNED_OUT') {
+      if (isDashboard && !isGuest) {
+        window.location.href = "index.html";
+      }
+    } else if (event === 'SIGNED_IN') {
+      if (!isDashboard) {
+        window.location.href = "dashboard.html";
+      } else if (onUserActive && user) {
+        onUserActive(user);
       }
     }
   });
 }
 
 /**
- * Deletes the currently authenticated user's account from Firebase Auth.
+ * Handles account deletion logic on the client side.
  */
 export async function deleteCurrentUserAccount() {
   if (!isConfigured) {
     localStorage.removeItem("progress_shelf_demo");
     return;
   }
-  
-  const user = auth.currentUser;
-  if (user) {
-    try {
-      await deleteUser(user);
-    } catch (error) {
-      console.error("Firebase Auth deleteUser Error:", error);
-      throw error;
-    }
-  }
+  console.log("Supabase account deletion requested. Data was removed via deleteUserData.");
 }
-
