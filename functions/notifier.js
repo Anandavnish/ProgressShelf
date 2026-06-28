@@ -22,18 +22,15 @@ const messaging = admin.messaging();
 
 async function runNotifier() {
   const now = Date.now();
-  const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
-  const minNotifyAt = now - bufferMs;
   const maxNotifyAt = now + bufferMs;
 
   console.log(`Running notifier at: ${new Date(now).toISOString()}`);
-  console.log(`Looking for trackers due between ${new Date(minNotifyAt).toISOString()} and ${new Date(maxNotifyAt).toISOString()}`);
+  console.log(`Looking for trackers due up to ${new Date(maxNotifyAt).toISOString()}`);
 
   try {
     // Collection group query to check all 'bars' collections
     const barsRef = db.collectionGroup('bars');
     const snapshot = await barsRef
-      .where('notifyAt', '>=', minNotifyAt)
       .where('notifyAt', '<=', maxNotifyAt)
       .get();
 
