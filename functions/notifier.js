@@ -20,6 +20,16 @@ try {
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+// Helper to safely parse any Date/Timestamp/Number into numeric epoch ms
+function getEpochMs(val) {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  if (val.toMillis) return val.toMillis();
+  if (val.toDate) return val.toDate().getTime();
+  if (val instanceof Date) return val.getTime();
+  return Number(val) || 0;
+}
+
 async function runNotifier() {
   const now = Date.now();
   const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
@@ -37,6 +47,16 @@ async function runNotifier() {
 
     if (snapshot.empty) {
       console.log("No trackers found within the notification window.");
+      
+      // RUN AUTOMATIC DIAGNOSTIC SCAN
+      console.log("--- START AUTOMATIC DATABASE DIAGNOSTIC SCAN ---");
+      const totalSnapshot = await barsRef.get();
+      console.log(`Total trackers found in entire Firestore: ${totalSnapshot.size}`);
+      totalSnapshot.docs.forEach(doc => {
+        const d = doc.data();
+        console.log(`- Tracker "${d.title}": notifyAt = ${d.notifyAt} (${typeof d.notifyAt}), notified = ${d.notified}, completed = ${d.completed}, notifyPercent = ${d.notifyPercent}`);
+      });
+      console.log("--- END AUTOMATIC DATABASE DIAGNOSTIC SCAN ---");
       return;
     }
 
@@ -47,6 +67,7 @@ async function runNotifier() {
       
       // Filter out already notified or completed trackers
       if (barData.notified === true || barData.completed === true) {
+        console.log(`Skipping tracker "${barData.title}" because notified=${barData.notified} or completed=${barData.completed}`);
         continue;
       }
 
@@ -94,7 +115,9 @@ async function runNotifier() {
         if (barData.notifyPercent !== undefined && barData.notifyPercent !== null) {
           timeStr = `${barData.notifyPercent}% of duration left!`;
         } else if (barData.deadlineAt && barData.notifyAt) {
-          const diffMins = Math.round((barData.deadlineAt - barData.notifyAt) / 60000);
+          const deadlineMs = getEpochMs(barData.deadlineAt);
+          const notifyMs = getEpochMs(barData.notifyAt);
+          const diffMins = Math.round((deadlineMs - notifyMs) / 60000);
           if (diffMins >= 60) {
             const hrs = (diffMins / 60).toFixed(1);
             timeStr = `${hrs} hours remaining!`;
