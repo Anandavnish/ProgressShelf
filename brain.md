@@ -26,8 +26,10 @@ ProgressShelf/
 ├── login.js                  # Landing page auth logic & startup SW registration
 ├── sw.js                     # Unified service worker (offline cache + FCM messaging)
 ├── manifest.json             # PWA app manifest configuration
-├── logo.svg                  # SVG vector logo asset
-└── favicon.svg               # Website tab icon
+├── logo.svg                  # SVG vector logo asset (with text)
+├── favicon.svg               # Website tab icon (graphic only, rectangular)
+├── icon-192.png              # Square textless PWA launcher icon (192x192)
+└── icon-512.png              # Square textless PWA launcher icon (512x512)
 ```
 
 ---
@@ -110,6 +112,11 @@ The scheduled runner (`notifier.js`) is designed to query all trackers where `no
 ### D. Sticky Navigation & Stats Pre-Load Skeletons
 * **Double-sticky Layout:** The navigation bar is sticky at `top: 0` (desktop height: `56px`, mobile height: `52px`). The stats banner is sticky below it (`top: 57px` on desktop, `top: 51px` on mobile media queries) to prevent any gaps.
 * **Stat Skeletons:** The statistics numbers (`#stat-total`, `#stat-deadlines`, etc.) are rendered with a `.stats-skeleton` class on page load, displaying a pulsing animation. As soon as the Firestore subscription yields data, `app.js` strips the skeleton classes and populates the text. If the user has zero trackers, the stats banner fades out automatically.
+
+### E. PWA Launcher Icon Scaling & Centering
+To meet PWA install guidelines and ensure mobile launcher compatibility:
+1. **No Text:** The launcher icons (`icon-192.png` and `icon-512.png`) omit all "ProgressShelf" lettering, focusing exclusively on the vector bar shelf graphic to optimize clarity on mobile homescreens.
+2. **Aspect Ratio Preservation:** PWA icons are strictly square (`1:1`). Since the raw shelf graphic features a wider aspect ratio, the icons are programmatically rendered onto a solid `#0D1117` background with built-in top/bottom padding to prevent any squeezing or stretching.
 
 ---
 
