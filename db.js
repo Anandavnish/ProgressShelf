@@ -323,7 +323,7 @@ export async function saveFCMToken(uid, token) {
   }
 
   try {
-    const tokenDocRef = doc(db, "users", uid, "fcmToken", "current");
+    const tokenDocRef = doc(db, "users", uid, "fcmTokens", token);
     await setDoc(tokenDocRef, {
       token: token,
       updatedAt: serverTimestamp()

@@ -59,42 +59,52 @@ async function runNotifier() {
 
       console.log(`Processing tracker "${barData.title}" (${barId}) for user ${uid}`);
 
-      // 1. Fetch user's FCM token
-      const tokenDoc = await db.doc(`users/${uid}/fcmToken/current`).get();
-      if (!tokenDoc.exists) {
-        console.log(`No FCM token found for user ${uid}. Skipping.`);
+      // 1. Fetch user's FCM tokens
+      const tokensRef = db.collection(`users/${uid}/fcmTokens`);
+      const tokensSnapshot = await tokensRef.get();
+      if (tokensSnapshot.empty) {
+        console.log(`No FCM tokens found for user ${uid}. Skipping.`);
         continue;
       }
 
-      const fcmToken = tokenDoc.data().token;
-      if (!fcmToken) {
-        console.log(`FCM token for user ${uid} is empty. Skipping.`);
-        continue;
+      console.log(`Found ${tokensSnapshot.size} registered tokens for user ${uid}`);
+
+      let sentAtLeastOne = false;
+
+      for (const tokenDoc of tokensSnapshot.docs) {
+        const fcmToken = tokenDoc.data().token;
+        if (!fcmToken) {
+          continue;
+        }
+
+        // 2. Send FCM Push Notification
+        const payload = {
+          notification: {
+            title: `ProgressShelf Alert`,
+            body: `Your tracker "${barData.title}" is approaching its deadline!`
+          },
+          token: fcmToken
+        };
+
+        try {
+          await messaging.send(payload);
+          console.log(`Notification sent successfully to user ${uid} on token ${tokenDoc.id.substring(0, 10)}... for tracker ${barId}`);
+          sentAtLeastOne = true;
+        } catch (fcmError) {
+          console.error(`Failed to send FCM message to user ${uid} on token ${tokenDoc.id.substring(0, 10)}...:`, fcmError);
+          
+          if (fcmError.code === 'messaging/invalid-registration-token' || 
+              fcmError.code === 'messaging/registration-token-not-registered') {
+            console.log(`Cleaning up invalid/expired FCM token ${tokenDoc.id.substring(0, 10)}... for user ${uid}`);
+            await tokenDoc.ref.delete();
+          }
+        }
       }
 
-      // 2. Send FCM Push Notification
-      const payload = {
-        notification: {
-          title: `ProgressShelf Alert`,
-          body: `Your tracker "${barData.title}" is approaching its deadline!`
-        },
-        token: fcmToken
-      };
-
-      try {
-        await messaging.send(payload);
-        console.log(`Notification sent successfully to user ${uid} for tracker ${barId}`);
-
-        // 3. Mark as notified in database to prevent double triggers
+      // 3. Mark as notified in database to prevent double triggers
+      if (sentAtLeastOne) {
         await doc.ref.update({ notified: true });
         console.log(`Marked tracker ${barId} as notified.`);
-      } catch (fcmError) {
-        console.error(`Failed to send FCM message for user ${uid}:`, fcmError);
-        
-        if (fcmError.code === 'messaging/invalid-registration-token' || fcmError.code === 'messaging/registration-token-not-registered') {
-          console.log(`Cleaning up invalid FCM token for user ${uid}`);
-          await doc.ref.update({ notified: true }); // Prevent trying again
-        }
       }
     }
   } catch (error) {
