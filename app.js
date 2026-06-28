@@ -3469,7 +3469,11 @@ async function handleFCMSession(uid) {
       }
 
       if (typeof messaging !== "undefined" && messaging) {
-        const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
+        const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        const token = await getToken(messaging, { 
+          vapidKey: FCM_VAPID_KEY,
+          serviceWorkerRegistration: registration
+        });
         if (token) {
           await saveFCMToken(uid, token);
         } else {
