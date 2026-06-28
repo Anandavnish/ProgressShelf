@@ -334,4 +334,19 @@ export async function saveFCMToken(uid, token) {
   }
 }
 
+/**
+ * Deletes a user's FCM token from Firestore.
+ * @param {string} uid User ID.
+ * @param {string} token FCM token value.
+ */
+export async function deleteFCMToken(uid, token) {
+  if (!isConfigured || isGuestMode() || !uid || !token) return;
+  try {
+    const tokenDocRef = doc(db, "users", uid, "fcmTokens", token);
+    await deleteDoc(tokenDocRef);
+  } catch (error) {
+    console.error("Error deleting FCM token:", error);
+  }
+}
+
 

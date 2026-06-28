@@ -1,6 +1,6 @@
 import { isConfigured, messaging } from "./firebase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken } from "./db.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken } from "./db.js";
 import { getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // Page elements
@@ -3054,6 +3054,11 @@ btnLogout.addEventListener("click", async () => {
       exitGuestMode();
       window.location.href = "index.html";
     } else {
+      const token = localStorage.getItem("ps_fcm_token");
+      if (token && currentUser) {
+        await deleteFCMToken(currentUser.uid, token);
+      }
+      localStorage.removeItem("ps_fcm_token");
       await logout();
     }
   } catch (error) {
@@ -3469,7 +3474,7 @@ async function handleFCMSession(uid) {
       }
 
       if (typeof messaging !== "undefined" && messaging) {
-        const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        const registration = await navigator.serviceWorker.ready;
         const token = await getToken(messaging, { 
           vapidKey: FCM_VAPID_KEY,
           serviceWorkerRegistration: registration
