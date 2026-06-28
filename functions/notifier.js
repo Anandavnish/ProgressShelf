@@ -22,6 +22,7 @@ const messaging = admin.messaging();
 
 async function runNotifier() {
   const now = Date.now();
+  const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
   const maxNotifyAt = now + bufferMs;
 
   console.log(`Running notifier at: ${new Date(now).toISOString()}`);
