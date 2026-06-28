@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v27';
+const CACHE_NAME = 'progressshelf-cache-v28';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -107,14 +107,6 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log('[sw.js] Received background message ', payload);
-  const notificationTitle = payload.notification.title || "ProgressShelf Alert";
-  const notificationOptions = {
-    body: payload.notification.body || "",
-    icon: './logo.svg',
-    badge: './favicon.svg'
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 self.addEventListener('notificationclick', event => {

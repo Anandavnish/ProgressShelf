@@ -317,8 +317,9 @@ export async function deleteUserData(uid) {
  * @param {string} token FCM token value.
  */
 export async function saveFCMToken(uid, token) {
+  localStorage.setItem("ps_fcm_token", token);
+
   if (!isConfigured || isGuestMode()) {
-    localStorage.setItem("ps_fcm_token", token);
     return;
   }
 
