@@ -2294,13 +2294,19 @@ function openEditModal(bar) {
 
   if (bar.notifyAt && deadlineMs) {
     const notifyAt = Number(bar.notifyAt);
-    const diffMs = deadlineMs - notifyAt;
-    if (diffMs > 0) {
-      const diffMins = Math.round(diffMs / 60000);
-      const hrs = Math.floor(diffMins / 60);
-      const mins = diffMins % 60;
-      if (editNotifyHrs) editNotifyHrs.value = hrs;
-      if (editNotifyMins) editNotifyMins.value = mins;
+    if (bar.notifyPercent !== undefined && bar.notifyPercent !== null) {
+      const percentRadio = document.querySelector('input[name="edit-notify-mode"][value="percent"]');
+      if (percentRadio) percentRadio.checked = true;
+      if (editNotifyPercent) editNotifyPercent.value = bar.notifyPercent;
+    } else {
+      const diffMs = deadlineMs - notifyAt;
+      if (diffMs > 0) {
+        const diffMins = Math.round(diffMs / 60000);
+        const hrs = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        if (editNotifyHrs) editNotifyHrs.value = hrs;
+        if (editNotifyMins) editNotifyMins.value = mins;
+      }
     }
   }
 
@@ -2471,10 +2477,17 @@ formCreate.addEventListener("submit", async (e) => {
   // Handle notification calculation
   let notifyAt = null;
   let notified = false;
+  let notifyPercent = null;
   if (deadlineAt && !completed) {
     const notifyRes = calculateNotifyAt("");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
+      const notifyModeRadio = document.querySelector('input[name="notify-mode"]:checked');
+      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
+      if (notifyMode === "percent") {
+        const percentInput = document.getElementById('notify-percent');
+        notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
+      }
     }
   }
 
@@ -2496,7 +2509,8 @@ formCreate.addEventListener("submit", async (e) => {
       completed,
       deadlineAt,
       notifyAt,
-      notified
+      notified,
+      notifyPercent
     });
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
@@ -2625,18 +2639,29 @@ formEdit.addEventListener("submit", async (e) => {
 
   let notifyAt = selectedBar.notifyAt || null;
   let notified = selectedBar.notified || false;
+  let notifyPercent = selectedBar.notifyPercent || null;
 
   if (completed) {
     notifyAt = null;
     notified = false;
+    notifyPercent = null;
   } else {
     const notifyRes = calculateNotifyAt("edit-");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
       notified = false;
+      const notifyModeRadio = document.querySelector('input[name="edit-notify-mode"]:checked');
+      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
+      if (notifyMode === "percent") {
+        const percentInput = document.getElementById('edit-notify-percent');
+        notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
+      } else {
+        notifyPercent = null;
+      }
     } else if (notifyRes.errorMsg || !notifyRes.notifyAt) {
       notifyAt = null;
       notified = false;
+      notifyPercent = null;
     }
   }
 
@@ -2657,7 +2682,8 @@ formEdit.addEventListener("submit", async (e) => {
       deadlineAt,
       updateDeadline,
       notifyAt,
-      notified
+      notified,
+      notifyPercent
     });
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
@@ -3363,6 +3389,10 @@ function updateNotificationPreview(prefix) {
   const minsInput = document.getElementById(prefix + 'deadline-mins');
   const clearCheckbox = document.getElementById(prefix + 'deadline-clear');
 
+  const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
+  const notifyMinsInput = document.getElementById(prefix + 'notify-mins');
+  const notifyPercentInput = document.getElementById(prefix + 'notify-percent');
+
   const hasDeadline = (dateInput?.value) ||
     (parseFloat(hrsInput?.value) > 0 || parseFloat(minsInput?.value) > 0);
   const isCleared = prefix === "edit-" && clearCheckbox?.checked;
@@ -3371,10 +3401,26 @@ function updateNotificationPreview(prefix) {
     section.classList.add("disabled");
     previewEl.classList.add("hidden");
     previewEl.textContent = "";
+    if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
+    if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
+    if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
     return;
   }
 
   section.classList.remove("disabled");
+
+  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
+  const mode = modeRadio ? modeRadio.value : "fixed";
+
+  if (mode === "fixed") {
+    if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
+    if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
+    if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
+  } else {
+    if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
+    if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
+    if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
+  }
 
   const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
 
@@ -3491,9 +3537,27 @@ function setupNotificationListeners(prefix = "") {
   notifyHrs?.addEventListener('input', runUpdate);
   notifyMins?.addEventListener('input', runUpdate);
   notifyPercent?.addEventListener('input', runUpdate);
+  notifyHrs?.addEventListener('change', runUpdate);
+  notifyMins?.addEventListener('change', runUpdate);
+  notifyPercent?.addEventListener('change', runUpdate);
+
+  const requestPermissionOnInteraction = () => {
+    if (Notification.permission === "default" && typeof currentUser !== 'undefined') {
+      const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+      handleFCMSession(uid);
+    }
+  };
+
+  notifyHrs?.addEventListener('focus', requestPermissionOnInteraction);
+  notifyMins?.addEventListener('focus', requestPermissionOnInteraction);
+  notifyPercent?.addEventListener('focus', requestPermissionOnInteraction);
+  notifyHrs?.addEventListener('click', requestPermissionOnInteraction);
+  notifyMins?.addEventListener('click', requestPermissionOnInteraction);
+  notifyPercent?.addEventListener('click', requestPermissionOnInteraction);
 
   modeRadios.forEach(radio => {
     radio.addEventListener('change', runUpdate);
+    radio.addEventListener('click', requestPermissionOnInteraction);
   });
 
   runUpdate();

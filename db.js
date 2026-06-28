@@ -90,7 +90,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @param {Object} barData The progress bar data object.
  * @returns {Promise<string>} The auto-generated bar ID.
  */
-export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified }) {
+export async function createBar(uid, { title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
@@ -110,7 +110,8 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
       deadlineAt: deadlineAt || null,
       deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null,
       notifyAt: notifyAt || null,
-      notified: notified || false
+      notified: notified || false,
+      notifyPercent: notifyPercent || null
     };
     bars.push(newBar);
     setLocalBars(bars);
@@ -136,7 +137,8 @@ export async function createBar(uid, { title, type, preset, levels, targetSmalle
       deadlineAt: deadlineAt ? new Date(deadlineAt) : null,
       deadlineSetAt: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt) : now) : null,
       notifyAt: notifyAt || null,
-      notified: notified || false
+      notified: notified || false,
+      notifyPercent: notifyPercent || null
     });
     return docRef.id;
   } catch (error) {
@@ -210,7 +212,7 @@ export async function deleteBar(uid, barId) {
 }
 
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -243,7 +245,8 @@ export async function editBar(uid, barId, {
         deadlineAt: newDeadlineAt,
         deadlineSetAt: newDeadlineSetAt,
         notifyAt: notifyAt !== undefined ? notifyAt : original.notifyAt,
-        notified: notified !== undefined ? notified : original.notified
+        notified: notified !== undefined ? notified : original.notified,
+        notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -268,6 +271,7 @@ export async function editBar(uid, barId, {
     if (completed !== undefined) updates.completed = completed;
     if (notifyAt !== undefined) updates.notifyAt = notifyAt;
     if (notified !== undefined) updates.notified = notified;
+    if (notifyPercent !== undefined) updates.notifyPercent = notifyPercent;
 
     if (updateDeadline) {
       if (deadlineAt) {
