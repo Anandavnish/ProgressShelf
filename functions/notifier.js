@@ -77,11 +77,36 @@ async function runNotifier() {
           continue;
         }
 
+        // 1. Calculate dynamic title and body matching tracker progress & timing
+        const titleText = `ProgressShelf: ${barData.title}`;
+        
+        let progressStr = "";
+        if (barData.type === "goal" && barData.targetSmallest) {
+          progressStr = ` • Progress: ${Math.round((barData.currentSmallest / barData.targetSmallest) * 100)}%`;
+        } else if (barData.type === "checklist" && barData.targetSmallest) {
+          progressStr = ` • Checklist: ${barData.currentSmallest}/${barData.targetSmallest} done`;
+        }
+
+        let timeStr = "";
+        if (barData.notifyPercent !== undefined && barData.notifyPercent !== null) {
+          timeStr = `${barData.notifyPercent}% of duration left!`;
+        } else if (barData.deadlineAt && barData.notifyAt) {
+          const diffMins = Math.round((barData.deadlineAt - barData.notifyAt) / 60000);
+          if (diffMins >= 60) {
+            const hrs = (diffMins / 60).toFixed(1);
+            timeStr = `${hrs} hours remaining!`;
+          } else {
+            timeStr = `${diffMins} minutes remaining!`;
+          }
+        }
+
+        const bodyText = `${timeStr}${progressStr}`;
+
         // 2. Send FCM Push Notification
         const payload = {
           notification: {
-            title: `ProgressShelf Alert`,
-            body: `Your tracker "${barData.title}" is approaching its deadline!`
+            title: titleText,
+            body: bodyText
           },
           token: fcmToken
         };
