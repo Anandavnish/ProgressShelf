@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v25';
+const CACHE_NAME = 'progressshelf-cache-v26';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -94,7 +94,8 @@ self.addEventListener('push', event => {
   let data = {};
   if (event.data) {
     try {
-      data = event.data.json();
+      const rawData = event.data.json();
+      data = rawData.notification || rawData.data || rawData;
     } catch (e) {
       data = { title: "ProgressShelf Alert", body: event.data.text() };
     }
