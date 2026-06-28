@@ -141,8 +141,16 @@ async function runNotifier() {
         } catch (fcmError) {
           console.error(`Failed to send FCM message to user ${uid} on token ${tokenDoc.id.substring(0, 10)}...:`, fcmError);
           
-          if (fcmError.code === 'messaging/invalid-registration-token' || 
-              fcmError.code === 'messaging/registration-token-not-registered') {
+          const errorCode = fcmError.code || fcmError.errorInfo?.code || "";
+          const errorMessage = fcmError.message || "";
+          
+          if (
+            errorCode === 'messaging/invalid-registration-token' || 
+            errorCode === 'messaging/registration-token-not-registered' ||
+            errorCode.includes('not-registered') ||
+            errorMessage.includes('NotRegistered') ||
+            errorMessage.includes('registration-token-not-registered')
+          ) {
             console.log(`Cleaning up invalid/expired FCM token ${tokenDoc.id.substring(0, 10)}... for user ${uid}`);
             await tokenDoc.ref.delete();
           }
