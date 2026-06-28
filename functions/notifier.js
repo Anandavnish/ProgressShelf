@@ -97,35 +97,32 @@ async function runNotifier() {
         }
 
         // 1. Calculate dynamic title and body matching tracker progress & timing
-        let progressStr = "";
-        let pctSuffix = "";
-        if (barData.type === "goal" && barData.targetSmallest) {
-          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
-          progressStr = ` • Progress: ${pct}%`;
-          pctSuffix = ` (${pct}%)`;
-        } else if (barData.type === "checklist" && barData.targetSmallest) {
-          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
-          progressStr = ` • Checklist: ${barData.currentSmallest}/${barData.targetSmallest} done`;
-          pctSuffix = ` (${pct}%)`;
-        }
-
-        const titleText = `ProgressShelf: ${barData.title}${pctSuffix}`;
-
+        // 1. Calculate time remaining string
         let timeStr = "";
         if (barData.notifyPercent !== undefined && barData.notifyPercent !== null) {
-          timeStr = `${barData.notifyPercent}% of duration left!`;
+          timeStr = `${barData.notifyPercent}% of duration left`;
         } else if (barData.deadlineAt && barData.notifyAt) {
           const deadlineMs = getEpochMs(barData.deadlineAt);
           const notifyMs = getEpochMs(barData.notifyAt);
           const diffMins = Math.round((deadlineMs - notifyMs) / 60000);
           if (diffMins >= 60) {
             const hrs = (diffMins / 60).toFixed(1);
-            timeStr = `${hrs} hours remaining!`;
+            timeStr = `${hrs} hours remaining`;
           } else {
-            timeStr = `${diffMins} minutes remaining!`;
+            timeStr = `${diffMins} minutes remaining`;
           }
         }
 
+        // 2. Calculate progress suffix smartly depending on tracker type
+        let progressStr = "";
+        if (barData.type === "goal" && barData.targetSmallest) {
+          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
+          progressStr = ` • Progress: ${pct}%`;
+        } else if (barData.type === "checklist" && barData.targetSmallest) {
+          progressStr = ` • Checklist: ${barData.currentSmallest}/${barData.targetSmallest} done`;
+        }
+
+        const titleText = `ProgressShelf: ${barData.title}`;
         const bodyText = `${timeStr}${progressStr}`;
 
         // 2. Send FCM Push Notification
