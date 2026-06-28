@@ -501,6 +501,13 @@ function updateOverallStats(bars) {
     }
   });
 
+  // Remove skeleton loading states if active
+  statTotal.classList.remove("stats-skeleton");
+  statDeadlines.classList.remove("stats-skeleton");
+  statOverdue.classList.remove("stats-skeleton");
+  statCompleted.classList.remove("stats-skeleton");
+  statFlexible.classList.remove("stats-skeleton");
+
   // Update text contents
   statTotal.textContent = total;
   statDeadlines.textContent = deadlinesCount;

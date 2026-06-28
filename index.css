@@ -587,12 +587,24 @@ body {
 
 /* Overall Stats Bar (3D Glossy Buttons) - Smaller & Centered */
 .stats-banner {
-  background-color: rgba(13, 17, 23, 0.4);
+  position: sticky;
+  top: 57px;
+  z-index: 99;
+  background-color: rgba(13, 17, 23, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--card-border);
   padding: 14px 16px;
   animation: fadeIn 0.4s var(--transition-ease);
+}
+
+.stats-skeleton {
+  display: inline-block;
+  width: 24px;
+  height: 16px;
+  border-radius: 4px;
+  animation: skeletonPulse 1.5s infinite;
+  vertical-align: middle;
 }
 
 .stats-container {
