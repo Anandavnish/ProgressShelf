@@ -3118,6 +3118,11 @@ initAuthProtection(async (user) => {
 
   currentUser = user;
 
+  // If notification permission is already granted, verify/renew token registration in the DB
+  if (Notification.permission === "granted" && user && user.uid) {
+    handleFCMSession(user.uid);
+  }
+
   // Render guest banner on dashboard if in guest mode
   if (guestBanner) {
     if (isGuestMode()) {
@@ -3542,7 +3547,7 @@ function setupNotificationListeners(prefix = "") {
   notifyPercent?.addEventListener('change', runUpdate);
 
   const requestPermissionOnInteraction = () => {
-    if (Notification.permission === "default" && typeof currentUser !== 'undefined') {
+    if (typeof currentUser !== 'undefined') {
       const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
       handleFCMSession(uid);
     }
