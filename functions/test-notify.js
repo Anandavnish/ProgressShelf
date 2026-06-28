@@ -24,6 +24,14 @@ async function runTestNotifier() {
   console.log("Starting FCM Test Push sender...");
 
   try {
+    // 0. Diagnostic print of all bars in the DB
+    const barsRef = db.collectionGroup('bars');
+    const barsSnapshot = await barsRef.get();
+    console.log(`Diagnostic: Found ${barsSnapshot.size} total bars in Firestore.`);
+    barsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      console.log(`- Bar "${data.title}": notifyAt = ${data.notifyAt} (${typeof data.notifyAt}), notified = ${data.notified}, completed = ${data.completed}, notifyPercent = ${data.notifyPercent}`);
+    });
     // Query all 'fcmTokens' collections across all users
     const tokensRef = db.collectionGroup('fcmTokens');
     const snapshot = await tokensRef.get();

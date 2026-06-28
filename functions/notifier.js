@@ -78,14 +78,19 @@ async function runNotifier() {
         }
 
         // 1. Calculate dynamic title and body matching tracker progress & timing
-        const titleText = `ProgressShelf: ${barData.title}`;
-        
         let progressStr = "";
+        let pctSuffix = "";
         if (barData.type === "goal" && barData.targetSmallest) {
-          progressStr = ` • Progress: ${Math.round((barData.currentSmallest / barData.targetSmallest) * 100)}%`;
+          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
+          progressStr = ` • Progress: ${pct}%`;
+          pctSuffix = ` (${pct}%)`;
         } else if (barData.type === "checklist" && barData.targetSmallest) {
+          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
           progressStr = ` • Checklist: ${barData.currentSmallest}/${barData.targetSmallest} done`;
+          pctSuffix = ` (${pct}%)`;
         }
+
+        const titleText = `ProgressShelf: ${barData.title}${pctSuffix}`;
 
         let timeStr = "";
         if (barData.notifyPercent !== undefined && barData.notifyPercent !== null) {
