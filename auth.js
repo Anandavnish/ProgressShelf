@@ -18,7 +18,8 @@ function mapSupabaseUser(supabaseUser) {
     uid: supabaseUser.id,
     email: supabaseUser.email,
     displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email || "Tracker User",
-    photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+    photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y",
+    preferredSort: supabaseUser.user_metadata?.preferred_sort || null
   };
 }
 
@@ -202,4 +203,20 @@ export async function deleteCurrentUserAccount() {
     return;
   }
   console.log("Supabase account deletion requested. Data was removed via deleteUserData.");
+}
+
+/**
+ * Persists the user's dashboard sort preference to Supabase user_metadata.
+ * @param {string} sortValue Sort preference value.
+ */
+export async function updateUserPreferredSort(sortValue) {
+  if (!isConfigured || isGuestMode()) return;
+  try {
+    const { error } = await supabase.auth.updateUser({
+      data: { preferred_sort: sortValue }
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.error("Failed to update user preferred sort:", err);
+  }
 }

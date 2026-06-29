@@ -1,5 +1,5 @@
 import { isConfigured } from "./supabase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort } from "./auth.js";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists } from "./db.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
@@ -2973,10 +2973,18 @@ const setupSortSelectListener = () => {
   const sortSelect = document.getElementById("sort-select");
   if (sortSelect) {
     sortSelect.value = currentSort;
-    sortSelect.addEventListener("change", (e) => {
+    sortSelect.addEventListener("change", async (e) => {
       currentSort = e.target.value;
       localStorage.setItem("ps_sort_order", currentSort);
       renderDashboard(currentBars);
+
+      if (!isGuestMode() && currentUser && currentUser.uid) {
+        try {
+          await updateUserPreferredSort(currentSort);
+        } catch (err) {
+          console.error("Error saving sort preference to Supabase:", err);
+        }
+      }
     });
   }
 };
@@ -3247,6 +3255,19 @@ initAuthProtection(async (user) => {
         handleFCMSession(user.uid);
       }
     }
+  }
+
+  // Load preferred sort setting from user metadata or local storage
+  if (user && user.preferredSort) {
+    currentSort = user.preferredSort;
+  } else {
+    currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
+  }
+
+  // Update sort dropdown value in UI to match currentSort
+  const sortSelect = document.getElementById("sort-select");
+  if (sortSelect) {
+    sortSelect.value = currentSort;
   }
 
   // Render guest banner on dashboard if in guest mode
