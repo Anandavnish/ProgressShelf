@@ -43,6 +43,8 @@ function mapDatabaseRow(row) {
     notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
     notified: row.notified,
     notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
+    alertAtDeadline: row.alert_at_deadline || false,
+    deadlineNotified: row.deadline_notified || false,
     createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
     lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
   };
@@ -140,7 +142,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @returns {Promise<string>} The auto-generated bar ID.
  */
 export async function createBar(uid, {
-  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent
+  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -162,7 +164,9 @@ export async function createBar(uid, {
       deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null,
       notifyAt: notifyAt || null,
       notified: notified || false,
-      notifyPercent: notifyPercent || null
+      notifyPercent: notifyPercent || null,
+      alertAtDeadline: alertAtDeadline || false,
+      deadlineNotified: deadlineNotified || false
     };
     bars.push(newBar);
     setLocalBars(bars);
@@ -193,6 +197,8 @@ export async function createBar(uid, {
       notify_at: notifyAt ? new Date(notifyAt).toISOString() : null,
       notified: notified || false,
       notify_percent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
+      alert_at_deadline: alertAtDeadline || false,
+      deadline_notified: deadlineNotified || false,
       last_updated: now
     });
     if (error) throw error;
@@ -280,7 +286,7 @@ export async function deleteBar(uid, barId) {
  * Edits an existing progress bar document.
  */
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -314,7 +320,9 @@ export async function editBar(uid, barId, {
         deadlineSetAt: newDeadlineSetAt,
         notifyAt: notifyAt !== undefined ? notifyAt : original.notifyAt,
         notified: notified !== undefined ? notified : original.notified,
-        notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent
+        notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent,
+        alertAtDeadline: alertAtDeadline !== undefined ? alertAtDeadline : original.alertAtDeadline,
+        deadlineNotified: deadlineNotified !== undefined ? deadlineNotified : original.deadlineNotified
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -338,6 +346,8 @@ export async function editBar(uid, barId, {
     if (notifyAt !== undefined) updates.notify_at = notifyAt ? new Date(notifyAt).toISOString() : null;
     if (notified !== undefined) updates.notified = notified;
     if (notifyPercent !== undefined) updates.notify_percent = notifyPercent !== null ? Number(notifyPercent) : null;
+    if (alertAtDeadline !== undefined) updates.alert_at_deadline = alertAtDeadline;
+    if (deadlineNotified !== undefined) updates.deadline_notified = deadlineNotified;
 
     if (updateDeadline) {
       if (deadlineAt) {

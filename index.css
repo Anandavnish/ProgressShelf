@@ -2653,24 +2653,22 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .section-divider {
   display: flex;
   align-items: center;
+  gap: 10px;
+  color: #444C56;
+  font-size: 11px;
   margin: 20px 0 15px 0;
-  opacity: 0.4;
 }
 
 .section-divider hr {
   flex: 1;
   border: none;
-  border-top: 1px solid var(--border);
+  height: 1px;
+  background: #30363D;
   margin: 0;
 }
 
 .section-divider span {
-  padding: 0 10px;
-  font-variant: all-small-caps;
-  letter-spacing: 1px;
-  font-size: 12px;
-  font-weight: normal;
-  color: var(--text-muted);
+  padding: 0 4px;
 }
 
 /* --- Notification Settings Panel inside Deadline Box --- */
@@ -2687,8 +2685,8 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .notify-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -2762,6 +2760,14 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   gap: 4px;
   margin-bottom: 10px;
   transition: opacity 0.2s ease;
+  opacity: 1;
+}
+
+/* Greyed out inactive modes */
+.notify-mode-a.inactive,
+.notify-mode-b.inactive {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .notify-radio-label {
@@ -2790,14 +2796,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  transition: opacity 0.2s ease;
-}
-
-/* Greying out inactive modes */
-.notify-mode-a.inactive .notify-mode-a-inputs,
-.notify-mode-b.inactive .notify-mode-b-inputs {
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 .notify-mode-a-inputs .form-input,
@@ -2891,15 +2889,32 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   color: #FF7B72; /* Error red */
 }
 
-/* Spinner overrides for all number inputs */
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* End Alert Row */
+.end-alert-row {
+  margin-top: 15px;
+  padding-left: 22px;
 }
 
-input[type=number] {
+.end-alert-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.end-alert-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* Spinner overrides for compact number inputs */
+.notify-input::-webkit-inner-spin-button,
+.notify-input::-webkit-outer-spin-button {
+  display: none;
+}
+
+.notify-input {
   -moz-appearance: textfield;
 }
-
-

@@ -20,6 +20,8 @@ CREATE TABLE trackers (
   notify_at TIMESTAMPTZ,
   notified BOOLEAN NOT NULL DEFAULT FALSE,
   notify_percent NUMERIC,
+  alert_at_deadline BOOLEAN NOT NULL DEFAULT FALSE,
+  deadline_notified BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -438,14 +438,14 @@
               </div>
               <!-- Section divider -->
               <div class="section-divider">
-                <hr><span>notification</span><hr>
+                <hr><span>NOTIFICATION</span><hr>
               </div>
 
               <!-- Notification Settings -->
               <div class="notification-section" id="notification-section">
                 <!-- Header row with Toggle -->
                 <div class="notify-header-row">
-                  <span class="notify-title">🔔 Deadline Alert</span>
+                  <span class="notify-title">Deadline Alert</span>
                   <label class="toggle-switch">
                     <input type="checkbox" id="notify-toggle">
                     <span class="toggle-slider"></span>
@@ -454,16 +454,12 @@
                 
                 <!-- Collapse container -->
                 <div class="notify-settings-content collapsed" id="notify-settings-content">
-                  <div class="notify-mode-a">
-                    <label class="notify-radio-label">
-                      <input type="radio" name="notify-mode" value="fixed" checked>
-                      <span>Fixed time</span>
-                    </label>
+                  <div class="notify-mode-a" id="notify-mode-a-container">
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input update-val-input" id="notify-hrs" placeholder="0">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0">
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input update-val-input" id="notify-mins" placeholder="0">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-mins" placeholder="0">
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -475,14 +471,10 @@
                     <hr><span>or</span><hr>
                   </div>
 
-                  <div class="notify-mode-b">
-                    <label class="notify-radio-label">
-                      <input type="radio" name="notify-mode" value="percent">
-                      <span>Remind at</span>
-                    </label>
+                  <div class="notify-mode-b" id="notify-mode-b-container">
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input update-val-input" id="notify-percent" placeholder="0">
+                        <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                       <button type="button" class="btn-clear-mode" id="btn-clear-mode-b" title="Clear values">✕</button>
@@ -490,6 +482,14 @@
                   </div>
 
                   <div class="notify-preview" id="notify-preview-create"></div>
+
+                  <!-- End Alert Checkbox -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="end-alert-toggle-create"> 
+                      Also alert at deadline
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -615,14 +615,14 @@
               </div>
               <!-- Section divider -->
               <div class="section-divider">
-                <hr><span>notification</span><hr>
+                <hr><span>NOTIFICATION</span><hr>
               </div>
 
               <!-- Notification Settings -->
               <div class="notification-section" id="edit-notification-section">
                 <!-- Header row with Toggle -->
                 <div class="notify-header-row">
-                  <span class="notify-title">🔔 Deadline Alert</span>
+                  <span class="notify-title">Deadline Alert</span>
                   <label class="toggle-switch">
                     <input type="checkbox" id="edit-notify-toggle">
                     <span class="toggle-slider"></span>
@@ -631,16 +631,12 @@
                 
                 <!-- Collapse container -->
                 <div class="notify-settings-content collapsed" id="edit-notify-settings-content">
-                  <div class="notify-mode-a">
-                    <label class="notify-radio-label">
-                      <input type="radio" name="edit-notify-mode" value="fixed" checked>
-                      <span>Fixed time</span>
-                    </label>
+                  <div class="notify-mode-a" id="edit-notify-mode-a-container">
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input update-val-input" id="edit-notify-hrs" placeholder="0">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0">
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input update-val-input" id="edit-notify-mins" placeholder="0">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-mins" placeholder="0">
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -652,14 +648,10 @@
                     <hr><span>or</span><hr>
                   </div>
 
-                  <div class="notify-mode-b">
-                    <label class="notify-radio-label">
-                      <input type="radio" name="edit-notify-mode" value="percent">
-                      <span>Remind at</span>
-                    </label>
+                  <div class="notify-mode-b" id="edit-notify-mode-b-container">
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input update-val-input" id="edit-notify-percent" placeholder="0">
+                        <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                       <button type="button" class="btn-clear-mode" id="edit-btn-clear-mode-b" title="Clear values">✕</button>
@@ -667,6 +659,14 @@
                   </div>
 
                   <div class="notify-preview" id="notify-preview-edit"></div>
+
+                  <!-- End Alert Checkbox -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="end-alert-toggle-edit"> 
+                      Also alert at deadline
+                    </label>
+                  </div>
                 </div>
               </div>
 

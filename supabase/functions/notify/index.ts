@@ -35,12 +35,11 @@ Deno.serve(async (req) => {
     console.log(`Running notifier at: ${now.toISOString()}`);
     console.log(`Looking for trackers due up to ${maxNotifyAt}`);
 
-    // Query trackers
+    // Query trackers where EITHER notify_at is due OR deadline_at is due (alert_at_deadline)
     const { data: trackers, error: trackersError } = await supabase
       .from('trackers')
       .select('*')
-      .lte('notify_at', maxNotifyAt)
-      .eq('notified', false)
+      .or(`and(notify_at.lte.${maxNotifyAt},notified.eq.false),and(deadline_at.lte.${maxNotifyAt},alert_at_deadline.eq.true,deadline_notified.eq.false)`)
       .eq('completed', false);
 
     if (trackersError) {
@@ -58,17 +57,54 @@ Deno.serve(async (req) => {
     console.log(`Found ${trackers.length} candidate documents in query.`);
 
     for (const tracker of trackers) {
-      console.log(`Processing tracker "${tracker.title}" (${tracker.id}) for user ${tracker.user_id}`);
-
-      // Smart Notification Delivery — No Stale/Late Pushes (Rule 1)
       const nowTime = Date.now();
-      const notifyAtMs = new Date(tracker.notify_at).getTime();
-      if (notifyAtMs < nowTime - 10 * 60 * 1000) {
-        console.log(`Tracker "${tracker.title}" (${tracker.id}) notification is older than 10 minutes (due ${tracker.notify_at}). Marking as notified but skipping delivery.`);
-        await supabase
-          .from('trackers')
-          .update({ notified: true })
-          .eq('id', tracker.id);
+      const isNotifyDue = tracker.notify_at && 
+                          new Date(tracker.notify_at).getTime() <= nowTime + 5 * 60 * 1000 &&
+                          !tracker.notified;
+      
+      const isDeadlineDue = tracker.deadline_at && 
+                            new Date(tracker.deadline_at).getTime() <= nowTime + 5 * 60 * 1000 &&
+                            tracker.alert_at_deadline &&
+                            !tracker.deadline_notified;
+
+      if (!isNotifyDue && !isDeadlineDue) {
+        console.log(`Tracker "${tracker.title}" is in query but not due. Skipping.`);
+        continue;
+      }
+
+      console.log(`Processing tracker "${tracker.title}" (${tracker.id}) for user ${tracker.user_id}. Due: isNotifyDue=${isNotifyDue}, isDeadlineDue=${isDeadlineDue}`);
+
+      // Smart Notification Delivery — No Stale/Late Pushes
+      let skipNotifyPush = false;
+      if (isNotifyDue) {
+        const notifyAtMs = new Date(tracker.notify_at).getTime();
+        if (notifyAtMs < nowTime - 10 * 60 * 1000) {
+          console.log(`Tracker "${tracker.title}" relative notify is older than 10 minutes. Skip relative delivery.`);
+          await supabase
+            .from('trackers')
+            .update({ notified: true })
+            .eq('id', tracker.id);
+          skipNotifyPush = true;
+        }
+      }
+
+      let skipDeadlinePush = false;
+      if (isDeadlineDue) {
+        const deadlineAtMs = new Date(tracker.deadline_at).getTime();
+        if (deadlineAtMs < nowTime - 10 * 60 * 1000) {
+          console.log(`Tracker "${tracker.title}" deadline is older than 10 minutes. Skip deadline delivery.`);
+          await supabase
+            .from('trackers')
+            .update({ deadline_notified: true })
+            .eq('id', tracker.id);
+          skipDeadlinePush = true;
+        }
+      }
+
+      const sendNotify = isNotifyDue && !skipNotifyPush;
+      const sendDeadline = isDeadlineDue && !skipDeadlinePush;
+
+      if (!sendNotify && !sendDeadline) {
         continue;
       }
 
@@ -85,124 +121,147 @@ Deno.serve(async (req) => {
 
       if (!tokenRows || tokenRows.length === 0) {
         console.log(`No FCM tokens found for user ${tracker.user_id}. Skipping.`);
+        const updates: any = {};
+        if (isNotifyDue) updates.notified = true;
+        if (isDeadlineDue) updates.deadline_notified = true;
+        await supabase.from('trackers').update(updates).eq('id', tracker.id);
         continue;
       }
 
       console.log(`Found ${tokenRows.length} registered tokens for user ${tracker.user_id}`);
 
-      const sendPromises = tokenRows.map(async (tokenRow) => {
-        const fcmToken = tokenRow.token;
-        if (!fcmToken) return false;
+      const dispatches = [];
+      if (sendNotify) dispatches.push({ type: 'warning' });
+      if (sendDeadline) dispatches.push({ type: 'deadline' });
 
-        // Calculate time remaining string
-        let timeStr = "";
-        if (tracker.notify_percent !== undefined && tracker.notify_percent !== null) {
-          timeStr = `${tracker.notify_percent}% of duration left`;
-        } else if (tracker.deadline_at && tracker.notify_at) {
-          const deadlineMs = new Date(tracker.deadline_at).getTime();
-          const notifyMs = new Date(tracker.notify_at).getTime();
-          const diffMins = Math.round((deadlineMs - notifyMs) / 60000);
-          if (diffMins >= 60) {
-            const hrs = (diffMins / 60).toFixed(1);
-            timeStr = `${hrs} hours remaining`;
-          } else {
-            timeStr = `${diffMins} minutes remaining`;
-          }
-        }
+      for (const dispatch of dispatches) {
+        const sendPromises = tokenRows.map(async (tokenRow) => {
+          const fcmToken = tokenRow.token;
+          if (!fcmToken) return false;
 
-        // Calculate progress suffix
-        let progressStr = "";
-        if (tracker.type === "goal" && tracker.target_smallest) {
-          const pct = Math.round((tracker.current_smallest / tracker.target_smallest) * 100);
-          progressStr = ` • Progress: ${pct}%`;
-        } else if (tracker.type === "checklist" && tracker.target_smallest) {
-          progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
-        }
+          let titleText = "";
+          let bodyText = "";
 
-        const titleText = `ProgressShelf: ${tracker.title}`;
-        const bodyText = `${timeStr}${progressStr}`;
-
-        // Send FCM Push Notification via HTTP v1 API
-        const projectId = serviceAccount.project_id || 'progressshelf';
-        const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-        
-        const fcmPayload = {
-          message: {
-            token: fcmToken,
-            notification: {
-              title: titleText,
-              body: bodyText
+          if (dispatch.type === 'warning') {
+            // Calculate time remaining string
+            let timeStr = "";
+            if (tracker.notify_percent !== undefined && tracker.notify_percent !== null) {
+              timeStr = `${tracker.notify_percent}% of duration left`;
+            } else if (tracker.deadline_at && tracker.notify_at) {
+              const deadlineMs = new Date(tracker.deadline_at).getTime();
+              const notifyMs = new Date(tracker.notify_at).getTime();
+              const diffMins = Math.round((deadlineMs - notifyMs) / 60000);
+              if (diffMins >= 60) {
+                const hrs = (diffMins / 60).toFixed(1);
+                timeStr = `${hrs} hours remaining`;
+              } else {
+                timeStr = `${diffMins} minutes remaining`;
+              }
             }
-          }
-        };
 
-        try {
-          const fcmResponse = await fetch(fcmUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(fcmPayload)
-          });
-
-          const fcmResult = await fcmResponse.json();
-
-          if (fcmResponse.ok) {
-            console.log(`Notification sent successfully to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}`);
-            return true;
-          } else {
-            console.error(`FCM send error response for token ${fcmToken.substring(0, 10)}...:`, fcmResult);
-            // Check for invalid tokens
-            const errorCode = fcmResult?.error?.status || "";
-            const errorMessage = fcmResult?.error?.message || "";
-            
-            if (
-              fcmResponse.status === 404 || 
-              fcmResponse.status === 410 ||
-              errorCode === 'UNREGISTERED' ||
-              errorMessage.includes('not-registered') ||
-              errorMessage.includes('NotRegistered')
-            ) {
-              console.log(`Cleaning up invalid/expired FCM token ${tokenRow.token.substring(0, 10)}... for user ${tracker.user_id}`);
-              await supabase
-                .from('fcm_tokens')
-                .delete()
-                .eq('id', tokenRow.id);
+            // Calculate progress suffix
+            let progressStr = "";
+            if (tracker.type === "goal" && tracker.target_smallest) {
+              const pct = Math.round((tracker.current_smallest / tracker.target_smallest) * 100);
+              progressStr = ` • Progress: ${pct}%`;
+            } else if (tracker.type === "checklist" && tracker.target_smallest) {
+              progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
+
+            titleText = `ProgressShelf: ${tracker.title}`;
+            bodyText = `${timeStr}${progressStr}`;
+          } else {
+            // Deadline Alert
+            let progressStr = "";
+            if (tracker.type === "goal" && tracker.target_smallest) {
+              const pct = Math.round((tracker.current_smallest / tracker.target_smallest) * 100);
+              progressStr = ` • Final Progress: ${pct}%`;
+            } else if (tracker.type === "checklist" && tracker.target_smallest) {
+              progressStr = ` • Final Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
+            }
+            titleText = `ProgressShelf: Deadline Reached!`;
+            bodyText = `"${tracker.title}" has reached its deadline!${progressStr}`;
+          }
+
+          // Send FCM Push Notification via HTTP v1 API
+          const projectId = serviceAccount.project_id || 'progressshelf';
+          const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+          
+          const fcmPayload = {
+            message: {
+              token: fcmToken,
+              notification: {
+                title: titleText,
+                body: bodyText
+              }
+            }
+          };
+
+          try {
+            const fcmResponse = await fetch(fcmUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(fcmPayload)
+            });
+
+            const fcmResult = await fcmResponse.json();
+
+            if (fcmResponse.ok) {
+              console.log(`Notification (${dispatch.type}) sent successfully to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}`);
+              return true;
+            } else {
+              console.error(`FCM send error response for token ${fcmToken.substring(0, 10)}...:`, fcmResult);
+              const errorCode = fcmResult?.error?.status || "";
+              const errorMessage = fcmResult?.error?.message || "";
+              
+              if (
+                fcmResponse.status === 404 || 
+                fcmResponse.status === 410 ||
+                errorCode === 'UNREGISTERED' ||
+                errorMessage.includes('not-registered') ||
+                errorMessage.includes('NotRegistered')
+              ) {
+                console.log(`Cleaning up invalid/expired FCM token ${tokenRow.token.substring(0, 10)}... for user ${tracker.user_id}`);
+                await supabase
+                  .from('fcm_tokens')
+                  .delete()
+                  .eq('id', tokenRow.id);
+              }
+              return false;
+            }
+          } catch (fcmError) {
+            console.error(`Fetch exception sending FCM to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}:`, fcmError);
             return false;
           }
-        } catch (fcmError) {
-          console.error(`Fetch exception sending FCM to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}:`, fcmError);
-          return false;
-        }
-      });
+        });
 
-      const results = await Promise.allSettled(sendPromises);
-      let sentAtLeastOne = false;
-      results.forEach((result, i) => {
-        const tokenVal = tokenRows[i]?.token?.substring(0, 10);
-        if (result.status === "fulfilled") {
-          console.log(`FCM send result for token ${tokenVal}...: ${result.value ? 'SUCCESS' : 'FAILED'}`);
-          if (result.value) {
-            sentAtLeastOne = true;
+        const results = await Promise.allSettled(sendPromises);
+        let sentAtLeastOne = false;
+        results.forEach((result, i) => {
+          const tokenVal = tokenRows[i]?.token?.substring(0, 10);
+          if (result.status === "fulfilled") {
+            if (result.value) sentAtLeastOne = true;
           }
-        } else {
-          console.error(`FCM promise rejected for token ${tokenVal}...:`, result.reason);
-        }
-      });
+        });
 
-      // Mark tracker as notified to prevent double triggers
-      if (sentAtLeastOne) {
-        const { error: updateError } = await supabase
-          .from('trackers')
-          .update({ notified: true })
-          .eq('id', tracker.id);
+        if (sentAtLeastOne) {
+          const updates: any = {};
+          if (dispatch.type === 'warning') updates.notified = true;
+          if (dispatch.type === 'deadline') updates.deadline_notified = true;
 
-        if (updateError) {
-          console.error(`Error marking tracker ${tracker.id} as notified:`, updateError);
-        } else {
-          console.log(`Marked tracker ${tracker.id} as notified.`);
+          const { error: updateError } = await supabase
+            .from('trackers')
+            .update(updates)
+            .eq('id', tracker.id);
+
+          if (updateError) {
+            console.error(`Error marking tracker ${tracker.id} dispatch (${dispatch.type}) as notified:`, updateError);
+          } else {
+            console.log(`Marked tracker ${tracker.id} dispatch (${dispatch.type}) as notified.`);
+          }
         }
       }
     }

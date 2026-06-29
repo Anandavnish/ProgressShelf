@@ -1699,10 +1699,17 @@ function openCreateModal() {
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
   
+  const notifySection = document.getElementById("notification-section");
   const notifyToggle = document.getElementById("notify-toggle");
   const settingsContent = document.getElementById("notify-settings-content");
+  const endAlertToggle = document.getElementById("end-alert-toggle-create");
+
+  if (notifySection) notifySection.removeAttribute("data-last-active");
   if (notifyToggle) notifyToggle.checked = false;
   if (settingsContent) settingsContent.classList.add("collapsed");
+  if (endAlertToggle) endAlertToggle.checked = false;
+
+  updateNotificationPreview("");
 
   openModal(modalCreate);
 }
@@ -2336,19 +2343,22 @@ function openEditModal(bar) {
   }
 
   // Pre-fill notification settings if bar has one
+  const editNotifySection = document.getElementById('edit-notification-section');
   const editNotifyHrs = document.getElementById('edit-notify-hrs');
   const editNotifyMins = document.getElementById('edit-notify-mins');
   const editNotifyPercent = document.getElementById('edit-notify-percent');
   const editNotifyToggle = document.getElementById('edit-notify-toggle');
   const editSettingsContent = document.getElementById('edit-notify-settings-content');
+  const editEndAlertToggle = document.getElementById('end-alert-toggle-edit');
 
   if (editNotifyHrs) editNotifyHrs.value = "";
   if (editNotifyMins) editNotifyMins.value = "";
   if (editNotifyPercent) editNotifyPercent.value = "";
+  if (editEndAlertToggle) editEndAlertToggle.checked = bar.alertAtDeadline || false;
 
-  // Set default radio back to fixed
-  const defaultRadio = document.querySelector('input[name="edit-notify-mode"][value="fixed"]');
-  if (defaultRadio) defaultRadio.checked = true;
+  if (editNotifySection) {
+    editNotifySection.removeAttribute("data-last-active");
+  }
 
   if (bar.notifyAt && deadlineMs) {
     if (editNotifyToggle) editNotifyToggle.checked = true;
@@ -2356,10 +2366,10 @@ function openEditModal(bar) {
 
     const notifyAt = Number(bar.notifyAt);
     if (bar.notifyPercent !== undefined && bar.notifyPercent !== null) {
-      const percentRadio = document.querySelector('input[name="edit-notify-mode"][value="percent"]');
-      if (percentRadio) percentRadio.checked = true;
+      if (editNotifySection) editNotifySection.setAttribute("data-last-active", "percent");
       if (editNotifyPercent) editNotifyPercent.value = bar.notifyPercent;
     } else {
+      if (editNotifySection) editNotifySection.setAttribute("data-last-active", "fixed");
       const diffMs = deadlineMs - notifyAt;
       if (diffMs > 0) {
         const diffMins = Math.round(diffMs / 60000);
@@ -2542,16 +2552,18 @@ formCreate.addEventListener("submit", async (e) => {
   let notifyAt = null;
   let notified = false;
   let notifyPercent = null;
+  let alertAtDeadline = false;
   if (deadlineAt && !completed) {
     const notifyRes = calculateNotifyAt("");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
-      const notifyModeRadio = document.querySelector('input[name="notify-mode"]:checked');
-      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
+      const notifySection = document.getElementById('notification-section');
+      const notifyMode = (notifySection && notifySection.getAttribute("data-last-active")) || "fixed";
       if (notifyMode === "percent") {
         const percentInput = document.getElementById('notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       }
+      alertAtDeadline = document.getElementById("end-alert-toggle-create")?.checked || false;
     }
   }
 
@@ -2578,7 +2590,9 @@ formCreate.addEventListener("submit", async (e) => {
       deadlineAt,
       notifyAt,
       notified,
-      notifyPercent
+      notifyPercent,
+      alertAtDeadline,
+      deadlineNotified: false
     });
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
@@ -2708,23 +2722,31 @@ formEdit.addEventListener("submit", async (e) => {
   let notifyAt = selectedBar.notifyAt || null;
   let notified = selectedBar.notified || false;
   let notifyPercent = selectedBar.notifyPercent || null;
+  let alertAtDeadline = selectedBar.alertAtDeadline || false;
+  let deadlineNotified = selectedBar.deadlineNotified || false;
 
   if (completed) {
     notifyAt = null;
     notified = false;
     notifyPercent = null;
+    alertAtDeadline = false;
+    deadlineNotified = false;
   } else {
     const notifyRes = calculateNotifyAt("edit-");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
       notified = false;
-      const notifyModeRadio = document.querySelector('input[name="edit-notify-mode"]:checked');
-      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
+      const notifySection = document.getElementById('edit-notification-section');
+      const notifyMode = (notifySection && notifySection.getAttribute("data-last-active")) || "fixed";
       if (notifyMode === "percent") {
         const percentInput = document.getElementById('edit-notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       } else {
         notifyPercent = null;
+      }
+      alertAtDeadline = document.getElementById("end-alert-toggle-edit")?.checked || false;
+      if (deadlineAt !== selectedBar.deadlineAt) {
+        deadlineNotified = false; // Reset if deadline changed
       }
     } else if (notifyRes.errorMsg || !notifyRes.notifyAt) {
       notifyAt = null;
@@ -2755,7 +2777,9 @@ formEdit.addEventListener("submit", async (e) => {
       updateDeadline,
       notifyAt,
       notified,
-      notifyPercent
+      notifyPercent,
+      alertAtDeadline,
+      deadlineNotified
     });
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
@@ -3493,8 +3517,8 @@ function calculateNotifyAt(prefix) {
     return { notifyAt: null, isValid: false, errorMsg: null };
   }
 
-  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
-  const mode = modeRadio ? modeRadio.value : "fixed";
+  const section = document.getElementById(prefix + 'notification-section');
+  const mode = (section && section.getAttribute("data-last-active")) || "fixed";
 
   if (mode === "fixed") {
     const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
@@ -3562,6 +3586,10 @@ function calculateNotifyAt(prefix) {
  * Updates the disabled state and calculated preview inside modals.
  * @param {string} prefix "" or "edit-"
  */
+/**
+ * Updates the disabled state and calculated preview inside modals.
+ * @param {string} prefix "" or "edit-"
+ */
 function updateNotificationPreview(prefix) {
   const section = document.getElementById(prefix + 'notification-section');
   const previewEl = document.getElementById(prefix === "edit-" ? "notify-preview-edit" : "notify-preview-create");
@@ -3607,33 +3635,53 @@ function updateNotificationPreview(prefix) {
     return;
   }
 
-  // Enable inputs based on mode
-  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
-  const mode = modeRadio ? modeRadio.value : "fixed";
+  const modeAHasValue = (notifyHrsInput?.value !== "") || (notifyMinsInput?.value !== "");
+  const modeBHasValue = (notifyPercentInput?.value !== "");
+
+  // Auto-detect active mode based on values if not tracked
+  let mode = section.getAttribute("data-last-active");
+  if (!mode) {
+    if (modeAHasValue && !modeBHasValue) {
+      mode = "fixed";
+      section.setAttribute("data-last-active", "fixed");
+    } else if (modeBHasValue && !modeAHasValue) {
+      mode = "percent";
+      section.setAttribute("data-last-active", "percent");
+    }
+  }
 
   const modeAContainer = section.querySelector(".notify-mode-a");
   const modeBContainer = section.querySelector(".notify-mode-b");
 
   if (mode === "fixed") {
+    // Mode A active, Mode B greyed out
     modeAContainer?.classList.remove("inactive");
     modeBContainer?.classList.add("inactive");
+    
     if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
     if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
     if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
-  } else {
+  } else if (mode === "percent") {
+    // Mode B active, Mode A greyed out
     modeBContainer?.classList.remove("inactive");
     modeAContainer?.classList.add("inactive");
+    
     if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
     if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
     if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
+  } else {
+    // Neither is greyed out (when both are empty)
+    modeAContainer?.classList.remove("inactive");
+    modeBContainer?.classList.remove("inactive");
+    
+    if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
+    if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
+    if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
   }
 
-  // Clear button visibility logic
+  // Clear button visibility logic (only visible next to the inactive group if it has values)
   const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
   const clearBtnB = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-b" : "btn-clear-mode-b");
-
-  const modeAHasValue = (notifyHrsInput?.value !== "") || (notifyMinsInput?.value !== "");
-  const modeBHasValue = (notifyPercentInput?.value !== "");
 
   if (clearBtnA) {
     if (mode === "percent" && modeAHasValue) {
@@ -3652,7 +3700,7 @@ function updateNotificationPreview(prefix) {
   }
 
   // Calculate and update preview
-  const hasInputs = mode === "fixed" ? modeAHasValue : modeBHasValue;
+  const hasInputs = mode === "fixed" ? modeAHasValue : (mode === "percent" ? modeBHasValue : false);
   if (!hasInputs) {
     previewEl.classList.remove("visible", "valid", "invalid");
     previewEl.textContent = "";
@@ -3737,9 +3785,8 @@ function setupNotificationListeners(prefix = "") {
   const notifyHrs = document.getElementById(prefix + 'notify-hrs');
   const notifyMins = document.getElementById(prefix + 'notify-mins');
   const notifyPercent = document.getElementById(prefix + 'notify-percent');
-
-  const modeRadios = document.querySelectorAll(`input[name="${prefix}notify-mode"]`);
   const toggle = document.getElementById(prefix + 'notify-toggle');
+  const endAlertToggle = document.getElementById(prefix === "edit-" ? "end-alert-toggle-edit" : "end-alert-toggle-create");
 
   const runUpdate = () => updateNotificationPreview(prefix);
 
@@ -3747,6 +3794,8 @@ function setupNotificationListeners(prefix = "") {
     if (notifyHrs) notifyHrs.value = "";
     if (notifyMins) notifyMins.value = "";
     if (notifyPercent) notifyPercent.value = "";
+    const section = document.getElementById(prefix + 'notification-section');
+    section?.removeAttribute("data-last-active");
   };
 
   // Bind change/input listeners for deadline changes
@@ -3783,6 +3832,7 @@ function setupNotificationListeners(prefix = "") {
 
   // Toggle switch listeners
   toggle?.addEventListener('change', runUpdate);
+  endAlertToggle?.addEventListener('change', runUpdate);
 
   // Clear button click listeners
   const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
@@ -3791,21 +3841,38 @@ function setupNotificationListeners(prefix = "") {
   clearBtnA?.addEventListener("click", () => {
     if (notifyHrs) notifyHrs.value = "";
     if (notifyMins) notifyMins.value = "";
+    const section = document.getElementById(prefix + 'notification-section');
+    section?.removeAttribute("data-last-active");
     runUpdate();
   });
 
   clearBtnB?.addEventListener("click", () => {
     if (notifyPercent) notifyPercent.value = "";
+    const section = document.getElementById(prefix + 'notification-section');
+    section?.removeAttribute("data-last-active");
     runUpdate();
   });
 
-  // Inputs listeners
-  notifyHrs?.addEventListener('input', runUpdate);
-  notifyMins?.addEventListener('input', runUpdate);
-  notifyPercent?.addEventListener('input', runUpdate);
-  notifyHrs?.addEventListener('change', runUpdate);
-  notifyMins?.addEventListener('change', runUpdate);
-  notifyPercent?.addEventListener('change', runUpdate);
+  // Mode inputs key triggers for auto-detect active mode
+  const onFixedType = () => {
+    const section = document.getElementById(prefix + 'notification-section');
+    section?.setAttribute("data-last-active", "fixed");
+    runUpdate();
+  };
+
+  const onPercentType = () => {
+    const section = document.getElementById(prefix + 'notification-section');
+    section?.setAttribute("data-last-active", "percent");
+    runUpdate();
+  };
+
+  notifyHrs?.addEventListener('input', onFixedType);
+  notifyMins?.addEventListener('input', onFixedType);
+  notifyPercent?.addEventListener('input', onPercentType);
+
+  notifyHrs?.addEventListener('change', onFixedType);
+  notifyMins?.addEventListener('change', onFixedType);
+  notifyPercent?.addEventListener('change', onPercentType);
 
   const requestPermissionOnInteraction = () => {
     if (Notification.permission === "denied") return;
@@ -3821,11 +3888,7 @@ function setupNotificationListeners(prefix = "") {
   notifyHrs?.addEventListener('click', requestPermissionOnInteraction);
   notifyMins?.addEventListener('click', requestPermissionOnInteraction);
   notifyPercent?.addEventListener('click', requestPermissionOnInteraction);
-
-  modeRadios.forEach(radio => {
-    radio.addEventListener('change', runUpdate);
-    radio.addEventListener('click', requestPermissionOnInteraction);
-  });
+  endAlertToggle?.addEventListener('click', requestPermissionOnInteraction);
 
   runUpdate();
 }
