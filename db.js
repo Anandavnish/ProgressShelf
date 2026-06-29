@@ -156,7 +156,7 @@ export async function createBar(uid, {
       preset: preset || null,
       levels: levels || null,
       target_smallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : 1,
-      current_smallest: current_smallest !== null && current_smallest !== undefined ? Number(current_smallest) : 0,
+      current_smallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : 0,
       items: items || null,
       text: text || null,
       completed: completed || false,
