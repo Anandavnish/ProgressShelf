@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
               progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
 
-            titleText = `ProgressShelf: ${tracker.title}`;
+            titleText = `⏰ ${tracker.title}`;
             bodyText = `${timeStr}${progressStr}`;
           } else {
             // Deadline Alert
@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
             } else if (tracker.type === "checklist" && tracker.target_smallest) {
               progressStr = ` • Final Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
-            titleText = `⏰ Deadline Reached: ${tracker.title}`;
+            titleText = `⏰ ${tracker.title}`;
             bodyText = `The deadline for "${tracker.title}" has arrived!${progressStr}`;
           }
 
@@ -193,6 +193,18 @@ Deno.serve(async (req) => {
               notification: {
                 title: titleText,
                 body: bodyText
+              },
+              data: {
+                tag: `tracker-${tracker.id}`,
+                url: 'https://anandavnish.github.io/ProgressShelf/dashboard.html'
+              },
+              android: {
+                priority: 'high'
+              },
+              webpush: {
+                headers: {
+                  Urgency: 'high'
+                }
               }
             }
           };

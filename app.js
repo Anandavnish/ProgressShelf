@@ -3285,6 +3285,15 @@ initAuthProtection(async (user) => {
     }
   }
 
+  // Token re-sync on app foreground
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && currentUser && currentUser.uid && !isGuestMode()) {
+      if (Notification.permission === 'granted') {
+        await handleFCMSession(currentUser.uid);
+      }
+    }
+  });
+
   // Load preferred sort setting from user metadata or local storage
   if (user && user.preferredSort) {
     currentSort = user.preferredSort;

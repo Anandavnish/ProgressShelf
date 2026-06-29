@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v38';
+const CACHE_NAME = 'progressshelf-cache-v39';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -110,9 +110,53 @@ messaging.onBackgroundMessage((payload) => {
   console.log('[sw.js] Received background message ', payload);
 });
 
+self.addEventListener('push', event => {
+  let data = { title: 'ProgressShelf', body: 'You have a deadline alert.' };
+  try {
+    if (event.data) {
+      const json = event.data.json();
+      // Extract title and body from nested notification or data properties
+      if (json.notification) {
+        data.title = json.notification.title || data.title;
+        data.body = json.notification.body || data.body;
+      } else if (json.data && json.data.title) {
+        data.title = json.data.title || data.title;
+        data.body = json.data.body || data.body;
+      } else if (json.title) {
+        data.title = json.title || data.title;
+        data.body = json.body || data.body;
+      }
+      
+      const tagVal = (json.data && json.data.tag) || json.tag;
+      if (tagVal) data.tag = tagVal;
+    }
+  } catch (e) {}
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/ProgressShelf/icon-192.png',
+      badge: '/ProgressShelf/favicon.svg',
+      tag: data.tag || 'progressshelf-alert',
+      renotify: true,
+      requireInteraction: false,
+      data: { url: '/ProgressShelf/dashboard.html' }
+    })
+  );
+});
+
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil(
-    clients.openWindow('/')
+    clients.matchAll({ type: 'window' }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes('ProgressShelf') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/ProgressShelf/dashboard.html');
+      }
+    })
   );
 });
