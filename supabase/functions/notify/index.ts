@@ -35,11 +35,11 @@ Deno.serve(async (req) => {
     console.log(`Running notifier at: ${now.toISOString()}`);
     console.log(`Looking for trackers due up to ${maxNotifyAt}`);
 
-    // Query trackers where EITHER notify_at is due OR deadline_at is due (alert_at_deadline)
+    // Query trackers where EITHER notify_at is due OR deadline_at has passed (alert_at_deadline)
     const { data: trackers, error: trackersError } = await supabase
       .from('trackers')
       .select('*')
-      .or(`and(notify_at.lte.${maxNotifyAt},notified.eq.false),and(deadline_at.lte.${maxNotifyAt},alert_at_deadline.eq.true,deadline_notified.eq.false)`)
+      .or(`and(notify_at.lte.${maxNotifyAt},notified.eq.false),and(deadline_at.lte.${now.toISOString()},alert_at_deadline.eq.true,deadline_notified.eq.false)`)
       .eq('completed', false);
 
     if (trackersError) {
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
                           !tracker.notified;
       
       const isDeadlineDue = tracker.deadline_at && 
-                            new Date(tracker.deadline_at).getTime() <= nowTime + 5 * 60 * 1000 &&
+                            new Date(tracker.deadline_at).getTime() <= nowTime &&
                             tracker.alert_at_deadline &&
                             !tracker.deadline_notified;
 
@@ -179,8 +179,8 @@ Deno.serve(async (req) => {
             } else if (tracker.type === "checklist" && tracker.target_smallest) {
               progressStr = ` • Final Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
-            titleText = `ProgressShelf: Deadline Reached!`;
-            bodyText = `"${tracker.title}" has reached its deadline!${progressStr}`;
+            titleText = `⏰ Deadline Reached: ${tracker.title}`;
+            bodyText = `The deadline for "${tracker.title}" has arrived!${progressStr}`;
           }
 
           // Send FCM Push Notification via HTTP v1 API
