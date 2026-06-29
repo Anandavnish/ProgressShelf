@@ -1,6 +1,6 @@
 import { isConfigured } from "./supabase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken } from "./db.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists } from "./db.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
@@ -2545,7 +2545,11 @@ formCreate.addEventListener("submit", async (e) => {
     closeModal(modalCreate);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
     if (notifyAt && targetUid) {
-      handleFCMSession(targetUid);
+      if (Notification.permission === "denied") {
+        showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
+      } else {
+        handleFCMSession(targetUid);
+      }
     }
     await createBar(targetUid, {
       title,
@@ -2719,7 +2723,11 @@ formEdit.addEventListener("submit", async (e) => {
     closeModal(modalEdit);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
     if (notifyAt && notifyAt !== selectedBar.notifyAt && targetUid) {
-      handleFCMSession(targetUid);
+      if (Notification.permission === "denied") {
+        showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
+      } else {
+        handleFCMSession(targetUid);
+      }
     }
     await editBar(targetUid, selectedBar.id, {
       title,
@@ -3177,6 +3185,28 @@ btnDeleteAccount.addEventListener("click", async () => {
   }
 });
 
+function showNotificationBanner(uid) {
+  if (document.getElementById("notification-banner")) return;
+  const banner = document.createElement("div");
+  banner.id = "notification-banner";
+  banner.className = "guest-banner notification-banner";
+  banner.innerHTML = `
+    <span>Enable notifications to get deadline alerts</span>
+    <button id="btn-allow-notifications" class="btn-banner-login">Allow</button>
+  `;
+  
+  const dashboardMain = document.querySelector(".dashboard-main");
+  const cardsGrid = document.getElementById("cards-grid");
+  if (dashboardMain && cardsGrid) {
+    dashboardMain.insertBefore(banner, cardsGrid);
+  }
+  
+  document.getElementById("btn-allow-notifications")?.addEventListener("click", async () => {
+    banner.remove();
+    await handleFCMSession(uid);
+  });
+}
+
 // Initialize auth check
 initAuthProtection(async (user) => {
   const localBars = getLocalBars();
@@ -3199,9 +3229,24 @@ initAuthProtection(async (user) => {
 
   currentUser = user;
 
-  // If notification permission is already granted, verify/renew token registration in the DB
-  if (Notification.permission === "granted" && user && user.uid) {
-    handleFCMSession(user.uid);
+  // Token Validity Check on App Load (Rule 7 & Rule 3)
+  if (user && user.uid && !isGuestMode()) {
+    const localToken = localStorage.getItem("ps_fcm_token");
+    if (localToken) {
+      checkFCMTokenExists(user.uid, localToken).then(async (exists) => {
+        if (!exists) {
+          console.log("Local FCM token is missing from the database. Re-registering...");
+          if (Notification.permission === "granted") {
+            await handleFCMSession(user.uid);
+          }
+        }
+      }).catch(err => console.error("Error verifying FCM token on load:", err));
+    } else {
+      if (Notification.permission === "granted") {
+        console.log("No FCM token found locally, but permission is granted. Registering fresh token...");
+        handleFCMSession(user.uid);
+      }
+    }
   }
 
   // Render guest banner on dashboard if in guest mode
@@ -3247,6 +3292,19 @@ initAuthProtection(async (user) => {
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
+      
+      // Dynamic Notification Permission Banner check (Rule 3)
+      if (user && user.uid && Notification.permission === "default") {
+        const hasNotifyAt = (bars || []).some(bar => bar.notifyAt);
+        if (hasNotifyAt) {
+          showNotificationBanner(user.uid);
+        } else {
+          document.getElementById("notification-banner")?.remove();
+        }
+      } else {
+        document.getElementById("notification-banner")?.remove();
+      }
+
       if (firstLoad) {
         firstLoad = false;
         if (navLogoSvg) {
@@ -3632,6 +3690,7 @@ function setupNotificationListeners(prefix = "") {
   notifyPercent?.addEventListener('change', runUpdate);
 
   const requestPermissionOnInteraction = () => {
+    if (Notification.permission === "denied") return;
     if (typeof currentUser !== 'undefined') {
       const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
       handleFCMSession(uid);

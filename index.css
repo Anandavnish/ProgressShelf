@@ -1743,6 +1743,16 @@ body {
   background: #357ABD;
 }
 
+.notification-banner {
+  background-color: rgba(74, 144, 217, 0.1) !important;
+  border: 1px solid rgba(74, 144, 217, 0.2) !important;
+  border-radius: 8px;
+  color: var(--text-primary) !important;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  padding: 12px 24px;
+}
+
 /* --- Card Actions (Edit / Delete) --- */
 .card-actions {
   position: absolute;

@@ -383,11 +383,6 @@ export async function deleteUserData(uid) {
   }
 }
 
-/**
- * Saves a user's FCM token to fcm_tokens (or LocalStorage in guest/sandbox mode).
- * @param {string} uid User ID.
- * @param {string} token FCM token value.
- */
 export async function saveFCMToken(uid, token) {
   localStorage.setItem("ps_fcm_token", token);
 
@@ -399,7 +394,13 @@ export async function saveFCMToken(uid, token) {
     const { error } = await supabase
       .from('fcm_tokens')
       .upsert(
-        { user_id: uid, token, updated_at: new Date().toISOString() },
+        { 
+          user_id: uid, 
+          token, 
+          browser_hint: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 100) : null,
+          last_seen: new Date().toISOString(),
+          updated_at: new Date().toISOString() 
+        },
         { onConflict: 'token' }
       );
     if (error) throw error;
@@ -425,5 +426,28 @@ export async function deleteFCMToken(uid, token) {
     if (error) throw error;
   } catch (error) {
     console.error("Error deleting FCM token:", error);
+  }
+}
+
+/**
+ * Verifies if a specific FCM token exists in the database.
+ * @param {string} uid User ID.
+ * @param {string} token FCM token value.
+ * @returns {Promise<boolean>} True if the token exists.
+ */
+export async function checkFCMTokenExists(uid, token) {
+  if (!isConfigured || isGuestMode() || !uid || !token) return false;
+  try {
+    const { data, error } = await supabase
+      .from('fcm_tokens')
+      .select('token')
+      .eq('user_id', uid)
+      .eq('token', token)
+      .maybeSingle();
+    if (error) throw error;
+    return !!data;
+  } catch (err) {
+    console.error("Error checking FCM token:", err);
+    return false;
   }
 }

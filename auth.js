@@ -58,22 +58,32 @@ export async function loginWithGoogle() {
  * Signs out the current user and cleans up FCM token.
  */
 export async function signOut() {
-  const token = localStorage.getItem("ps_fcm_token");
-  if (token) {
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user?.id;
-    if (uid) {
-      try {
-        await supabase.from('fcm_tokens').delete().eq('user_id', uid).eq('token', token);
-      } catch (err) {
-        console.error("Failed to delete FCM token on sign-out:", err);
+  try {
+    // Step 1: Delete FCM token for this device
+    const token = localStorage.getItem('ps_fcm_token');
+    if (token) {
+      const session = await supabase.auth.getSession();
+      const uid = session?.data?.session?.user?.id;
+      if (uid) {
+        await supabase.from('fcm_tokens')
+          .delete()
+          .eq('user_id', uid)
+          .eq('token', token);
       }
     }
+  } catch (e) {
+    console.warn('FCM token cleanup failed:', e);
+  } finally {
+    // Step 2: Always clear local state regardless of FCM cleanup result
+    localStorage.removeItem('ps_fcm_token');
+    localStorage.removeItem('ps_guest_bars');
+    // Step 3: Sign out from Supabase
+    if (isConfigured) {
+      await supabase.auth.signOut();
+    }
+    // Step 4: Redirect to login
+    window.location.href = 'index.html';
   }
-  localStorage.removeItem("ps_fcm_token");
-
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
 }
 
 /**

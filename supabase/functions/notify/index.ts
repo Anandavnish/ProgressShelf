@@ -60,6 +60,18 @@ Deno.serve(async (req) => {
     for (const tracker of trackers) {
       console.log(`Processing tracker "${tracker.title}" (${tracker.id}) for user ${tracker.user_id}`);
 
+      // Smart Notification Delivery — No Stale/Late Pushes (Rule 1)
+      const nowTime = Date.now();
+      const notifyAtMs = new Date(tracker.notify_at).getTime();
+      if (notifyAtMs < nowTime - 10 * 60 * 1000) {
+        console.log(`Tracker "${tracker.title}" (${tracker.id}) notification is older than 10 minutes (due ${tracker.notify_at}). Marking as notified but skipping delivery.`);
+        await supabase
+          .from('trackers')
+          .update({ notified: true })
+          .eq('id', tracker.id);
+        continue;
+      }
+
       // Fetch FCM tokens
       const { data: tokenRows, error: tokensError } = await supabase
         .from('fcm_tokens')
@@ -77,11 +89,10 @@ Deno.serve(async (req) => {
       }
 
       console.log(`Found ${tokenRows.length} registered tokens for user ${tracker.user_id}`);
-      let sentAtLeastOne = false;
 
-      for (const tokenRow of tokenRows) {
+      const sendPromises = tokenRows.map(async (tokenRow) => {
         const fcmToken = tokenRow.token;
-        if (!fcmToken) continue;
+        if (!fcmToken) return false;
 
         // Calculate time remaining string
         let timeStr = "";
@@ -138,15 +149,14 @@ Deno.serve(async (req) => {
           const fcmResult = await fcmResponse.json();
 
           if (fcmResponse.ok) {
-            console.log(`Notification sent successfully to user ${tracker.user_id} for tracker ${tracker.id}`);
-            sentAtLeastOne = true;
+            console.log(`Notification sent successfully to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}`);
+            return true;
           } else {
-            console.error(`FCM send error response:`, fcmResult);
+            console.error(`FCM send error response for token ${fcmToken.substring(0, 10)}...:`, fcmResult);
             // Check for invalid tokens
             const errorCode = fcmResult?.error?.status || "";
             const errorMessage = fcmResult?.error?.message || "";
             
-            // In HTTP v1 API, errors for invalid tokens are UNREGISTERED (404) or INVALID_ARGUMENT (400)
             if (
               fcmResponse.status === 404 || 
               fcmResponse.status === 410 ||
@@ -160,11 +170,27 @@ Deno.serve(async (req) => {
                 .delete()
                 .eq('id', tokenRow.id);
             }
+            return false;
           }
         } catch (fcmError) {
-          console.error(`Fetch exception sending FCM to user ${tracker.user_id}:`, fcmError);
+          console.error(`Fetch exception sending FCM to token ${fcmToken.substring(0, 10)}... for user ${tracker.user_id}:`, fcmError);
+          return false;
         }
-      }
+      });
+
+      const results = await Promise.allSettled(sendPromises);
+      let sentAtLeastOne = false;
+      results.forEach((result, i) => {
+        const tokenVal = tokenRows[i]?.token?.substring(0, 10);
+        if (result.status === "fulfilled") {
+          console.log(`FCM send result for token ${tokenVal}...: ${result.value ? 'SUCCESS' : 'FAILED'}`);
+          if (result.value) {
+            sentAtLeastOne = true;
+          }
+        } else {
+          console.error(`FCM promise rejected for token ${tokenVal}...:`, result.reason);
+        }
+      });
 
       // Mark tracker as notified to prevent double triggers
       if (sentAtLeastOne) {
