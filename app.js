@@ -2826,7 +2826,7 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
 // ==========================================
 // Guest Mode Migration
 // ==========================================
-async function migrateGuestBarsToFirestore(uid) {
+async function migrateGuestBarsToSupabase(uid) {
   const localBars = getLocalBars();
   if (!localBars || localBars.length === 0) {
     exitGuestMode();
@@ -2834,26 +2834,30 @@ async function migrateGuestBarsToFirestore(uid) {
   }
 
   // Temporarily clear guest mode so that createBar calls during the migration loop
-  // write to Firestore instead of writing back to localStorage
+  // write to Supabase instead of writing back to localStorage
   exitGuestMode();
 
   let failCount = 0;
 
   for (const bar of localBars) {
     try {
-      await createBar(uid, {
+      const mapped = {
         title: bar.title,
-        type: bar.type || "goal",
+        type: bar.type,
         preset: bar.preset,
-        levels: bar.levels || (bar.type === "goal" || !bar.type ? [{ name: bar.preset || 'Units', conversionToNext: null }] : null),
+        levels: bar.levels,
         targetSmallest: bar.targetSmallest,
         currentSmallest: bar.currentSmallest,
-        items: bar.items || null,
-        text: bar.text || null,
-        completed: bar.completed || false,
+        items: bar.items,
+        text: bar.text,
+        completed: bar.completed,
         deadlineAt: bar.deadlineAt,
-        deadlineSetAt: bar.deadlineSetAt
-      });
+        deadlineSetAt: bar.deadlineSetAt,
+        notifyAt: bar.notifyAt,
+        notified: bar.notified ?? false,
+        lastUpdated: bar.lastUpdated
+      };
+      await createBar(uid, mapped);
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
       failCount++;
@@ -3142,8 +3146,8 @@ initAuthProtection(async (user) => {
     // Show migration status
     showToast("Syncing your data to cloud account...", "info");
 
-    await migrateGuestBarsToFirestore(user.uid);
-    // exitGuestMode() already called inside migrateGuestBarsToFirestore
+    await migrateGuestBarsToSupabase(user.uid);
+    // exitGuestMode() already called inside migrateGuestBarsToSupabase
 
     // Instead of returning and getting stuck, let it fall through to 
     // the normal dashboard initialization below, which will setup UI
