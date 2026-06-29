@@ -927,7 +927,7 @@ function createCardElement(bar) {
   // Set timestamp reference for the 5-minute background check
   let lastUpdatedMs = Date.now();
   if (bar.lastUpdated) {
-    // Handle firestore Timestamp vs client side local date
+    // Handle Supabase/JS Timestamp vs client side local date
     lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
       ? bar.lastUpdated.toDate().getTime()
       : bar.lastUpdated;
