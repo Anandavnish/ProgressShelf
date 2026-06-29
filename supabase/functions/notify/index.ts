@@ -190,11 +190,9 @@ Deno.serve(async (req) => {
           const fcmPayload = {
             message: {
               token: fcmToken,
-              notification: {
-                title: titleText,
-                body: bodyText
-              },
               data: {
+                title: titleText,
+                body: bodyText,
                 tag: `tracker-${tracker.id}`,
                 url: 'https://anandavnish.github.io/ProgressShelf/dashboard.html'
               },
