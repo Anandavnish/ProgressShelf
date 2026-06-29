@@ -2544,24 +2544,25 @@ formCreate.addEventListener("submit", async (e) => {
   let notified = false;
   let notifyPercent = null;
   let alertAtDeadline = false;
-  if (deadlineAt && !completed) {
+  
+  const notifyToggle = document.getElementById("notify-toggle");
+  if (deadlineAt && !completed && notifyToggle && notifyToggle.checked) {
     const notifyRes = calculateNotifyAt("");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
       const percentInput = document.getElementById('notify-percent');
       const notifyMode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
       if (notifyMode === "percent") {
-        const percentInput = document.getElementById('notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       }
-      alertAtDeadline = document.getElementById("end-alert-toggle-create")?.checked || false;
     }
+    alertAtDeadline = document.getElementById("end-alert-toggle-create")?.checked || false;
   }
 
   try {
     closeModal(modalCreate);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
-    if (notifyAt && targetUid) {
+    if ((notifyAt || alertAtDeadline) && targetUid) {
       if (Notification.permission === "denied") {
         showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
       } else {
@@ -2716,13 +2717,14 @@ formEdit.addEventListener("submit", async (e) => {
   let alertAtDeadline = selectedBar.alertAtDeadline || false;
   let deadlineNotified = selectedBar.deadlineNotified || false;
 
+  const editNotifyToggle = document.getElementById("edit-notify-toggle");
   if (completed) {
     notifyAt = null;
     notified = false;
     notifyPercent = null;
     alertAtDeadline = false;
     deadlineNotified = false;
-  } else {
+  } else if (editNotifyToggle && editNotifyToggle.checked) {
     const notifyRes = calculateNotifyAt("edit-");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
@@ -2734,21 +2736,30 @@ formEdit.addEventListener("submit", async (e) => {
       } else {
         notifyPercent = null;
       }
-      alertAtDeadline = document.getElementById("edit-notify-toggle-deadline")?.checked || false;
-      if (deadlineAt !== selectedBar.deadlineAt) {
-        deadlineNotified = false; // Reset if deadline changed
-      }
-    } else if (notifyRes.errorMsg || !notifyRes.notifyAt) {
+    } else {
       notifyAt = null;
       notified = false;
       notifyPercent = null;
     }
+    
+    alertAtDeadline = document.getElementById("edit-notify-toggle-deadline")?.checked || false;
+    if (deadlineAt !== selectedBar.deadlineAt) {
+      deadlineNotified = false; // Reset if deadline changed
+    }
+  } else {
+    notifyAt = null;
+    notified = false;
+    notifyPercent = null;
+    alertAtDeadline = false;
+    deadlineNotified = false;
   }
 
   try {
     closeModal(modalEdit);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
-    if (notifyAt && notifyAt !== selectedBar.notifyAt && targetUid) {
+    const notifyChanged = notifyAt !== selectedBar.notifyAt || alertAtDeadline !== selectedBar.alertAtDeadline;
+    const notifyEnabled = notifyAt || alertAtDeadline;
+    if (notifyChanged && notifyEnabled && targetUid) {
       if (Notification.permission === "denied") {
         showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
       } else {
