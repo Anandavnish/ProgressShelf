@@ -92,7 +92,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
   const channel = supabase
     .channel(`trackers-user-${uid}`)
     .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'trackers', filter: `user_id=eq.${uid}` },
+      { event: '*', schema: 'public', table: 'trackers' },
       () => {
         fetchAndCallback();
       }

@@ -642,6 +642,7 @@ function filterBars(bars) {
 }
 
 function updateCardElement(card, bar) {
+  card._barData = bar;
   const barType = bar.type || "goal";
 
   // Check if card type changed
@@ -912,6 +913,7 @@ function updateCardElement(card, bar) {
 
 function createCardElement(bar) {
   const card = document.createElement("div");
+  card._barData = bar;
   card.className = "card-progress";
   card.setAttribute("data-bar-id", bar.id);
 
@@ -1083,14 +1085,15 @@ function createCardElement(bar) {
 
   card.querySelector('.btn-delete-confirm-inline').addEventListener('click', (e) => {
     e.stopPropagation();
-    deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
-      .then(() => showToast(`Deleted "${bar.title}".`, "success"))
+    const currentBar = card._barData;
+    deleteBar(isGuestMode() ? null : currentUser.uid, currentBar.id)
+      .then(() => showToast(`Deleted "${currentBar.title}".`, "success"))
       .catch(() => showToast("Failed to delete progress bar.", "error"));
   });
 
   card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
     e.stopPropagation();
-    openEditModal(bar);
+    openEditModal(card._barData);
   });
 
   // Checkbox toggling on the dashboard card itself
@@ -1101,8 +1104,9 @@ function createCardElement(bar) {
       });
 
       checkbox.addEventListener("change", async (e) => {
+        const currentBar = card._barData;
         const isChecked = e.target.checked;
-        const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
+        const updatedItems = JSON.parse(JSON.stringify(currentBar.items || []));
         if (updatedItems[idx]) {
           updatedItems[idx].done = isChecked;
         }
@@ -1139,8 +1143,8 @@ function createCardElement(bar) {
         }
 
         try {
-          await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
-            title: bar.title,
+          await editBar(isGuestMode() ? null : currentUser.uid, currentBar.id, {
+            title: currentBar.title,
             targetSmallest,
             currentSmallest,
             items: updatedItems,
@@ -1161,11 +1165,12 @@ function createCardElement(bar) {
 
   card.addEventListener("click", () => {
     if (!deleteConfirmPanel.classList.contains('hidden')) return;
+    const currentBar = card._barData;
 
     if (barType === "checklist") {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
-        expandedCardIds.add(bar.id);
+        expandedCardIds.add(currentBar.id);
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
@@ -1179,7 +1184,7 @@ function createCardElement(bar) {
     } else {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
-        expandedCardIds.add(bar.id);
+        expandedCardIds.add(currentBar.id);
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
@@ -1190,7 +1195,7 @@ function createCardElement(bar) {
         if (showMoreBtn) showMoreBtn.style.display = "none";
         if (showLessBtn) showLessBtn.style.display = "inline-block";
       } else {
-        openUpdateModal(bar);
+        openUpdateModal(currentBar);
       }
     }
   });
