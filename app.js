@@ -205,7 +205,7 @@ let selectedBar = null;
 let activeUnsubscribe = null;
 let authInitialized = false;
 let currentFilter = "all";
-let currentSort = localStorage.getItem("ps_sort_order") || "updated-desc";
+let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
 let closedViaPopState = false;
 let searchClosedViaPopState = false;
@@ -1219,29 +1219,13 @@ function createCardElement(bar) {
 
 function sortBars(bars) {
   return [...bars].sort((a, b) => {
+    if (currentSort === "created-desc") {
+      // Invert comparator order because of .reverse() in the reconciliation loop!
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    }
     if (currentSort === "updated-desc") {
       // Invert comparator order because of .reverse() in the reconciliation loop!
       return (a.lastUpdated || 0) - (b.lastUpdated || 0);
-    }
-    if (currentSort === "title-asc") {
-      // A-Z first in UI -> Z-A in array -> b.localeCompare(a)
-      return b.title.localeCompare(a.title);
-    }
-    if (currentSort === "title-desc") {
-      // Z-A first in UI -> A-Z in array -> a.localeCompare(b)
-      return a.title.localeCompare(b.title);
-    }
-    if (currentSort === "progress-desc") {
-      // Highest progress first in UI -> Lowest first in array
-      const percentA = a.targetSmallest > 0 ? (a.currentSmallest / a.targetSmallest) : 0;
-      const percentB = b.targetSmallest > 0 ? (b.currentSmallest / b.targetSmallest) : 0;
-      return percentA - percentB;
-    }
-    if (currentSort === "progress-asc") {
-      // Lowest progress first in UI -> Highest first in array
-      const percentA = a.targetSmallest > 0 ? (a.currentSmallest / a.targetSmallest) : 0;
-      const percentB = b.targetSmallest > 0 ? (b.currentSmallest / b.targetSmallest) : 0;
-      return percentB - percentA;
     }
     return 0;
   });

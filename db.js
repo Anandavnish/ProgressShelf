@@ -75,6 +75,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
         notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
         notified: row.notified,
         notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
         lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
       }));
 

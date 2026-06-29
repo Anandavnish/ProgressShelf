@@ -882,20 +882,21 @@ body {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  margin-bottom: 20px;
-  margin-top: -10px;
-  padding: 0 4px;
+  margin-bottom: 24px;
+  margin-top: -16px;
 }
 
 .sort-container {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background-color: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  height: 38px;
 }
 
 .sort-label {
@@ -903,6 +904,7 @@ body {
   font-weight: 500;
   color: var(--text-muted);
   white-space: nowrap;
+  line-height: 1;
 }
 
 .sort-select {
@@ -914,7 +916,11 @@ body {
   color: var(--text-primary);
   outline: none;
   cursor: pointer;
-  padding-right: 4px;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .sort-select option {
