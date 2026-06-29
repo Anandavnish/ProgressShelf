@@ -1698,6 +1698,12 @@ function openCreateModal() {
   barPresetSelect.value = "";
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
+  
+  const notifyToggle = document.getElementById("notify-toggle");
+  const settingsContent = document.getElementById("notify-settings-content");
+  if (notifyToggle) notifyToggle.checked = false;
+  if (settingsContent) settingsContent.classList.add("collapsed");
+
   openModal(modalCreate);
 }
 
@@ -2333,6 +2339,8 @@ function openEditModal(bar) {
   const editNotifyHrs = document.getElementById('edit-notify-hrs');
   const editNotifyMins = document.getElementById('edit-notify-mins');
   const editNotifyPercent = document.getElementById('edit-notify-percent');
+  const editNotifyToggle = document.getElementById('edit-notify-toggle');
+  const editSettingsContent = document.getElementById('edit-notify-settings-content');
 
   if (editNotifyHrs) editNotifyHrs.value = "";
   if (editNotifyMins) editNotifyMins.value = "";
@@ -2343,6 +2351,9 @@ function openEditModal(bar) {
   if (defaultRadio) defaultRadio.checked = true;
 
   if (bar.notifyAt && deadlineMs) {
+    if (editNotifyToggle) editNotifyToggle.checked = true;
+    if (editSettingsContent) editSettingsContent.classList.remove("collapsed");
+
     const notifyAt = Number(bar.notifyAt);
     if (bar.notifyPercent !== undefined && bar.notifyPercent !== null) {
       const percentRadio = document.querySelector('input[name="edit-notify-mode"][value="percent"]');
@@ -2358,6 +2369,9 @@ function openEditModal(bar) {
         if (editNotifyMins) editNotifyMins.value = mins;
       }
     }
+  } else {
+    if (editNotifyToggle) editNotifyToggle.checked = false;
+    if (editSettingsContent) editSettingsContent.classList.add("collapsed");
   }
 
   // Force layout update for Edit modal notifications
@@ -3432,6 +3446,11 @@ const FCM_VAPID_KEY = "BBMQHPcnjNhugmwdap8XCS8fKkWcS6MhYFCDfEsibb_tLTWFhvRi_CukI
  * @returns {{ notifyAt: number | null, isValid: boolean, errorMsg: string | null }}
  */
 function calculateNotifyAt(prefix) {
+  const toggle = document.getElementById(prefix + 'notify-toggle');
+  if (toggle && !toggle.checked) {
+    return { notifyAt: null, isValid: true, errorMsg: null };
+  }
+
   const dateInput = document.getElementById(prefix + 'deadline-date');
   const timeInput = document.getElementById(prefix + 'deadline-time');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
@@ -3545,9 +3564,23 @@ function calculateNotifyAt(prefix) {
  */
 function updateNotificationPreview(prefix) {
   const section = document.getElementById(prefix + 'notification-section');
-  const previewEl = document.getElementById(prefix + 'notify-preview');
+  const previewEl = document.getElementById(prefix === "edit-" ? "notify-preview-edit" : "notify-preview-create");
 
   if (!section || !previewEl) return;
+
+  const toggle = document.getElementById(prefix + 'notify-toggle');
+  const settingsContent = document.getElementById(prefix === "edit-" ? "edit-notify-settings-content" : "notify-settings-content");
+
+  if (toggle && settingsContent) {
+    if (!toggle.checked) {
+      settingsContent.classList.add("collapsed");
+      previewEl.classList.remove("visible", "valid", "invalid");
+      previewEl.textContent = "";
+      return;
+    } else {
+      settingsContent.classList.remove("collapsed");
+    }
+  }
 
   const dateInput = document.getElementById(prefix + 'deadline-date');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
@@ -3563,54 +3596,98 @@ function updateNotificationPreview(prefix) {
   const isCleared = prefix === "edit-" && clearCheckbox?.checked;
 
   if (!hasDeadline || isCleared) {
-    section.classList.add("disabled");
-    previewEl.classList.add("hidden");
-    previewEl.textContent = "";
+    previewEl.classList.add("visible", "invalid");
+    previewEl.classList.remove("valid");
+    previewEl.textContent = "⚠ Please set a deadline first";
+    
+    // Disable inputs
     if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
     if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
     if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
     return;
   }
 
-  section.classList.remove("disabled");
-
+  // Enable inputs based on mode
   const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
   const mode = modeRadio ? modeRadio.value : "fixed";
 
+  const modeAContainer = section.querySelector(".notify-mode-a");
+  const modeBContainer = section.querySelector(".notify-mode-b");
+
   if (mode === "fixed") {
+    modeAContainer?.classList.remove("inactive");
+    modeBContainer?.classList.add("inactive");
     if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
     if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
     if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
   } else {
+    modeBContainer?.classList.remove("inactive");
+    modeAContainer?.classList.add("inactive");
     if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
     if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
     if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
   }
 
-  const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
+  // Clear button visibility logic
+  const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
+  const clearBtnB = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-b" : "btn-clear-mode-b");
 
-  if (errorMsg) {
-    previewEl.classList.remove("hidden", "valid");
-    previewEl.classList.add("invalid");
-    previewEl.textContent = errorMsg;
-  } else if (isValid && notifyAt) {
-    previewEl.classList.remove("hidden", "invalid");
-    previewEl.classList.add("valid");
+  const modeAHasValue = (notifyHrsInput?.value !== "") || (notifyMinsInput?.value !== "");
+  const modeBHasValue = (notifyPercentInput?.value !== "");
 
-    const options = {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true
-    };
-    const formattedDate = new Date(notifyAt).toLocaleDateString('en-US', options);
-    previewEl.textContent = `You'll be notified on ${formattedDate}`;
-  } else {
-    previewEl.classList.add("hidden");
+  if (clearBtnA) {
+    if (mode === "percent" && modeAHasValue) {
+      clearBtnA.classList.add("visible");
+    } else {
+      clearBtnA.classList.remove("visible");
+    }
+  }
+
+  if (clearBtnB) {
+    if (mode === "fixed" && modeBHasValue) {
+      clearBtnB.classList.add("visible");
+    } else {
+      clearBtnB.classList.remove("visible");
+    }
+  }
+
+  // Calculate and update preview
+  const hasInputs = mode === "fixed" ? modeAHasValue : modeBHasValue;
+  if (!hasInputs) {
+    previewEl.classList.remove("visible", "valid", "invalid");
     previewEl.textContent = "";
+  } else {
+    const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
+    if (errorMsg) {
+      previewEl.classList.add("visible", "invalid");
+      previewEl.classList.remove("valid");
+      let displayMsg = errorMsg;
+      if (displayMsg && displayMsg.includes("outside the valid range")) {
+        displayMsg = "⚠ Outside valid range";
+      }
+      previewEl.textContent = displayMsg;
+    } else if (isValid && notifyAt) {
+      previewEl.classList.add("visible", "valid");
+      previewEl.classList.remove("invalid");
+
+      const dt = new Date(notifyAt);
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const dayName = days[dt.getDay()];
+      const monthName = months[dt.getMonth()];
+      const dateNum = dt.getDate();
+      let hours = dt.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutesStr = String(dt.getMinutes()).padStart(2, '0');
+      const customFormatted = `${dayName}, ${monthName} ${dateNum} at ${hours}:${minutesStr} ${ampm}`;
+
+      previewEl.textContent = `📅 ${customFormatted}`;
+    } else {
+      previewEl.classList.remove("visible", "valid", "invalid");
+      previewEl.textContent = "";
+    }
   }
 }
 
@@ -3662,6 +3739,7 @@ function setupNotificationListeners(prefix = "") {
   const notifyPercent = document.getElementById(prefix + 'notify-percent');
 
   const modeRadios = document.querySelectorAll(`input[name="${prefix}notify-mode"]`);
+  const toggle = document.getElementById(prefix + 'notify-toggle');
 
   const runUpdate = () => updateNotificationPreview(prefix);
 
@@ -3671,7 +3749,7 @@ function setupNotificationListeners(prefix = "") {
     if (notifyPercent) notifyPercent.value = "";
   };
 
-  // Bind change/input listeners
+  // Bind change/input listeners for deadline changes
   dateInput?.addEventListener('input', () => {
     if (prefix === "edit-") clearNotificationInputs();
     runUpdate();
@@ -3703,6 +3781,25 @@ function setupNotificationListeners(prefix = "") {
     });
   }
 
+  // Toggle switch listeners
+  toggle?.addEventListener('change', runUpdate);
+
+  // Clear button click listeners
+  const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
+  const clearBtnB = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-b" : "btn-clear-mode-b");
+
+  clearBtnA?.addEventListener("click", () => {
+    if (notifyHrs) notifyHrs.value = "";
+    if (notifyMins) notifyMins.value = "";
+    runUpdate();
+  });
+
+  clearBtnB?.addEventListener("click", () => {
+    if (notifyPercent) notifyPercent.value = "";
+    runUpdate();
+  });
+
+  // Inputs listeners
   notifyHrs?.addEventListener('input', runUpdate);
   notifyMins?.addEventListener('input', runUpdate);
   notifyPercent?.addEventListener('input', runUpdate);

@@ -2649,31 +2649,119 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   min-height: 180px;
 }
 
+/* --- Section Divider --- */
+.section-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0 15px 0;
+  opacity: 0.4;
+}
+
+.section-divider hr {
+  flex: 1;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+.section-divider span {
+  padding: 0 10px;
+  font-variant: all-small-caps;
+  letter-spacing: 1px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
 /* --- Notification Settings Panel inside Deadline Box --- */
 .notification-section {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--card-border);
+  margin-top: 10px;
   transition: opacity 0.2s ease;
 }
 
-.notification-section.disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.notification-section-header {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
+.notify-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
+.notify-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  transition: background-color 0.2s ease;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: transform 0.2s ease;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Collapsible Settings Content */
+.notify-settings-content {
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.2s ease;
+  margin-top: 10px;
+}
+
+.notify-settings-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
+}
+
+/* Mode input sections */
 .notify-mode-a, .notify-mode-b {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 10px;
+  transition: opacity 0.2s ease;
 }
 
 .notify-radio-label {
@@ -2690,25 +2778,70 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   accent-color: var(--accent);
 }
 
+.notify-inputs-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 22px;
+}
+
 .notify-mode-a-inputs, .notify-mode-b-inputs {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 22px;
   flex-wrap: wrap;
+  transition: opacity 0.2s ease;
+}
+
+/* Greying out inactive modes */
+.notify-mode-a.inactive .notify-mode-a-inputs,
+.notify-mode-b.inactive .notify-mode-b-inputs {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .notify-mode-a-inputs .form-input,
 .notify-mode-b-inputs .form-input {
-  width: 64px;
   text-align: center;
   padding: 6px;
   font-size: 0.85rem;
 }
 
+/* Input compact widths */
+#notify-hrs, #notify-mins, #edit-notify-hrs, #edit-notify-mins {
+  max-width: 70px;
+}
+
+#notify-percent, #edit-notify-percent {
+  max-width: 60px;
+}
+
 .notify-sep, .notify-suffix, .notify-prefix {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* Clear icon trigger */
+.btn-clear-mode {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.btn-clear-mode.visible {
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.btn-clear-mode.visible:hover {
+  opacity: 1;
+  color: var(--error);
 }
 
 /* Or Divider */
@@ -2739,6 +2872,11 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 500;
+  display: none;
+}
+
+.notify-preview.visible {
+  display: block;
 }
 
 .notify-preview.valid {
@@ -2751,6 +2889,17 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   background: rgba(248, 81, 73, 0.15);
   border: 1px solid rgba(248, 81, 73, 0.3);
   color: #FF7B72; /* Error red */
+}
+
+/* Spinner overrides for all number inputs */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
 }
 
 
