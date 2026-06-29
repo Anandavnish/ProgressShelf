@@ -1,5 +1,5 @@
 // login.js
-import { isConfigured } from "./firebase-config.js";
+import { isConfigured } from "./supabase-config.js";
 import { loginWithGoogle, initAuthProtection, enterGuestMode } from "./auth.js";
 
 const configBanner = document.getElementById("config-banner");

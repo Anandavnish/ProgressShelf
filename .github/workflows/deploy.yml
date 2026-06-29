@@ -29,7 +29,7 @@ jobs:
         run: |
           cat << 'EOF' > supabase-config.js
           import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-          const SUPABASE_URL = '${{ secrets.SUPABASE_URL }}'
+          const SUPABASE_URL = '${{ secrets.PS_URL }}'
           const SUPABASE_PUBLISHABLE_KEY = '${{ secrets.SUPABASE_PUBLISHABLE_KEY }}'
           export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
           export const isConfigured = true
