@@ -2826,18 +2826,25 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
 // ==========================================
 // Guest Mode Migration
 // ==========================================
+let migrationInProgress = false;
+
 async function migrateGuestBarsToSupabase(uid) {
+  if (migrationInProgress) return;
+  migrationInProgress = true;
+
   const localBars = getLocalBars();
   if (!localBars || localBars.length === 0) {
     exitGuestMode();
+    migrationInProgress = false;
     return;
   }
 
-  // Temporarily clear guest mode so that createBar calls during the migration loop
-  // write to Supabase instead of writing back to localStorage
+  // Clear local bars immediately to prevent concurrent calls from re-triggering migration
+  localStorage.removeItem('progress_shelf_bars');
   exitGuestMode();
 
   let failCount = 0;
+  const failedBars = [];
 
   for (const bar of localBars) {
     try {
@@ -2861,20 +2868,21 @@ async function migrateGuestBarsToSupabase(uid) {
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
       failCount++;
+      failedBars.push(bar);
     }
   }
 
-  if (failCount === 0) {
-    // All bars migrated successfully — safe to clear local data
-    localStorage.removeItem('progress_shelf_bars');
-  } else {
-    // Partial failure — restore guest mode so local data is not lost and user can retry
+  if (failCount > 0) {
+    // Restore failed bars to localStorage
+    localStorage.setItem('progress_shelf_bars', JSON.stringify(failedBars));
     sessionStorage.setItem('guest_mode', 'true');
     showToast(
       `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
       "error"
     );
   }
+
+  migrationInProgress = false;
 }
 
 if (btnBannerLogin) {
