@@ -393,7 +393,7 @@ function getProgressColor(percent) {
 
 function encodeToSmallest(levelValues, levels) {
   // levelValues: array ordered largest→smallest (matches form display order)
-  // levels: array ordered smallest→largest (matches Firestore schema)
+  // levels: array ordered smallest→largest (matches Supabase schema)
   // Reverse levelValues to align with levels array
   const vals = [...levelValues].reverse();
 
@@ -2356,7 +2356,7 @@ function openEditModal(bar) {
 
 
 // ==========================================
-// Firestore Form Submissions (Write / Update / Delete)
+// Supabase Form Submissions (Write / Update / Delete)
 // ==========================================
 
 // Create Form Submit
@@ -3112,7 +3112,7 @@ btnDeleteAccount.addEventListener("click", async () => {
     // Show loading toast (persist it)
     const toast = showToast("Deleting account data...", "info", 0);
 
-    // 1. Delete all user bars from database (Firestore or LocalStorage)
+    // 1. Delete all user bars from database (Supabase or LocalStorage)
     await deleteUserData(uid);
 
     if (isGuest) {
@@ -3120,7 +3120,7 @@ btnDeleteAccount.addEventListener("click", async () => {
       if (toast) dismissToast(toast);
       window.location.href = "index.html";
     } else {
-      // 2. Delete user account from Firebase Auth
+      // 2. Delete user account from Supabase Auth
       await deleteCurrentUserAccount();
 
       // 3. Clear session states and logout
@@ -3151,7 +3151,7 @@ initAuthProtection(async (user) => {
 
     // Instead of returning and getting stuck, let it fall through to 
     // the normal dashboard initialization below, which will setup UI
-    // for the logged-in user and start the proper Firestore subscription.
+    // for the logged-in user and start the proper Supabase subscription.
   }
 
   currentUser = user;
@@ -3224,7 +3224,7 @@ initAuthProtection(async (user) => {
           <div class="empty-state" style="border-color: var(--error);">
             <div class="empty-icon" style="color: var(--error)">⚠️</div>
             <h3 class="empty-title">Offline or Load Failed</h3>
-            <p class="empty-desc">Could not connect to Firestore database. Please check your internet connection.</p>
+            <p class="empty-desc">Could not connect to Supabase database. Please check your internet connection.</p>
             <button class="btn btn-secondary" onclick="window.location.reload()" style="margin-top: 16px;">Retry Connection</button>
           </div>
         `;
