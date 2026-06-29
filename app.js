@@ -209,6 +209,7 @@ let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
 let closedViaPopState = false;
 let searchClosedViaPopState = false;
+let lastInteractionCardId = null;
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -1468,10 +1469,29 @@ window.addEventListener("click", (e) => {
   });
 });
 
-// Close expanded checklist cards on scroll
+// Track card interaction origin to prevent collapse during scroll/swipe
+window.addEventListener("mousedown", (e) => {
+  const card = e.target.closest('.card-progress');
+  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
+}, { passive: true });
+
+window.addEventListener("touchstart", (e) => {
+  const card = e.target.closest('.card-progress');
+  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
+}, { passive: true });
+
+window.addEventListener("wheel", (e) => {
+  const card = e.target.closest('.card-progress');
+  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
+}, { passive: true });
+
+// Close expanded checklist cards on scroll only if scroll originated outside the card
 window.addEventListener("scroll", () => {
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
-    collapseCard(card);
+    const cardBarId = card.getAttribute('data-bar-id');
+    if (cardBarId !== lastInteractionCardId) {
+      collapseCard(card);
+    }
   });
 }, { passive: true });
 
