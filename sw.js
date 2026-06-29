@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v32';
+const CACHE_NAME = 'progressshelf-cache-v33';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -46,10 +46,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  // Do not intercept or cache Firebase, Firestore, Google Auth, or other external APIs
+  // Do not intercept or cache Firebase, Firestore, Supabase, Google Auth, or other external APIs
   if (
     url.includes('firebase') || 
     url.includes('firestore') || 
+    url.includes('supabase.co') ||
     url.includes('googleapis') || 
     url.includes('googleusercontent') ||
     url.includes('gstatic.com')

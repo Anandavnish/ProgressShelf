@@ -40,6 +40,11 @@ CREATE POLICY "Users own their trackers" ON trackers
 CREATE POLICY "Users own their tokens" ON fcm_tokens
   FOR ALL USING (auth.uid() = user_id);
 
+-- Explicitly grant permissions to API roles
+GRANT ALL ON TABLE public.trackers TO postgres, anon, authenticated, service_role;
+GRANT ALL ON TABLE public.fcm_tokens TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+
 -- Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE trackers;
 
