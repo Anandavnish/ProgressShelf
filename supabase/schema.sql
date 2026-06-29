@@ -56,7 +56,10 @@ SELECT cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://lieckszgurlqcujmyrjw.supabase.co/functions/v1/notify',
-    headers := '{"Authorization": "Bearer __SUPABASE_SECRET_KEY__", "Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role' LIMIT 1)
+    ),
     body := '{}'::jsonb
   );
   $$

@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize firebase-admin using service account from env
 const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -17,42 +18,56 @@ try {
   process.exit(1);
 }
 
-const db = admin.firestore();
 const messaging = admin.messaging();
+
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL || process.env.PS_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PS_SECRET_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing SUPABASE_URL / PS_URL or SUPABASE_SERVICE_ROLE_KEY / PS_SECRET_KEY environment variable.");
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runTestNotifier() {
   console.log("Starting FCM Test Push sender...");
 
   try {
-    // 0. Diagnostic print of all bars in the DB
-    const barsRef = db.collectionGroup('bars');
-    const barsSnapshot = await barsRef.get();
-    console.log(`Diagnostic: Found ${barsSnapshot.size} total bars in Firestore.`);
-    barsSnapshot.docs.forEach(doc => {
-      const data = doc.data();
-      console.log(`- Bar "${data.title}": notifyAt = ${data.notifyAt} (${typeof data.notifyAt}), notified = ${data.notified}, completed = ${data.completed}, notifyPercent = ${data.notifyPercent}`);
-    });
-    // Query all 'fcmTokens' collections across all users
-    const tokensRef = db.collectionGroup('fcmTokens');
-    const snapshot = await tokensRef.get();
+    // 0. Diagnostic print of all trackers in the DB
+    const { data: trackers, error: trackersError } = await supabase
+      .from('trackers')
+      .select('*');
 
-    if (snapshot.empty) {
+    if (trackersError) throw trackersError;
+
+    console.log(`Diagnostic: Found ${trackers ? trackers.length : 0} total trackers in Supabase.`);
+    (trackers || []).forEach(row => {
+      console.log(`- Tracker "${row.title}": notifyAt = ${row.notify_at}, notified = ${row.notified}, completed = ${row.completed}, notifyPercent = ${row.notify_percent}`);
+    });
+
+    // Query all registered FCM tokens
+    const { data: tokenRows, error: tokensError } = await supabase
+      .from('fcm_tokens')
+      .select('*');
+
+    if (tokensError) throw tokensError;
+
+    if (!tokenRows || tokenRows.length === 0) {
       console.log("No registered FCM tokens found in the database. Please visit the app, open Create/Edit modals, and allow notification permissions first!");
       return;
     }
 
-    console.log(`Found ${snapshot.size} tokens in the database. Sending test notifications...`);
+    console.log(`Found ${tokenRows.length} tokens in the database. Sending test notifications...`);
 
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      const fcmToken = data.token;
+    for (const tokenRow of tokenRows) {
+      const fcmToken = tokenRow.token;
       if (!fcmToken) continue;
 
-      // Extract user ID from document path: users/{uid}/fcmTokens/{token}
-      const pathSegments = doc.ref.path.split('/');
-      const uid = pathSegments[1];
+      const uid = tokenRow.user_id;
 
-      console.log(`Sending test notification to user ${uid} on token ${doc.id.substring(0, 10)}...`);
+      console.log(`Sending test notification to user ${uid} on token ${tokenRow.id.substring(0, 10)}...`);
 
       const payload = {
         notification: {

@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize firebase-admin using service account from env
 const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -17,93 +18,86 @@ try {
   process.exit(1);
 }
 
-const db = admin.firestore();
 const messaging = admin.messaging();
 
-// Helper to safely parse any Date/Timestamp/Number into numeric epoch ms
-function getEpochMs(val) {
-  if (!val) return 0;
-  if (typeof val === 'number') return val;
-  if (val.toMillis) return val.toMillis();
-  if (val.toDate) return val.toDate().getTime();
-  if (val instanceof Date) return val.getTime();
-  return Number(val) || 0;
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL || process.env.PS_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PS_SECRET_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing SUPABASE_URL / PS_URL or SUPABASE_SERVICE_ROLE_KEY / PS_SECRET_KEY environment variable.");
+  process.exit(1);
 }
 
-async function runNotifier() {
-  const now = Date.now();
-  const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
-  const maxNotifyAt = now + bufferMs;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-  console.log(`Running notifier at: ${new Date(now).toISOString()}`);
-  console.log(`Looking for trackers due up to ${new Date(maxNotifyAt).toISOString()}`);
+async function runNotifier() {
+  const now = new Date();
+  const maxNotifyAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
+
+  console.log(`Running notifier at: ${now.toISOString()}`);
+  console.log(`Looking for trackers due up to ${maxNotifyAt}`);
 
   try {
-    // Collection group query to check all 'bars' collections
-    const barsRef = db.collectionGroup('bars');
-    const snapshot = await barsRef
-      .where('notifyAt', '<=', maxNotifyAt)
-      .get();
+    // Query trackers
+    const { data: trackers, error: trackersError } = await supabase
+      .from('trackers')
+      .select('*')
+      .lte('notify_at', maxNotifyAt)
+      .eq('notified', false)
+      .eq('completed', false);
 
-    if (snapshot.empty) {
+    if (trackersError) throw trackersError;
+
+    if (!trackers || trackers.length === 0) {
       console.log("No trackers found within the notification window.");
       
-      // RUN AUTOMATIC DIAGNOSTIC SCAN
+      // RUN DIAGNOSTIC SCAN
       console.log("--- START AUTOMATIC DATABASE DIAGNOSTIC SCAN ---");
-      const totalSnapshot = await barsRef.get();
-      console.log(`Total trackers found in entire Firestore: ${totalSnapshot.size}`);
-      totalSnapshot.docs.forEach(doc => {
-        const d = doc.data();
-        console.log(`- Tracker "${d.title}": notifyAt = ${d.notifyAt} (${typeof d.notifyAt}), notified = ${d.notified}, completed = ${d.completed}, notifyPercent = ${d.notifyPercent}`);
+      const { data: allTrackers } = await supabase.from('trackers').select('*');
+      console.log(`Total trackers found in entire Supabase: ${allTrackers ? allTrackers.length : 0}`);
+      (allTrackers || []).forEach(row => {
+        console.log(`- Tracker "${row.title}": notifyAt = ${row.notify_at}, notified = ${row.notified}, completed = ${row.completed}, notifyPercent = ${row.notify_percent}`);
       });
       console.log("--- END AUTOMATIC DATABASE DIAGNOSTIC SCAN ---");
       return;
     }
 
-    console.log(`Found ${snapshot.size} candidate documents in query.`);
+    console.log(`Found ${trackers.length} candidate documents in query.`);
 
-    for (const doc of snapshot.docs) {
-      const barData = doc.data();
-      
-      // Filter out already notified or completed trackers
-      if (barData.notified === true || barData.completed === true) {
-        console.log(`Skipping tracker "${barData.title}" because notified=${barData.notified} or completed=${barData.completed}`);
+    for (const tracker of trackers) {
+      console.log(`Processing tracker "${tracker.title}" (${tracker.id}) for user ${tracker.user_id}`);
+
+      // Fetch user's FCM tokens
+      const { data: tokenRows, error: tokensError } = await supabase
+        .from('fcm_tokens')
+        .select('*')
+        .eq('user_id', tracker.user_id);
+
+      if (tokensError) {
+        console.error(`Error fetching FCM tokens for user ${tracker.user_id}:`, tokensError);
         continue;
       }
 
-      // Extract user ID from document path: users/{uid}/bars/{barId}
-      const pathSegments = doc.ref.path.split('/');
-      const uid = pathSegments[1];
-      const barId = pathSegments[3];
-
-      console.log(`Processing tracker "${barData.title}" (${barId}) for user ${uid}`);
-
-      // 1. Fetch user's FCM tokens
-      const tokensRef = db.collection(`users/${uid}/fcmTokens`);
-      const tokensSnapshot = await tokensRef.get();
-      if (tokensSnapshot.empty) {
-        console.log(`No FCM tokens found for user ${uid}. Skipping.`);
+      if (!tokenRows || tokenRows.length === 0) {
+        console.log(`No FCM tokens found for user ${tracker.user_id}. Skipping.`);
         continue;
       }
 
-      console.log(`Found ${tokensSnapshot.size} registered tokens for user ${uid}`);
-
+      console.log(`Found ${tokenRows.length} registered tokens for user ${tracker.user_id}`);
       let sentAtLeastOne = false;
 
-      for (const tokenDoc of tokensSnapshot.docs) {
-        const fcmToken = tokenDoc.data().token;
-        if (!fcmToken) {
-          continue;
-        }
+      for (const tokenRow of tokenRows) {
+        const fcmToken = tokenRow.token;
+        if (!fcmToken) continue;
 
-        // 1. Calculate dynamic title and body matching tracker progress & timing
-        // 1. Calculate time remaining string
+        // Calculate time remaining string
         let timeStr = "";
-        if (barData.notifyPercent !== undefined && barData.notifyPercent !== null) {
-          timeStr = `${barData.notifyPercent}% of duration left`;
-        } else if (barData.deadlineAt && barData.notifyAt) {
-          const deadlineMs = getEpochMs(barData.deadlineAt);
-          const notifyMs = getEpochMs(barData.notifyAt);
+        if (tracker.notify_percent !== undefined && tracker.notify_percent !== null) {
+          timeStr = `${tracker.notify_percent}% of duration left`;
+        } else if (tracker.deadline_at && tracker.notify_at) {
+          const deadlineMs = new Date(tracker.deadline_at).getTime();
+          const notifyMs = new Date(tracker.notify_at).getTime();
           const diffMins = Math.round((deadlineMs - notifyMs) / 60000);
           if (diffMins >= 60) {
             const hrs = (diffMins / 60).toFixed(1);
@@ -113,19 +107,18 @@ async function runNotifier() {
           }
         }
 
-        // 2. Calculate progress suffix smartly depending on tracker type
+        // Calculate progress suffix
         let progressStr = "";
-        if (barData.type === "goal" && barData.targetSmallest) {
-          const pct = Math.round((barData.currentSmallest / barData.targetSmallest) * 100);
+        if (tracker.type === "goal" && tracker.target_smallest) {
+          const pct = Math.round((tracker.current_smallest / tracker.target_smallest) * 100);
           progressStr = ` • Progress: ${pct}%`;
-        } else if (barData.type === "checklist" && barData.targetSmallest) {
-          progressStr = ` • Checklist: ${barData.currentSmallest}/${barData.targetSmallest} done`;
+        } else if (tracker.type === "checklist" && tracker.target_smallest) {
+          progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
         }
 
-        const titleText = `ProgressShelf: ${barData.title}`;
+        const titleText = `ProgressShelf: ${tracker.title}`;
         const bodyText = `${timeStr}${progressStr}`;
 
-        // 2. Send FCM Push Notification
         const payload = {
           notification: {
             title: titleText,
@@ -136,31 +129,33 @@ async function runNotifier() {
 
         try {
           await messaging.send(payload);
-          console.log(`Notification sent successfully to user ${uid} on token ${tokenDoc.id.substring(0, 10)}... for tracker ${barId}`);
+          console.log(`Notification sent successfully to user ${tracker.user_id} for tracker ${tracker.id}`);
           sentAtLeastOne = true;
         } catch (fcmError) {
-          console.error(`Failed to send FCM message to user ${uid} on token ${tokenDoc.id.substring(0, 10)}...:`, fcmError);
-          
+          console.error(`Failed to send FCM message to user ${tracker.user_id}:`, fcmError);
           const errorCode = fcmError.code || fcmError.errorInfo?.code || "";
-          const errorMessage = fcmError.message || "";
           
           if (
             errorCode === 'messaging/invalid-registration-token' || 
             errorCode === 'messaging/registration-token-not-registered' ||
-            errorCode.includes('not-registered') ||
-            errorMessage.includes('NotRegistered') ||
-            errorMessage.includes('registration-token-not-registered')
+            errorCode.includes('not-registered')
           ) {
-            console.log(`Cleaning up invalid/expired FCM token ${tokenDoc.id.substring(0, 10)}... for user ${uid}`);
-            await tokenDoc.ref.delete();
+            console.log(`Cleaning up invalid/expired FCM token...`);
+            await supabase
+              .from('fcm_tokens')
+              .delete()
+              .eq('id', tokenRow.id);
           }
         }
       }
 
-      // 3. Mark as notified in database to prevent double triggers
+      // Mark tracker as notified
       if (sentAtLeastOne) {
-        await doc.ref.update({ notified: true });
-        console.log(`Marked tracker ${barId} as notified.`);
+        await supabase
+          .from('trackers')
+          .update({ notified: true })
+          .eq('id', tracker.id);
+        console.log(`Marked tracker ${tracker.id} as notified.`);
       }
     }
   } catch (error) {

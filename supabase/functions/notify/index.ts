@@ -4,8 +4,8 @@ import { GoogleAuth } from 'npm:google-auth-library'
 
 Deno.serve(async (req) => {
   try {
-    const SUPABASE_URL = Deno.env.get("PS_URL")!;
-    const SUPABASE_SECRET_KEY = Deno.env.get("PS_SECRET_KEY")!;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SECRET_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 
     const serviceAccountStr = Deno.env.get("FIREBASE_SERVICE_ACCOUNT");
