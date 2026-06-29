@@ -173,24 +173,27 @@ export function initAuthProtection(onUserActive) {
         window.location.href = "index.html";
       }
     }
-  });
 
-  // Track auth changes
-  supabase.auth.onAuthStateChange((event, session) => {
-    const user = session ? mapSupabaseUser(session.user) : null;
-    const isGuest = isGuestMode();
+    // Track auth changes only after initial session checks complete
+    supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore INITIAL_SESSION to prevent duplicate startup checks or race conditions
+      if (event === 'INITIAL_SESSION') return;
 
-    if (event === 'SIGNED_OUT') {
-      if (isDashboard && !isGuest) {
-        window.location.href = "index.html";
+      const user = session ? mapSupabaseUser(session.user) : null;
+      const isGuest = isGuestMode();
+
+      if (event === 'SIGNED_OUT') {
+        if (isDashboard && !isGuest) {
+          window.location.href = "index.html";
+        }
+      } else if (event === 'SIGNED_IN') {
+        if (!isDashboard) {
+          window.location.href = "dashboard.html";
+        } else if (onUserActive && user) {
+          onUserActive(user);
+        }
       }
-    } else if (event === 'SIGNED_IN') {
-      if (!isDashboard) {
-        window.location.href = "dashboard.html";
-      } else if (onUserActive && user) {
-        onUserActive(user);
-      }
-    }
+    });
   });
 }
 
