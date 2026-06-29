@@ -26,6 +26,28 @@ function triggerMockUpdate() {
   });
 }
 
+function mapDatabaseRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    preset: row.preset,
+    levels: row.levels,
+    targetSmallest: row.target_smallest !== null ? Number(row.target_smallest) : null,
+    currentSmallest: row.current_smallest !== null ? Number(row.current_smallest) : null,
+    items: row.items,
+    text: row.text,
+    completed: row.completed,
+    deadlineAt: row.deadline_at ? new Date(row.deadline_at).getTime() : null,
+    deadlineSetAt: row.deadline_set_at ? new Date(row.deadline_set_at).getTime() : null,
+    notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
+    notified: row.notified,
+    notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
+    lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
+  };
+}
+
 /**
  * Subscribes to real-time updates for a user's progress bars.
  * @param {string} uid The user ID.
@@ -47,39 +69,20 @@ export function subscribeToBars(uid, onUpdate, onError) {
     };
   }
 
+  let cachedBars = [];
+
   // Initial fetch and callback helper
-  const fetchAndCallback = async () => {
+  const fetchInitial = async () => {
     try {
       const { data, error } = await supabase
         .from('trackers')
         .select('*')
-        .eq('user_id', uid)
-        .order('last_updated', { ascending: false });
+        .eq('user_id', uid);
 
       if (error) throw error;
 
-      // Map snake_case columns back to camelCase properties for app.js
-      const bars = (data || []).map(row => ({
-        id: row.id,
-        title: row.title,
-        type: row.type,
-        preset: row.preset,
-        levels: row.levels,
-        targetSmallest: row.target_smallest !== null ? Number(row.target_smallest) : null,
-        currentSmallest: row.current_smallest !== null ? Number(row.current_smallest) : null,
-        items: row.items,
-        text: row.text,
-        completed: row.completed,
-        deadlineAt: row.deadline_at ? new Date(row.deadline_at).getTime() : null,
-        deadlineSetAt: row.deadline_set_at ? new Date(row.deadline_set_at).getTime() : null,
-        notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
-        notified: row.notified,
-        notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
-        createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
-        lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
-      }));
-
-      onUpdate(bars);
+      cachedBars = (data || []).map(mapDatabaseRow);
+      onUpdate(cachedBars);
     } catch (err) {
       console.error("Error fetching trackers:", err);
       if (onError) onError(err);
@@ -87,15 +90,39 @@ export function subscribeToBars(uid, onUpdate, onError) {
   };
 
   // Perform initial fetch
-  fetchAndCallback();
+  fetchInitial();
 
   // Subscribe to real-time changes
   const channel = supabase
     .channel(`trackers-user-${uid}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'trackers' },
-      () => {
-        fetchAndCallback();
+      (payload) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        
+        if (eventType === 'INSERT') {
+          if (newRow.user_id === uid) {
+            const mapped = mapDatabaseRow(newRow);
+            if (!cachedBars.some(b => b.id === mapped.id)) {
+              cachedBars.push(mapped);
+            }
+          }
+        } else if (eventType === 'UPDATE') {
+          if (newRow.user_id === uid) {
+            const mapped = mapDatabaseRow(newRow);
+            const idx = cachedBars.findIndex(b => b.id === mapped.id);
+            if (idx !== -1) {
+              cachedBars[idx] = mapped;
+            } else {
+              cachedBars.push(mapped);
+            }
+          }
+        } else if (eventType === 'DELETE') {
+          const deleteId = oldRow.id;
+          cachedBars = cachedBars.filter(b => b.id !== deleteId);
+        }
+        
+        onUpdate(cachedBars);
       }
     )
     .subscribe();
