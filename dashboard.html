@@ -454,7 +454,16 @@
                 
                 <!-- Collapse container -->
                 <div class="notify-settings-content collapsed" id="notify-settings-content">
+                  <!-- End Alert Checkbox (at the top) -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="end-alert-toggle-create"> 
+                      Alert at exact deadline
+                    </label>
+                  </div>
+
                   <div class="notify-mode-a" id="notify-mode-a-container">
+                    <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
                         <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0">
@@ -463,7 +472,6 @@
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
-                      <button type="button" class="btn-clear-mode" id="btn-clear-mode-a" title="Clear values">✕</button>
                     </div>
                   </div>
 
@@ -472,24 +480,16 @@
                   </div>
 
                   <div class="notify-mode-b" id="notify-mode-b-container">
+                    <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
                         <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
-                      <button type="button" class="btn-clear-mode" id="btn-clear-mode-b" title="Clear values">✕</button>
                     </div>
                   </div>
 
                   <div class="notify-preview" id="notify-preview-create"></div>
-
-                  <!-- End Alert Checkbox -->
-                  <div class="end-alert-row">
-                    <label class="end-alert-label">
-                      <input type="checkbox" id="end-alert-toggle-create"> 
-                      Also alert at deadline
-                    </label>
-                  </div>
                 </div>
               </div>
             </div>
@@ -628,10 +628,18 @@
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
-                
-                <!-- Collapse container -->
+                                <!-- Collapse container -->
                 <div class="notify-settings-content collapsed" id="edit-notify-settings-content">
+                  <!-- End Alert Checkbox (at the top) -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="edit-notify-toggle-deadline"> 
+                      Alert at exact deadline
+                    </label>
+                  </div>
+
                   <div class="notify-mode-a" id="edit-notify-mode-a-container">
+                    <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
                         <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0">
@@ -640,7 +648,6 @@
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
-                      <button type="button" class="btn-clear-mode" id="edit-btn-clear-mode-a" title="Clear values">✕</button>
                     </div>
                   </div>
 
@@ -649,24 +656,16 @@
                   </div>
 
                   <div class="notify-mode-b" id="edit-notify-mode-b-container">
+                    <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
                         <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
-                      <button type="button" class="btn-clear-mode" id="edit-btn-clear-mode-b" title="Clear values">✕</button>
                     </div>
                   </div>
 
                   <div class="notify-preview" id="notify-preview-edit"></div>
-
-                  <!-- End Alert Checkbox -->
-                  <div class="end-alert-row">
-                    <label class="end-alert-label">
-                      <input type="checkbox" id="end-alert-toggle-edit"> 
-                      Also alert at deadline
-                    </label>
-                  </div>
                 </div>
               </div>
 

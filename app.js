@@ -1699,12 +1699,10 @@ function openCreateModal() {
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
   
-  const notifySection = document.getElementById("notification-section");
   const notifyToggle = document.getElementById("notify-toggle");
   const settingsContent = document.getElementById("notify-settings-content");
   const endAlertToggle = document.getElementById("end-alert-toggle-create");
 
-  if (notifySection) notifySection.removeAttribute("data-last-active");
   if (notifyToggle) notifyToggle.checked = false;
   if (settingsContent) settingsContent.classList.add("collapsed");
   if (endAlertToggle) endAlertToggle.checked = false;
@@ -2343,22 +2341,17 @@ function openEditModal(bar) {
   }
 
   // Pre-fill notification settings if bar has one
-  const editNotifySection = document.getElementById('edit-notification-section');
   const editNotifyHrs = document.getElementById('edit-notify-hrs');
   const editNotifyMins = document.getElementById('edit-notify-mins');
   const editNotifyPercent = document.getElementById('edit-notify-percent');
   const editNotifyToggle = document.getElementById('edit-notify-toggle');
   const editSettingsContent = document.getElementById('edit-notify-settings-content');
-  const editEndAlertToggle = document.getElementById('end-alert-toggle-edit');
+  const editEndAlertToggle = document.getElementById('edit-notify-toggle-deadline');
 
   if (editNotifyHrs) editNotifyHrs.value = "";
   if (editNotifyMins) editNotifyMins.value = "";
   if (editNotifyPercent) editNotifyPercent.value = "";
   if (editEndAlertToggle) editEndAlertToggle.checked = bar.alertAtDeadline || false;
-
-  if (editNotifySection) {
-    editNotifySection.removeAttribute("data-last-active");
-  }
 
   if (bar.notifyAt && deadlineMs) {
     if (editNotifyToggle) editNotifyToggle.checked = true;
@@ -2366,10 +2359,8 @@ function openEditModal(bar) {
 
     const notifyAt = Number(bar.notifyAt);
     if (bar.notifyPercent !== undefined && bar.notifyPercent !== null) {
-      if (editNotifySection) editNotifySection.setAttribute("data-last-active", "percent");
       if (editNotifyPercent) editNotifyPercent.value = bar.notifyPercent;
     } else {
-      if (editNotifySection) editNotifySection.setAttribute("data-last-active", "fixed");
       const diffMs = deadlineMs - notifyAt;
       if (diffMs > 0) {
         const diffMins = Math.round(diffMs / 60000);
@@ -2557,8 +2548,8 @@ formCreate.addEventListener("submit", async (e) => {
     const notifyRes = calculateNotifyAt("");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
-      const notifySection = document.getElementById('notification-section');
-      const notifyMode = (notifySection && notifySection.getAttribute("data-last-active")) || "fixed";
+      const percentInput = document.getElementById('notify-percent');
+      const notifyMode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
       if (notifyMode === "percent") {
         const percentInput = document.getElementById('notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
@@ -2736,15 +2727,14 @@ formEdit.addEventListener("submit", async (e) => {
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
       notified = false;
-      const notifySection = document.getElementById('edit-notification-section');
-      const notifyMode = (notifySection && notifySection.getAttribute("data-last-active")) || "fixed";
+      const percentInput = document.getElementById('edit-notify-percent');
+      const notifyMode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
       if (notifyMode === "percent") {
-        const percentInput = document.getElementById('edit-notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       } else {
         notifyPercent = null;
       }
-      alertAtDeadline = document.getElementById("end-alert-toggle-edit")?.checked || false;
+      alertAtDeadline = document.getElementById("edit-notify-toggle-deadline")?.checked || false;
       if (deadlineAt !== selectedBar.deadlineAt) {
         deadlineNotified = false; // Reset if deadline changed
       }
@@ -3517,8 +3507,8 @@ function calculateNotifyAt(prefix) {
     return { notifyAt: null, isValid: false, errorMsg: null };
   }
 
-  const section = document.getElementById(prefix + 'notification-section');
-  const mode = (section && section.getAttribute("data-last-active")) || "fixed";
+  const percentInput = document.getElementById(prefix + 'notify-percent');
+  const mode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
 
   if (mode === "fixed") {
     const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
@@ -3635,69 +3625,16 @@ function updateNotificationPreview(prefix) {
     return;
   }
 
+  // Ensure all inputs are enabled
+  if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
+  if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
+  if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
+
   const modeAHasValue = (notifyHrsInput?.value !== "") || (notifyMinsInput?.value !== "");
   const modeBHasValue = (notifyPercentInput?.value !== "");
 
-  // Auto-detect active mode based on values if not tracked
-  let mode = section.getAttribute("data-last-active");
-  if (!mode) {
-    if (modeAHasValue && !modeBHasValue) {
-      mode = "fixed";
-      section.setAttribute("data-last-active", "fixed");
-    } else if (modeBHasValue && !modeAHasValue) {
-      mode = "percent";
-      section.setAttribute("data-last-active", "percent");
-    }
-  }
-
-  const modeAContainer = section.querySelector(".notify-mode-a");
-  const modeBContainer = section.querySelector(".notify-mode-b");
-
-  if (mode === "fixed") {
-    // Mode A active, Mode B greyed out
-    modeAContainer?.classList.remove("inactive");
-    modeBContainer?.classList.add("inactive");
-    
-    if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
-    if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
-    if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
-  } else if (mode === "percent") {
-    // Mode B active, Mode A greyed out
-    modeBContainer?.classList.remove("inactive");
-    modeAContainer?.classList.add("inactive");
-    
-    if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
-    if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
-    if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
-  } else {
-    // Neither is greyed out (when both are empty)
-    modeAContainer?.classList.remove("inactive");
-    modeBContainer?.classList.remove("inactive");
-    
-    if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
-    if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
-    if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
-  }
-
-  // Clear button visibility logic (only visible next to the inactive group if it has values)
-  const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
-  const clearBtnB = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-b" : "btn-clear-mode-b");
-
-  if (clearBtnA) {
-    if (mode === "percent" && modeAHasValue) {
-      clearBtnA.classList.add("visible");
-    } else {
-      clearBtnA.classList.remove("visible");
-    }
-  }
-
-  if (clearBtnB) {
-    if (mode === "fixed" && modeBHasValue) {
-      clearBtnB.classList.add("visible");
-    } else {
-      clearBtnB.classList.remove("visible");
-    }
-  }
+  // Auto-detect mode dynamically based on inputs
+  const mode = modeBHasValue ? "percent" : "fixed";
 
   // Calculate and update preview
   const hasInputs = mode === "fixed" ? modeAHasValue : (mode === "percent" ? modeBHasValue : false);
@@ -3786,7 +3723,7 @@ function setupNotificationListeners(prefix = "") {
   const notifyMins = document.getElementById(prefix + 'notify-mins');
   const notifyPercent = document.getElementById(prefix + 'notify-percent');
   const toggle = document.getElementById(prefix + 'notify-toggle');
-  const endAlertToggle = document.getElementById(prefix === "edit-" ? "end-alert-toggle-edit" : "end-alert-toggle-create");
+  const endAlertToggle = document.getElementById(prefix === "edit-" ? "edit-notify-toggle-deadline" : "end-alert-toggle-create");
 
   const runUpdate = () => updateNotificationPreview(prefix);
 
@@ -3794,8 +3731,6 @@ function setupNotificationListeners(prefix = "") {
     if (notifyHrs) notifyHrs.value = "";
     if (notifyMins) notifyMins.value = "";
     if (notifyPercent) notifyPercent.value = "";
-    const section = document.getElementById(prefix + 'notification-section');
-    section?.removeAttribute("data-last-active");
   };
 
   // Bind change/input listeners for deadline changes
@@ -3834,35 +3769,15 @@ function setupNotificationListeners(prefix = "") {
   toggle?.addEventListener('change', runUpdate);
   endAlertToggle?.addEventListener('change', runUpdate);
 
-  // Clear button click listeners
-  const clearBtnA = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-a" : "btn-clear-mode-a");
-  const clearBtnB = document.getElementById(prefix === "edit-" ? "edit-btn-clear-mode-b" : "btn-clear-mode-b");
-
-  clearBtnA?.addEventListener("click", () => {
-    if (notifyHrs) notifyHrs.value = "";
-    if (notifyMins) notifyMins.value = "";
-    const section = document.getElementById(prefix + 'notification-section');
-    section?.removeAttribute("data-last-active");
-    runUpdate();
-  });
-
-  clearBtnB?.addEventListener("click", () => {
-    if (notifyPercent) notifyPercent.value = "";
-    const section = document.getElementById(prefix + 'notification-section');
-    section?.removeAttribute("data-last-active");
-    runUpdate();
-  });
-
-  // Mode inputs key triggers for auto-detect active mode
+  // Auto-clearing input triggers
   const onFixedType = () => {
-    const section = document.getElementById(prefix + 'notification-section');
-    section?.setAttribute("data-last-active", "fixed");
+    if (notifyPercent) notifyPercent.value = "";
     runUpdate();
   };
 
   const onPercentType = () => {
-    const section = document.getElementById(prefix + 'notification-section');
-    section?.setAttribute("data-last-active", "percent");
+    if (notifyHrs) notifyHrs.value = "";
+    if (notifyMins) notifyMins.value = "";
     runUpdate();
   };
 

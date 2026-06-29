@@ -2711,16 +2711,17 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--border);
-  transition: background-color 0.2s ease;
+  background-color: #21262d;
+  border: 1px solid var(--border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 24px;
 }
 
 .toggle-slider:before {
   position: absolute;
   content: "";
-  height: 18px;
-  width: 18px;
+  height: 16px;
+  width: 16px;
   left: 3px;
   bottom: 3px;
   background-color: white;
@@ -2731,6 +2732,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .toggle-switch input:checked + .toggle-slider {
   background-color: var(--accent);
+  border-color: var(--accent);
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
@@ -2757,38 +2759,21 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .notify-mode-a, .notify-mode-b {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-  transition: opacity 0.2s ease;
-  opacity: 1;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
-/* Greyed out inactive modes */
-.notify-mode-a.inactive,
-.notify-mode-b.inactive {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-.notify-radio-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.notify-sub-label {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-primary);
-  cursor: pointer;
-}
-
-.notify-radio-label input[type="radio"] {
-  accent-color: var(--accent);
 }
 
 .notify-inputs-wrapper {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-left: 22px;
+  padding-left: 12px;
 }
 
 .notify-mode-a-inputs, .notify-mode-b-inputs {
@@ -2817,29 +2802,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .notify-sep, .notify-suffix, .notify-prefix {
   font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-/* Clear icon trigger */
-.btn-clear-mode {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s, color 0.15s;
-}
-
-.btn-clear-mode.visible {
-  opacity: 0.7;
-  pointer-events: auto;
-}
-
-.btn-clear-mode.visible:hover {
-  opacity: 1;
-  color: var(--error);
 }
 
 /* Or Divider */
@@ -2891,8 +2853,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* End Alert Row */
 .end-alert-row {
-  margin-top: 15px;
-  padding-left: 22px;
+  margin-top: 5px;
+  margin-bottom: 15px;
+  padding-left: 12px;
 }
 
 .end-alert-label {
