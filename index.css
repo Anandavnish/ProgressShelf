@@ -986,6 +986,7 @@ body {
   text-overflow: ellipsis;
   white-space: normal;
   /* Force title to wrap up to 2 lines */
+  transition: margin-left 0.2s var(--transition-ease);
 }
 
 
@@ -3108,8 +3109,8 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 /* Card Selection overlay styling */
 .card-select-control {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 24px;
+  left: 24px;
   z-index: 5;
   cursor: pointer;
   display: none;
@@ -3149,6 +3150,10 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 /* Edit Mode grid active state rules */
 .cards-grid.edit-mode .card-select-control {
   display: flex;
+}
+
+.cards-grid.edit-mode .card-title {
+  margin-left: 32px;
 }
 
 .cards-grid.edit-mode .card-actions {
