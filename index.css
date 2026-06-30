@@ -986,7 +986,7 @@ body {
   text-overflow: ellipsis;
   white-space: normal;
   /* Force title to wrap up to 2 lines */
-  transition: margin-left 0.2s var(--transition-ease);
+  transition: transform 0.2s var(--transition-ease);
 }
 
 
@@ -3152,8 +3152,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   display: flex;
 }
 
+/* [EDIT MODE CONFIG] Shifting layout coordinates. Adjust translateX value to visually push title in Edit Mode */
 .cards-grid.edit-mode .card-title {
-  margin-left: 32px;
+  transform: translateX(32px);
 }
 
 .cards-grid.edit-mode .card-actions {
