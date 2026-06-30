@@ -4217,6 +4217,7 @@ function setupEditModeControls() {
       grid.classList.add("edit-mode");
       if (controls) controls.classList.add("edit-active");
       window.history.pushState({ editMode: true }, "");
+      resetHeaderScroll();
     } else {
       exitEditMode();
     }
@@ -4300,20 +4301,28 @@ function exitEditMode() {
       window.history.back();
     }
   }
+  resetHeaderScroll();
 }
 
 // Run initializers
 setupAPKButton();
 setupEditModeControls();
 
-// ==========================================
-// Scroll-to-Hide Staggered Header Controller
-// ==========================================
+// Scroll state variables at module scope so edit mode controls can reset them
+let y_stats = 0;
+let y_controls = 0;
+
+function resetHeaderScroll() {
+  y_stats = 0;
+  y_controls = 0;
+  const statsEl = document.getElementById("stats-banner");
+  const controlsEl = document.querySelector(".dashboard-controls");
+  if (statsEl) statsEl.style.transform = "translateY(0px)";
+  if (controlsEl) controlsEl.style.transform = "translateY(0px)";
+}
+
 function setupStaggeredHeaderScroll() {
   let lastScrollY = window.scrollY;
-  let y_stats = 0;
-  let y_controls = 0;
-  
   let H_nav = 57;
   let H_stats = 0;
   let H_controls = 45;
@@ -4327,12 +4336,16 @@ function setupStaggeredHeaderScroll() {
     const statsEl = document.getElementById("stats-banner");
     const controlsEl = document.querySelector(".dashboard-controls");
 
+    // Don't scroll or hide panels if Edit Mode is active
+    if (editModeActive) {
+      resetHeaderScroll();
+      scrollTicking = false;
+      return;
+    }
+
     // Clear translations at the top of the page
     if (currentScrollY <= 0) {
-      y_stats = 0;
-      y_controls = 0;
-      if (statsEl) statsEl.style.transform = "translateY(0px)";
-      if (controlsEl) controlsEl.style.transform = "translateY(0px)";
+      resetHeaderScroll();
       scrollTicking = false;
       return;
     }
@@ -4348,26 +4361,26 @@ function setupStaggeredHeaderScroll() {
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
     if (deltaY > 0) {
-      // Scrolling down -> hide headers (stats first, then controls)
-      if (y_stats < H_stats) {
-        y_stats = Math.min(H_stats, y_stats + deltaY);
-        const remaining = deltaY - (H_stats - y_stats);
+      // Scrolling down -> hide dashboard controls first, then stats banner
+      if (y_controls < H_controls) {
+        y_controls = Math.min(H_controls, y_controls + deltaY);
+        const remaining = deltaY - (H_controls - y_controls);
         if (remaining > 0) {
-          y_controls = Math.min(H_controls, y_controls + remaining);
+          y_stats = Math.min(H_stats, y_stats + remaining);
         }
       } else {
-        y_controls = Math.min(H_controls, y_controls + deltaY);
+        y_stats = Math.min(H_stats, y_stats + deltaY);
       }
     } else if (deltaY < 0) {
-      // Scrolling up -> show headers (controls first, then stats)
-      if (y_controls > 0) {
-        y_controls = Math.max(0, y_controls + deltaY);
-        const remaining = deltaY + y_controls; // deltaY is negative
+      // Scrolling up -> reveal stats banner first, then dashboard controls
+      if (y_stats > 0) {
+        y_stats = Math.max(0, y_stats + deltaY);
+        const remaining = deltaY + y_stats; // deltaY is negative
         if (remaining < 0) {
-          y_stats = Math.max(0, y_stats + remaining);
+          y_controls = Math.max(0, y_controls + remaining);
         }
       } else {
-        y_stats = Math.max(0, y_stats + deltaY);
+        y_controls = Math.max(0, y_controls + deltaY);
       }
     }
 
@@ -4394,11 +4407,14 @@ function setupStaggeredHeaderScroll() {
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
-    y_stats = Math.min(y_stats, H_stats);
-    y_controls = Math.min(y_controls, H_controls);
-
-    if (statsEl) statsEl.style.transform = `translateY(-${y_stats}px)`;
-    if (controlsEl) controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+    if (editModeActive) {
+      resetHeaderScroll();
+    } else {
+      y_stats = Math.min(y_stats, H_stats);
+      y_controls = Math.min(y_controls, H_controls);
+      if (statsEl) statsEl.style.transform = `translateY(-${y_stats}px)`;
+      if (controlsEl) controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+    }
   }
 
   window.addEventListener("scroll", () => {

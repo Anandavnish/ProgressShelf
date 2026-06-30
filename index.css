@@ -886,7 +886,6 @@ body {
   -webkit-backdrop-filter: blur(12px);
   padding: 16px 24px;
   margin: 0 -24px 24px -24px !important;
-  border-bottom: 1px solid var(--card-border);
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -2999,7 +2998,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   -webkit-backdrop-filter: blur(12px);
   padding: 16px 24px;
   margin: 0 -24px 24px -24px !important;
-  border-bottom: 1px solid var(--card-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
