@@ -933,8 +933,9 @@ function updateCardElement(card, bar) {
             renderDashboard(currentBars);
           }
         });
-      });
-    }
+      }
+    });
+  }
 
     // Update show more / less indicators
     const showMoreBtn = card.querySelector(".show-more-indicator");
@@ -1341,6 +1342,7 @@ function createCardElement(bar) {
           renderDashboard(currentBars); // Revert to database state on error
         }
       });
+      }
     });
   }
 
