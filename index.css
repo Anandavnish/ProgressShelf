@@ -879,13 +879,13 @@ body {
 /* Dashboard Controls */
 .dashboard-controls {
   position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 1px);
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
   z-index: 98;
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 16px 24px;
-  margin: 0 -24px 24px -24px !important;
+  padding: 18px 24px 16px 24px;
+  margin: -2px -24px 24px -24px !important;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -1522,8 +1522,8 @@ body {
   }
 
   .dashboard-controls {
-    padding: 16px 16px;
-    margin: 0 -16px 24px -16px !important;
+    padding: 18px 16px 16px 16px;
+    margin: -2px -16px 24px -16px !important;
   }
 
   .modal-overlay {
@@ -2991,13 +2991,13 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 /* Controls layout wrapper */
 .dashboard-controls {
   position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 1px);
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
   z-index: 98;
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 16px 24px;
-  margin: 0 -24px 24px -24px !important;
+  padding: 18px 24px 16px 24px;
+  margin: -2px -24px 24px -24px !important;
   display: flex;
   justify-content: space-between;
   align-items: center;
