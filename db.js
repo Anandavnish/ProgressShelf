@@ -45,6 +45,7 @@ function mapDatabaseRow(row) {
     notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
     alertAtDeadline: row.alert_at_deadline || false,
     deadlineNotified: row.deadline_notified || false,
+    position: row.position !== null && row.position !== undefined ? Number(row.position) : 0,
     createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
     lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
   };
@@ -286,7 +287,7 @@ export async function deleteBar(uid, barId) {
  * Edits an existing progress bar document.
  */
 export async function editBar(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position
 }) {
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
@@ -322,7 +323,8 @@ export async function editBar(uid, barId, {
         notified: notified !== undefined ? notified : original.notified,
         notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent,
         alertAtDeadline: alertAtDeadline !== undefined ? alertAtDeadline : original.alertAtDeadline,
-        deadlineNotified: deadlineNotified !== undefined ? deadlineNotified : original.deadlineNotified
+        deadlineNotified: deadlineNotified !== undefined ? deadlineNotified : original.deadlineNotified,
+        position: position !== undefined ? position : original.position
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -348,6 +350,7 @@ export async function editBar(uid, barId, {
     if (notifyPercent !== undefined) updates.notify_percent = notifyPercent !== null ? Number(notifyPercent) : null;
     if (alertAtDeadline !== undefined) updates.alert_at_deadline = alertAtDeadline;
     if (deadlineNotified !== undefined) updates.deadline_notified = deadlineNotified;
+    if (position !== undefined) updates.position = position;
 
     if (updateDeadline) {
       if (deadlineAt) {
@@ -459,5 +462,31 @@ export async function checkFCMTokenExists(uid, token) {
   } catch (err) {
     console.error("Error checking FCM token:", err);
     return false;
+  }
+}
+
+/**
+ * Deletes multiple progress bars in a batch operation.
+ * @param {string} uid The user ID.
+ * @param {Array<string>} barIds Array of progress bar IDs.
+ */
+export async function deleteMultipleBars(uid, barIds) {
+  if (!isConfigured || isGuestMode()) {
+    const bars = getLocalBars().filter(b => !barIds.includes(b.id));
+    setLocalBars(bars);
+    triggerMockUpdate();
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('trackers')
+      .delete()
+      .in('id', barIds)
+      .eq('user_id', uid);
+    if (error) throw error;
+  } catch (error) {
+    console.error("Error deleting multiple progress bars:", error);
+    throw error;
   }
 }

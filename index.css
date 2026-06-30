@@ -2971,3 +2971,209 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   display: block;
   margin-top: 8px;
 }
+
+/* Controls layout wrapper */
+.dashboard-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
+}
+
+.controls-right-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* APK Download Button */
+.btn-apk-download {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: #4ADE80;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  height: 38px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.05);
+}
+
+.btn-apk-download:hover {
+  background-color: rgba(74, 222, 128, 0.2);
+  border-color: #4ADE80;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-apk-download:active {
+  transform: translateY(0);
+}
+
+.apk-icon {
+  flex-shrink: 0;
+}
+
+/* Edit Mode Button */
+.btn-toggle-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  height: 38px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-toggle-edit:hover {
+  border-color: var(--accent);
+  background-color: rgba(56, 189, 248, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-toggle-edit:active {
+  transform: translateY(0);
+}
+
+.btn-toggle-edit.active {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.btn-toggle-edit.active svg {
+  stroke: #000;
+}
+
+/* Delete Selected Button */
+.btn-delete-selected {
+  display: flex;
+  align-items: center;
+  background-color: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: #FF7B72;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: 38px;
+}
+
+.btn-delete-selected:hover {
+  background-color: #f85149;
+  color: #fff;
+  border-color: #f85149;
+  transform: translateY(-1px);
+}
+
+.btn-delete-selected:active {
+  transform: translateY(0);
+}
+
+/* Card Selection overlay styling */
+.card-select-control {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  cursor: pointer;
+  display: none;
+}
+
+.card-select-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background-color: #161b22;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.card-select-circle .check-icon {
+  color: #000;
+  display: none;
+}
+
+.card-progress.selected {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 16px var(--accent-glow) !important;
+}
+
+.card-progress.selected .card-select-circle {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+
+.card-progress.selected .card-select-circle .check-icon {
+  display: block;
+}
+
+/* Card Drag Handle styling */
+.card-drag-handle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  cursor: move;
+  color: var(--text-muted);
+  display: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.card-drag-handle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background-color: rgba(56, 189, 248, 0.1);
+}
+
+/* Edit Mode grid active state rules */
+.cards-grid.edit-mode .card-select-control,
+.cards-grid.edit-mode .card-drag-handle {
+  display: flex;
+}
+
+.cards-grid.edit-mode .card-actions {
+  display: none !important;
+}
+
+.cards-grid.edit-mode .card-progress {
+  user-select: none;
+}
+
+/* Make card dragging visual semi-transparent */
+.card-progress.dragging {
+  opacity: 0.4;
+  border: 2px dashed var(--accent) !important;
+  background-color: rgba(56, 189, 248, 0.05) !important;
+}

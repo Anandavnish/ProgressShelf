@@ -1,6 +1,6 @@
 import { isConfigured } from "./supabase-config.js";
 import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists } from "./db.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars } from "./db.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
@@ -1190,6 +1190,23 @@ function createCardElement(bar) {
   const isCompleted = isTrackerCompleted(bar);
 
   card.innerHTML = `
+    <!-- Select Control for Edit Mode -->
+    <div class="card-select-control">
+      <div class="card-select-circle">
+        <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+    </div>
+    
+    <!-- Drag Handle for Arrange Mode -->
+    <div class="card-drag-handle">
+      <svg class="drag-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M12 2v20M12 2l-3 3m3-3l3 3M12 22l-3-3m3 3l3-3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 12h20M2 12l3-3m-3 3l3 3M22 12l-3-3m3 3l3 3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
     <div class="card-actions">
       <button class="btn-card-delete" title="Delete">
         <svg width="16" height="16" viewBox="0 0 24 24"
@@ -1350,7 +1367,60 @@ function createCardElement(bar) {
   const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
     (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
 
-  card.addEventListener("click", () => {
+  // Restore selected state if present
+  if (selectedBarIds.has(bar.id)) {
+    card.classList.add("selected");
+  }
+
+  // HTML5 Drag and Drop events
+  const dragHandle = card.querySelector('.card-drag-handle');
+  if (dragHandle) {
+    let dragAllowed = false;
+    dragHandle.addEventListener('mousedown', () => {
+      dragAllowed = true;
+      card.setAttribute('draggable', 'true');
+    });
+    dragHandle.addEventListener('mouseup', () => {
+      dragAllowed = false;
+      card.removeAttribute('draggable');
+    });
+    dragHandle.addEventListener('touchstart', (e) => {
+      dragAllowed = true;
+      card.setAttribute('draggable', 'true');
+    });
+    dragHandle.addEventListener('touchend', () => {
+      dragAllowed = false;
+      card.removeAttribute('draggable');
+    });
+
+    card.addEventListener('dragstart', (e) => {
+      if (!dragAllowed) {
+        e.preventDefault();
+        return;
+      }
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', bar.id);
+    });
+
+    card.addEventListener('dragend', async () => {
+      card.classList.remove('dragging');
+      card.removeAttribute('draggable');
+      dragAllowed = false;
+      await saveNewManualOrder();
+    });
+  }
+
+  card.addEventListener("click", (e) => {
+    // In Edit Mode, clicking the card toggles selection
+    const grid = document.getElementById("cards-grid");
+    if (grid && grid.classList.contains("edit-mode")) {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleCardSelection(card);
+      return;
+    }
+
     if (!deleteConfirmPanel.classList.contains('hidden')) return;
     const currentBar = card._barData;
 
@@ -1412,6 +1482,10 @@ function sortBars(bars) {
     if (currentSort === "updated-desc") {
       // Invert comparator order because of .reverse() in the reconciliation loop!
       return (a.lastUpdated || 0) - (b.lastUpdated || 0);
+    }
+    if (currentSort === "manual") {
+      // Invert comparator order because of .reverse() in the reconciliation loop!
+      return (b.position ?? 0) - (a.position ?? 0);
     }
     return 0;
   });
@@ -3226,6 +3300,15 @@ const setupSortSelectListener = () => {
     sortSelect.addEventListener("change", async (e) => {
       currentSort = e.target.value;
       localStorage.setItem("ps_sort_order", currentSort);
+
+      if (currentSort === "manual" && !hasEverManualOrdered()) {
+        if (!editModeActive) {
+          const btnToggle = document.getElementById("btn-toggle-edit");
+          if (btnToggle) btnToggle.click();
+          showToast("Arrange mode active. Drag handles to reorder cards!", "info");
+        }
+      }
+
       renderDashboard(currentBars);
 
       if (!isGuestMode() && currentUser && currentUser.uid) {
@@ -4070,6 +4153,208 @@ function setupNoteCharCounters() {
   });
 }
 setupNoteCharCounters();
+
+// ==========================================
+// APK & Edit Mode & Manual Ordering Controls
+// ==========================================
+const selectedBarIds = new Set();
+let editModeActive = false;
+
+// Custom 2D Drag-and-Drop Drop Indicator resolver
+function getDragAfterElement(container, y, x) {
+  const draggableElements = [...container.querySelectorAll('.card-progress:not(.dragging)')];
+
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const childX = box.left + box.width / 2;
+    const childY = box.top + box.height / 2;
+    const distance = Math.hypot(x - childX, y - childY);
+
+    if (distance < closest.distance) {
+      return { distance: distance, element: child };
+    } else {
+      return closest;
+    }
+  }, { distance: Number.POSITIVE_INFINITY }).element;
+}
+
+// Check if user has ever manual ordered cards
+function hasEverManualOrdered() {
+  if (currentBars.length <= 1) return true;
+  return currentBars.some(bar => bar.position !== undefined && bar.position !== 0);
+}
+
+// Toggles selection state of a card in Edit Mode
+function toggleCardSelection(card) {
+  const barId = card.getAttribute("data-bar-id");
+  if (!barId) return;
+
+  if (selectedBarIds.has(barId)) {
+    selectedBarIds.delete(barId);
+    card.classList.remove("selected");
+  } else {
+    selectedBarIds.add(barId);
+    card.classList.add("selected");
+  }
+
+  updateDeleteSelectedButton();
+}
+
+// Update state/label of the delete selected button
+function updateDeleteSelectedButton() {
+  const btn = document.getElementById("btn-delete-selected");
+  if (btn) {
+    btn.textContent = `Delete Selected (${selectedBarIds.size})`;
+    if (selectedBarIds.size > 0) {
+      btn.classList.remove("hidden");
+    } else {
+      btn.classList.add("hidden");
+    }
+  }
+}
+
+// Saves new manual order coordinates to LocalStorage or database
+async function saveNewManualOrder() {
+  const grid = document.getElementById("cards-grid");
+  if (!grid) return;
+
+  const orderedIds = [...grid.querySelectorAll('.card-progress')].map(card => card.getAttribute('data-bar-id'));
+  if (orderedIds.length === 0) return;
+
+  // Switch sort to manual dynamically if it wasn't already manual
+  if (currentSort !== "manual") {
+    currentSort = "manual";
+    localStorage.setItem("ps_sort_order", currentSort);
+    const sortSelect = document.getElementById("sort-select");
+    if (sortSelect) sortSelect.value = "manual";
+    if (!isGuestMode() && currentUser && currentUser.uid) {
+      updateUserPreferredSort(currentSort).catch(err => console.error("Error saving manual sort preference:", err));
+    }
+  }
+
+  // Update position local objects
+  orderedIds.forEach((id, idx) => {
+    const bar = currentBars.find(b => b.id === id);
+    if (bar) bar.position = idx;
+  });
+
+  if (isGuestMode()) {
+    localStorage.setItem("guest_progress_bars", JSON.stringify(currentBars));
+  } else if (currentUser && currentUser.uid) {
+    try {
+      const updates = orderedIds.map((id, index) => {
+        return editBar(currentUser.uid, id, { position: index });
+      });
+      await Promise.all(updates);
+    } catch (err) {
+      console.error("Error saving manual positions to Supabase:", err);
+      showToast("Failed to sync card order to database.", "error");
+    }
+  }
+}
+
+// Setup APK button toast triggers
+function setupAPKButton() {
+  const btn = document.getElementById("btn-apk-download");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      showToast("Thanks for showing interest. APK is under development.", "info");
+    });
+  }
+}
+
+// Setup Edit Mode and Batch Delete interactions
+function setupEditModeControls() {
+  const btnToggle = document.getElementById("btn-toggle-edit");
+  const btnDelete = document.getElementById("btn-delete-selected");
+  const grid = document.getElementById("cards-grid");
+
+  if (!btnToggle || !grid) return;
+
+  btnToggle.addEventListener("click", () => {
+    editModeActive = !editModeActive;
+    if (editModeActive) {
+      btnToggle.classList.add("active");
+      btnToggle.querySelector("span").textContent = "Close Edit";
+      grid.classList.add("edit-mode");
+    } else {
+      exitEditMode();
+    }
+  });
+
+  if (btnDelete) {
+    btnDelete.addEventListener("click", async () => {
+      if (selectedBarIds.size === 0) return;
+      const count = selectedBarIds.size;
+      const confirmMessage = `Are you sure you want to permanently delete the ${count} selected progress bar${count === 1 ? '' : 's'}?`;
+      if (!window.confirm(confirmMessage)) return;
+
+      const idsToDelete = [...selectedBarIds];
+      const toast = showToast(`Deleting ${count} card${count === 1 ? '' : 's'}...`, "info", 0);
+
+      try {
+        await deleteMultipleBars(isGuestMode() ? null : (currentUser ? currentUser.uid : null), idsToDelete);
+        if (toast) dismissToast(toast);
+        showToast(`Deleted ${count} card${count === 1 ? '' : 's'} successfully.`, "success");
+        
+        // Remove deleted items locally if in guest mode
+        if (isGuestMode()) {
+          const bars = getLocalBars().filter(b => !idsToDelete.includes(b.id));
+          renderDashboard(bars);
+        }
+        
+        selectedBarIds.clear();
+        exitEditMode();
+      } catch (err) {
+        if (toast) dismissToast(toast);
+        showToast("Failed to delete selected cards.", "error");
+        console.error("Error performing batch deletion:", err);
+      }
+    });
+  }
+
+  // Setup HTML5 dragover grid target reordering
+  grid.addEventListener('dragover', (e) => {
+    // Only allow dragover reordering in edit mode
+    if (!editModeActive) return;
+    
+    e.preventDefault();
+    const draggingCard = document.querySelector('.card-progress.dragging');
+    if (!draggingCard) return;
+
+    const afterElement = getDragAfterElement(grid, e.clientY, e.clientX);
+    if (afterElement === undefined || afterElement === null) {
+      grid.appendChild(draggingCard);
+    } else {
+      grid.insertBefore(draggingCard, afterElement);
+    }
+  });
+}
+
+function exitEditMode() {
+  const btnToggle = document.getElementById("btn-toggle-edit");
+  const grid = document.getElementById("cards-grid");
+
+  editModeActive = false;
+  selectedBarIds.clear();
+  updateDeleteSelectedButton();
+
+  if (btnToggle) {
+    btnToggle.classList.remove("active");
+    btnToggle.querySelector("span").textContent = "Edit Mode";
+  }
+  if (grid) {
+    grid.classList.remove("edit-mode");
+    // Remove selected highlights
+    grid.querySelectorAll(".card-progress.selected").forEach(card => {
+      card.classList.remove("selected");
+    });
+  }
+}
+
+// Run initializers
+setupAPKButton();
+setupEditModeControls();
 
 // ==========================================
 // Service Worker Registration & Updates
