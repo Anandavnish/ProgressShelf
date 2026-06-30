@@ -978,6 +978,11 @@ body {
   color: var(--text-primary);
   margin-bottom: 8px;
   padding-right: 72px;
+  display: flex;
+  align-items: center;
+}
+
+.card-title-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -986,7 +991,6 @@ body {
   text-overflow: ellipsis;
   white-space: normal;
   /* Force title to wrap up to 2 lines */
-  transition: transform 0.2s var(--transition-ease);
 }
 
 
@@ -3108,12 +3112,13 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Card Selection overlay styling */
 .card-select-control {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 5;
+  display: none; /* Hidden by default */
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-right: 10px; /* Space between circle and title text */
+  flex-shrink: 0;
   cursor: pointer;
-  display: none;
 }
 
 .card-select-circle {
@@ -3122,7 +3127,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 50%;
   border: 2px solid var(--text-muted);
   background-color: #161b22;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
@@ -3149,12 +3154,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Edit Mode grid active state rules */
 .cards-grid.edit-mode .card-select-control {
-  display: flex;
-}
-
-/* [EDIT MODE CONFIG] Shifting layout coordinates. Adjust translateX value to visually push title in Edit Mode */
-.cards-grid.edit-mode .card-title {
-  transform: translateX(32px);
+  display: inline-flex;
 }
 
 .cards-grid.edit-mode .card-actions {

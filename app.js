@@ -1190,15 +1190,6 @@ function createCardElement(bar) {
   const isCompleted = isTrackerCompleted(bar);
 
   card.innerHTML = `
-    <!-- Select Control for Edit Mode -->
-    <div class="card-select-control">
-      <div class="card-select-circle">
-        <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-      </div>
-    </div>
-
     <div class="card-actions">
       <button class="btn-card-delete" title="Delete">
         <svg width="16" height="16" viewBox="0 0 24 24"
@@ -1216,7 +1207,17 @@ function createCardElement(bar) {
         </svg>
       </button>
     </div>
-    <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
+    <h3 class="card-title" title="${escapeHtml(bar.title)}">
+      <!-- Select Control for Edit Mode -->
+      <span class="card-select-control">
+        <span class="card-select-circle">
+          <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </span>
+      </span>
+      <span class="card-title-text">${escapeHtml(bar.title)}</span>
+    </h3>
     ${bodyHtml}
     ${(isCompleted || getDeadlineMs(bar)) ? (() => {
       const dMs = getDeadlineMs(bar);
