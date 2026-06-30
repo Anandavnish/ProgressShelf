@@ -885,7 +885,7 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 18px 24px 16px 24px;
-  margin: -2px -24px 24px -24px !important;
+  margin: -2px -24px 12px -24px !important;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -1523,7 +1523,7 @@ body {
 
   .dashboard-controls {
     padding: 18px 16px 16px 16px;
-    margin: -2px -16px 24px -16px !important;
+    margin: -2px -16px 12px -16px !important;
   }
 
   .modal-overlay {
@@ -2997,7 +2997,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 18px 24px 16px 24px;
-  margin: -2px -24px 24px -24px !important;
+  margin: -2px -24px 12px -24px !important;
   display: flex;
   justify-content: space-between;
   align-items: center;
