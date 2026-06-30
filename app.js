@@ -797,10 +797,25 @@ function updateCardElement(card, bar) {
   card.style.setProperty("--bar-color", barColor);
 
   // Update title
+  const titleTextEl = card.querySelector(".card-title-text");
+  if (titleTextEl) {
+    titleTextEl.textContent = bar.title;
+  } else {
+    const titleEl = card.querySelector(".card-title");
+    if (titleEl) {
+      titleEl.textContent = bar.title;
+    }
+  }
   const titleEl = card.querySelector(".card-title");
   if (titleEl) {
-    titleEl.textContent = bar.title;
     titleEl.setAttribute("title", bar.title);
+  }
+
+  // Restore/re-sync selected state if present
+  if (selectedBarIds.has(bar.id)) {
+    card.classList.add("selected");
+  } else {
+    card.classList.remove("selected");
   }
 
   // Re-bind action button click listeners with latest bar data
@@ -4137,6 +4152,15 @@ function toggleCardSelection(card) {
     card.classList.add("selected");
   }
 
+  const grid = document.getElementById("cards-grid");
+  if (grid) {
+    if (selectedBarIds.size > 0) {
+      grid.classList.add("has-selections");
+    } else {
+      grid.classList.remove("has-selections");
+    }
+  }
+
   updateDeleteSelectedButton();
 }
 
@@ -4260,6 +4284,7 @@ function exitEditMode() {
   }
   if (grid) {
     grid.classList.remove("edit-mode");
+    grid.classList.remove("has-selections");
     // Remove selected highlights
     grid.querySelectorAll(".card-progress.selected").forEach(card => {
       card.classList.remove("selected");

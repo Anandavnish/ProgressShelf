@@ -3110,63 +3110,39 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   display: flex !important;
 }
 
-/* Card Selection overlay styling */
+/* Card Selection styling (circle hidden per user request, using selection border instead) */
 .card-select-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: middle;
-  width: 0;
-  opacity: 0;
-  margin-right: 0;
-  overflow: hidden;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: width 0.3s var(--transition-ease), opacity 0.3s var(--transition-ease), margin-right 0.3s var(--transition-ease);
-}
-
-.card-select-circle {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid var(--text-muted);
-  background-color: #161b22;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.card-select-circle .check-icon {
-  color: #000;
-  display: none;
+  display: none !important;
 }
 
 .card-progress.selected {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 16px var(--accent-glow) !important;
-}
-
-.card-progress.selected .card-select-circle {
-  border-color: var(--accent);
-  background-color: var(--accent);
-}
-
-.card-progress.selected .card-select-circle .check-icon {
-  display: block;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow) !important;
 }
 
 /* Edit Mode grid active state rules */
-.cards-grid.edit-mode .card-select-control {
-  width: 22px;
-  opacity: 1;
-  margin-right: 10px;
-}
-
 .cards-grid.edit-mode .card-actions {
   display: none !important;
 }
 
 .cards-grid.edit-mode .card-progress {
   user-select: none;
+}
+
+.cards-grid.edit-mode .card-progress:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* If grid has selections, dim all non-selected cards to make selected ones stand out */
+.cards-grid.edit-mode.has-selections .card-progress:not(.selected) {
+  opacity: 0.45;
+  transform: none !important; /* disable lift translation */
+  box-shadow: none !important;
+  border-color: var(--card-border) !important;
+}
+
+.cards-grid.edit-mode.has-selections .card-progress:not(.selected):hover {
+  opacity: 0.75;
+  border-color: var(--text-muted) !important;
 }
