@@ -862,18 +862,28 @@ function updateCardElement(card, bar) {
       container.innerHTML = itemsHtml;
 
       // Re-register checkbox listeners
-      card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
-        checkbox.addEventListener("click", (e) => {
+      card.querySelectorAll(".card-checklist-item").forEach((label, idx) => {
+        const checkbox = label.querySelector("input[type='checkbox']");
+
+        label.addEventListener("click", (e) => {
           const isExpanded = card.classList.contains("expanded");
           const hasHiddenItems = items.length > 3;
           if (hasHiddenItems && !isExpanded) {
             e.preventDefault();
             card.click();
-          } else {
-            e.stopPropagation();
           }
         });
-        checkbox.addEventListener("change", async (e) => {
+
+        if (checkbox) {
+          checkbox.addEventListener("click", (e) => {
+            const isExpanded = card.classList.contains("expanded");
+            const hasHiddenItems = items.length > 3;
+            if (isExpanded || !hasHiddenItems) {
+              e.stopPropagation();
+            }
+          });
+
+          checkbox.addEventListener("change", async (e) => {
           const isChecked = e.target.checked;
           const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
           if (updatedItems[idx]) {
@@ -1257,17 +1267,26 @@ function createCardElement(bar) {
 
   // Checkbox toggling on the dashboard card itself
   if (barType === "checklist") {
-    card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
-      checkbox.addEventListener("click", (e) => {
+    card.querySelectorAll(".card-checklist-item").forEach((label, idx) => {
+      const checkbox = label.querySelector("input[type='checkbox']");
+
+      label.addEventListener("click", (e) => {
         const isExpanded = card.classList.contains("expanded");
         const hasHiddenItems = (card._barData.items || []).length > 3;
         if (hasHiddenItems && !isExpanded) {
           e.preventDefault();
           card.click();
-        } else {
-          e.stopPropagation(); // Stop click from opening update modal / expanding card
         }
       });
+
+      if (checkbox) {
+        checkbox.addEventListener("click", (e) => {
+          const isExpanded = card.classList.contains("expanded");
+          const hasHiddenItems = (card._barData.items || []).length > 3;
+          if (isExpanded || !hasHiddenItems) {
+            e.stopPropagation(); // Stop click from opening update modal / expanding card
+          }
+        });
 
       checkbox.addEventListener("change", async (e) => {
         const currentBar = card._barData;
