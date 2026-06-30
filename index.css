@@ -2899,6 +2899,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .notify-input {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 /* Textarea Footer & Character Counter */
