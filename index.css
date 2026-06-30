@@ -2881,3 +2881,96 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .notify-input {
   -moz-appearance: textfield;
 }
+
+/* Textarea Footer & Character Counter */
+.textarea-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.char-counter {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Markdown formatting inside Notes Cards */
+.card-note-text {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.card-note-text .note-h1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 12px 0 6px 0;
+  color: var(--text-primary);
+}
+
+.card-note-text .note-h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 10px 0 4px 0;
+  color: var(--text-primary);
+}
+
+.card-note-text .note-h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 8px 0 2px 0;
+  color: var(--text-primary);
+}
+
+.card-note-text .note-ul,
+.card-note-text .note-ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.card-note-text .note-ul {
+  list-style-type: disc;
+}
+
+.card-note-text .note-ol {
+  list-style-type: decimal;
+}
+
+.card-note-text .note-li {
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+.card-note-text .note-code {
+  background-color: #21262d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.card-note-text .note-code-block {
+  background-color: #161b22;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.card-note-text .note-code-block code {
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-size: 0.85rem;
+  color: #e6edf3;
+}
+
+.card-note-text .note-p {
+  margin-bottom: 8px;
+}
+
+.card-note-text br {
+  content: "";
+  display: block;
+  margin-top: 8px;
+}

@@ -401,7 +401,10 @@
             <div id="create-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="create-note-text">Note Text</label>
-                <textarea class="form-input" id="create-note-text" rows="5" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="create-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="create-note-char-count">0 / 1600</span>
+                </div>
               </div>
             </div>
 
@@ -578,7 +581,10 @@
             <div id="edit-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="edit-note-text">Note Text</label>
-                <textarea class="form-input" id="edit-note-text" rows="5" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="edit-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
+                </div>
               </div>
             </div>
 
@@ -719,7 +725,10 @@
             <div id="update-note-fields" class="hidden">
               <p class="section-label">Note Text</p>
               <div class="form-group">
-                <textarea class="form-input" id="update-note-text" rows="5" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="update-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="update-note-char-count">0 / 1600</span>
+                </div>
               </div>
             </div>
 

@@ -282,6 +282,125 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Lightweight Markdown-to-HTML parser
+function parseMarkdown(text) {
+  if (!text) return "";
+  
+  const lines = text.split("\n");
+  let inList = null; // 'ul', 'ol', 'code', or null
+  let htmlLines = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    
+    // Code block check
+    if (line.trim().startsWith("```")) {
+      if (inList === 'code') {
+        htmlLines.push("</code></pre>");
+        inList = null;
+      } else {
+        // Close any active lists
+        if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+        if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+        htmlLines.push("<pre class=\"note-code-block\"><code>");
+        inList = 'code';
+      }
+      continue;
+    }
+    
+    if (inList === 'code') {
+      htmlLines.push(escapeHtml(line));
+      continue;
+    }
+    
+    // Escape standard line
+    let parsedLine = escapeHtml(line);
+    
+    // Formatting: Bold, Italic, Inline Code
+    parsedLine = parsedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    parsedLine = parsedLine.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    parsedLine = parsedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    parsedLine = parsedLine.replace(/_(.*?)_/g, '<em>$1</em>');
+    parsedLine = parsedLine.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
+    
+    // Headers
+    if (parsedLine.startsWith("### ")) {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      htmlLines.push(`<h5 class="note-h3">${parsedLine.substring(4)}</h5>`);
+      continue;
+    }
+    if (parsedLine.startsWith("## ")) {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      htmlLines.push(`<h4 class="note-h2">${parsedLine.substring(3)}</h4>`);
+      continue;
+    }
+    if (parsedLine.startsWith("# ")) {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      htmlLines.push(`<h3 class="note-h1">${parsedLine.substring(2)}</h3>`);
+      continue;
+    }
+    
+    // Bullet lists (- or * or +)
+    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+)\s+(.*)$/);
+    if (bulletMatch) {
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      if (inList !== 'ul') {
+        htmlLines.push("<ul class=\"note-ul\">");
+        inList = 'ul';
+      }
+      let content = escapeHtml(bulletMatch[2]);
+      content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
+      content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      content = content.replace(/_(.*?)_/g, '<em>$1</em>');
+      content = content.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
+      htmlLines.push(`<li class="note-li">${content}</li>`);
+      continue;
+    }
+    
+    // Numbered lists (1. or 2. etc.)
+    const numberMatch = line.match(/^(\s*)(?:\d+)\.\s+(.*)$/);
+    if (numberMatch) {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList !== 'ol') {
+        htmlLines.push("<ol class=\"note-ol\">");
+        inList = 'ol';
+      }
+      let content = escapeHtml(numberMatch[2]);
+      content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
+      content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      content = content.replace(/_(.*?)_/g, '<em>$1</em>');
+      content = content.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
+      htmlLines.push(`<li class="note-li">${content}</li>`);
+      continue;
+    }
+    
+    // Empty line check
+    if (line.trim() === "") {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      htmlLines.push("<br>");
+      continue;
+    }
+    
+    // Normal line
+    if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+    if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+    htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
+  }
+  
+  // Clean up unclosed tags
+  if (inList === 'ul') htmlLines.push("</ul>");
+  if (inList === 'ol') htmlLines.push("</ol>");
+  if (inList === 'code') htmlLines.push("</code></pre>");
+  
+  return htmlLines.join("");
+}
+
 function formatNumber(value) {
   // Returns integer string if whole number, else up to 2 decimal places
   if (Number.isInteger(value) || value % 1 === 0) {
@@ -837,7 +956,7 @@ function updateCardElement(card, bar) {
     }
   } else if (barType === "note") {
     const textEl = card.querySelector(".card-note-text");
-    if (textEl) textEl.textContent = bar.text || "";
+    if (textEl) textEl.innerHTML = parseMarkdown(bar.text || "");
   }
 
   // Update deadlines and SVG in-place
@@ -1014,7 +1133,7 @@ function createCardElement(bar) {
     const isLongNote = text.length > 150 || text.includes("\n");
     const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
     bodyHtml = `
-      <div class="card-note-text">${escapeHtml(text)}</div>
+      <div class="card-note-text">${parseMarkdown(text)}</div>
       ${showMoreBtnHtml}
     `;
   }
@@ -2098,7 +2217,10 @@ function openUpdateModal(bar) {
       });
     });
   } else if (barType === "note") {
-    document.getElementById("update-note-text").value = bar.text || "";
+    const textVal = bar.text || "";
+    document.getElementById("update-note-text").value = textVal;
+    const counter = document.getElementById("update-note-char-count");
+    if (counter) counter.textContent = `${textVal.length} / 1600`;
   }
 
   // Handle Mark as Completed checkbox
@@ -2322,7 +2444,10 @@ function openEditModal(bar) {
     editChecklistItems = JSON.parse(JSON.stringify(bar.items || []));
     renderEditChecklist();
   } else if (barType === "note") {
-    document.getElementById("edit-note-text").value = bar.text || "";
+    const textVal = bar.text || "";
+    document.getElementById("edit-note-text").value = textVal;
+    const counter = document.getElementById("edit-note-char-count");
+    if (counter) counter.textContent = `${textVal.length} / 1600`;
   }
 
   // Clear relative inputs and checkbox first
@@ -2511,7 +2636,7 @@ formCreate.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (type === "note") {
-    text = document.getElementById("create-note-text").value;
+    text = document.getElementById("create-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -2672,7 +2797,7 @@ formEdit.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (barType === "note") {
-    text = document.getElementById("edit-note-text").value;
+    text = document.getElementById("edit-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -2864,7 +2989,7 @@ formUpdate.addEventListener("submit", async (e) => {
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
-    const text = document.getElementById("update-note-text").value;
+    const text = document.getElementById("update-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3850,6 +3975,28 @@ function setupNotificationListeners(prefix = "") {
 
 setupNotificationListeners("");
 setupNotificationListeners("edit-");
+
+// Setup character count listeners for Notes textareas
+function setupNoteCharCounters() {
+  const textareas = [
+    { id: "create-note-text", counterId: "create-note-char-count" },
+    { id: "edit-note-text", counterId: "edit-note-char-count" },
+    { id: "update-note-text", counterId: "update-note-char-count" }
+  ];
+
+  textareas.forEach(({ id, counterId }) => {
+    const el = document.getElementById(id);
+    const counter = document.getElementById(counterId);
+    if (el && counter) {
+      const update = () => {
+        counter.textContent = `${el.value.length} / 1600`;
+      };
+      el.addEventListener("input", update);
+      el.addEventListener("change", update);
+    }
+  });
+}
+setupNoteCharCounters();
 
 // ==========================================
 // Service Worker Registration & Updates
