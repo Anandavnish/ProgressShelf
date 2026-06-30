@@ -4167,6 +4167,16 @@ function setupAPKButton() {
   }
 }
 
+let isPopStateExit = false;
+
+window.addEventListener("popstate", (event) => {
+  if (editModeActive) {
+    isPopStateExit = true;
+    exitEditMode();
+    isPopStateExit = false;
+  }
+});
+
 // Setup Edit Mode and Batch Delete interactions
 function setupEditModeControls() {
   const btnToggle = document.getElementById("btn-toggle-edit");
@@ -4182,6 +4192,7 @@ function setupEditModeControls() {
       btnToggle.classList.add("active");
       grid.classList.add("edit-mode");
       if (controls) controls.classList.add("edit-active");
+      window.history.pushState({ editMode: true }, "");
     } else {
       exitEditMode();
     }
@@ -4217,6 +4228,22 @@ function setupEditModeControls() {
       }
     });
   }
+
+  // Auto-exit Edit Mode when clicking elements outside the grid and control buttons
+  document.addEventListener("click", (event) => {
+    if (!editModeActive) return;
+
+    const toggleEditBtn = document.getElementById("btn-toggle-edit");
+    const deleteSelectedBtn = document.getElementById("btn-delete-selected");
+
+    const clickedInsideGrid = grid && grid.contains(event.target);
+    const clickedToggleEdit = toggleEditBtn && toggleEditBtn.contains(event.target);
+    const clickedDeleteSelected = deleteSelectedBtn && deleteSelectedBtn.contains(event.target);
+
+    if (!clickedInsideGrid && !clickedToggleEdit && !clickedDeleteSelected) {
+      exitEditMode();
+    }
+  }, true);
 }
 
 function exitEditMode() {
@@ -4240,6 +4267,13 @@ function exitEditMode() {
   }
   if (controls) {
     controls.classList.remove("edit-active");
+  }
+
+  // Clean history state if manual close
+  if (!isPopStateExit) {
+    if (window.history.state && window.history.state.editMode) {
+      window.history.back();
+    }
   }
 }
 
