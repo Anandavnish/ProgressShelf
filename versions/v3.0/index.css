@@ -584,10 +584,11 @@ body {
   color: var(--error);
   background-color: rgba(255, 77, 77, 0.05);
 }
+
 /* Overall Stats Bar (3D Glossy Buttons) - Smaller & Centered */
 .stats-banner {
   position: sticky;
-  top: var(--navbar-height, 57px);
+  top: 57px;
   z-index: 99;
   background-color: rgba(13, 17, 23, 0.92);
   backdrop-filter: blur(16px);
@@ -595,7 +596,6 @@ body {
   border-bottom: 1px solid var(--card-border);
   padding: 14px 16px;
   animation: fadeIn 0.4s var(--transition-ease);
-  will-change: transform;
 }
 
 .stats-skeleton {
@@ -876,63 +876,6 @@ body {
   padding: 40px 24px;
   animation: fadeIn 0.4s var(--transition-ease);
 }
-/* Dashboard Controls */
-.dashboard-controls {
-  position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
-  z-index: 98;
-  background-color: rgba(13, 17, 23, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 18px 24px 16px 24px;
-  margin: -2px -24px 12px -24px !important;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  will-change: transform;
-}
-
-.sort-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background-color: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 8px 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  height: 38px;
-}
-
-.sort-label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.sort-select {
-  background: transparent;
-  border: none;
-  font-family: var(--font-family);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  outline: none;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-}
-
-.sort-select option {
-  background-color: var(--card-bg);
-  color: var(--text-primary);
-}
 
 /* Cards Grid */
 .cards-grid {
@@ -964,7 +907,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   min-height: 180px;
   height: auto;
   transition: transform var(--transition-speed) var(--transition-ease),
@@ -984,11 +927,6 @@ body {
   color: var(--text-primary);
   margin-bottom: 8px;
   padding-right: 72px;
-  display: flex;
-  align-items: center;
-}
-
-.card-title-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -1521,11 +1459,6 @@ body {
     padding: 24px 16px;
   }
 
-  .dashboard-controls {
-    padding: 18px 16px 16px 16px;
-    margin: -2px -16px 12px -16px !important;
-  }
-
   .modal-overlay {
     padding: 12px;
   }
@@ -1759,16 +1692,6 @@ body {
   background: #357ABD;
 }
 
-.notification-banner {
-  background-color: rgba(74, 144, 217, 0.1) !important;
-  border: 1px solid rgba(74, 144, 217, 0.2) !important;
-  border-radius: 8px;
-  color: var(--text-primary) !important;
-  margin-top: 12px;
-  margin-bottom: 16px;
-  padding: 12px 24px;
-}
-
 /* --- Card Actions (Edit / Delete) --- */
 .card-actions {
   position: absolute;
@@ -1861,7 +1784,6 @@ body {
   background: var(--card-border);
   margin: 12px 0 0 0;
   width: 100%;
-  margin-top: auto;
 }
 
 /* Deadline SVG Border styles */
@@ -2250,7 +2172,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 
   .stats-banner {
-    top: var(--navbar-height, 51px);
+    top: 51px;
   }
 
   .nav-container {
@@ -2514,7 +2436,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   max-height: 120px;
   overflow: hidden;
   transition: max-height 0.35s ease;
-  flex-grow: 1;
 }
 
 .card-progress.expanded .card-checklist-container {
@@ -2562,7 +2483,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .card-note-text {
   font-size: 0.92rem;
   line-height: 1.6;
-  color: #c9d1d9;
+  color: var(--text-primary);
   margin-top: 12px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2574,7 +2495,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   text-overflow: ellipsis;
   max-height: 96px; /* 4 lines approx */
   transition: max-height 0.35s ease;
-  flex-grow: 1;
 }
 
 .card-progress.expanded .card-note-text {
@@ -2668,154 +2588,61 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   min-height: 180px;
 }
 
-/* --- Section Divider --- */
-.section-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #444C56;
-  font-size: 11px;
-  margin: 20px 0 15px 0;
-}
-
-.section-divider hr {
-  flex: 1;
-  border: none;
-  height: 1px;
-  background: #30363D;
-  margin: 0;
-}
-
-.section-divider span {
-  padding: 0 4px;
-}
-
 /* --- Notification Settings Panel inside Deadline Box --- */
 .notification-section {
-  margin-top: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--card-border);
   transition: opacity 0.2s ease;
 }
 
-.notify-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.notify-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* Toggle Switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #21262d;
-  border: 1px solid var(--border);
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  border-radius: 24px;
-}
-
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: transform 0.2s ease;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.toggle-switch input:checked + .toggle-slider {
-  background-color: var(--accent);
-  border-color: var(--accent);
-}
-
-.toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(20px);
-}
-
-/* Collapsible Settings Content */
-.notify-settings-content {
-  max-height: 500px;
-  opacity: 1;
-  overflow: hidden;
-  transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.2s ease;
-  margin-top: 10px;
-}
-
-.notify-settings-content.collapsed {
-  max-height: 0;
-  opacity: 0;
-  margin-top: 0;
+.notification-section.disabled {
+  opacity: 0.4;
   pointer-events: none;
 }
 
-/* Mode input sections */
-.notify-mode-a, .notify-mode-b {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.notification-section-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
-.notify-sub-label {
+.notify-mode-a, .notify-mode-b {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.notify-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-primary);
+  cursor: pointer;
 }
 
-.notify-inputs-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-left: 12px;
+.notify-radio-label input[type="radio"] {
+  accent-color: var(--accent);
 }
 
 .notify-mode-a-inputs, .notify-mode-b-inputs {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-left: 22px;
   flex-wrap: wrap;
 }
 
 .notify-mode-a-inputs .form-input,
 .notify-mode-b-inputs .form-input {
+  width: 64px;
   text-align: center;
   padding: 6px;
   font-size: 0.85rem;
-}
-
-/* Input compact widths */
-#notify-hrs, #notify-mins, #edit-notify-hrs, #edit-notify-mins {
-  max-width: 70px;
-}
-
-#notify-percent, #edit-notify-percent {
-  max-width: 60px;
 }
 
 .notify-sep, .notify-suffix, .notify-prefix {
@@ -2851,11 +2678,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 500;
-  display: none;
-}
-
-.notify-preview.visible {
-  display: block;
 }
 
 .notify-preview.valid {
@@ -2870,297 +2692,4 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   color: #FF7B72; /* Error red */
 }
 
-/* End Alert Row */
-.end-alert-row {
-  margin-top: 5px;
-  margin-bottom: 15px;
-  padding-left: 12px;
-}
 
-.end-alert-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.end-alert-label input[type="checkbox"] {
-  cursor: pointer;
-  accent-color: var(--accent);
-}
-
-/* Spinner overrides for compact number inputs */
-.notify-input::-webkit-inner-spin-button,
-.notify-input::-webkit-outer-spin-button {
-  display: none;
-}
-
-.notify-input {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-/* Textarea Footer & Character Counter */
-.textarea-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.char-counter {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-
-.card-note-text .note-h1 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 12px 0 6px 0;
-  color: var(--text-primary);
-}
-
-.card-note-text .note-h2 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 10px 0 4px 0;
-  color: var(--text-primary);
-}
-
-.card-note-text .note-h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 8px 0 2px 0;
-  color: var(--text-primary);
-}
-
-.card-note-text .note-ul,
-.card-note-text .note-ol {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.card-note-text .note-ul {
-  list-style-type: disc;
-}
-
-.card-note-text .note-ol {
-  list-style-type: decimal;
-}
-
-.card-note-text .note-li {
-  margin-bottom: 4px;
-  font-size: 0.85rem;
-}
-
-.card-note-text .note-code {
-  background-color: #21262d;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-  font-size: 0.85rem;
-  color: var(--accent);
-}
-
-.card-note-text .note-code-block {
-  background-color: #161b22;
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  overflow-x: auto;
-  margin: 8px 0;
-}
-
-.card-note-text .note-code-block code {
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-  font-size: 0.85rem;
-  color: #e6edf3;
-}
-
-.card-note-text .note-p {
-  margin-bottom: 8px;
-}
-
-.card-note-text br {
-  content: "";
-  display: block;
-  margin-top: 8px;
-}
-
-/* Controls layout wrapper */
-.dashboard-controls {
-  position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
-  z-index: 98;
-  background-color: rgba(13, 17, 23, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 18px 24px 16px 24px;
-  margin: -2px -24px 12px -24px !important;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  will-change: transform;
-}
-
-.controls-right-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* APK Download Button */
-.btn-apk-download {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.25);
-  border-radius: 8px;
-  width: 38px;
-  height: 38px;
-  color: #4ADE80;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.05);
-}
-
-.btn-apk-download:hover {
-  background-color: rgba(74, 222, 128, 0.2);
-  border-color: #4ADE80;
-  box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
-  transform: translateY(-1px);
-}
-
-.btn-apk-download:active {
-  transform: translateY(0);
-}
-
-.apk-icon {
-  flex-shrink: 0;
-}
-
-/* Shake Animation */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  15%, 45%, 75% { transform: translateX(-4px); }
-  30%, 60% { transform: translateX(4px); }
-}
-.shake-anim {
-  animation: shake 0.4s ease;
-}
-
-/* Edit Mode Button */
-.btn-toggle-edit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  width: 38px;
-  height: 38px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.btn-toggle-edit:hover {
-  border-color: var(--accent);
-  background-color: rgba(56, 189, 248, 0.1);
-  transform: translateY(-1px);
-}
-
-.btn-toggle-edit:active {
-  transform: translateY(0);
-}
-
-.btn-toggle-edit.active {
-  border-color: var(--accent);
-  background-color: var(--accent);
-  color: #000;
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.btn-toggle-edit.active svg {
-  stroke: #000;
-}
-
-/* Delete Selected Button */
-.btn-delete-selected {
-  display: none; /* Hidden by default, shown via edit-active swap */
-  align-items: center;
-  background-color: rgba(248, 81, 73, 0.15);
-  border: 1px solid rgba(248, 81, 73, 0.3);
-  border-radius: 8px;
-  padding: 8px 16px;
-  color: #FF7B72;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  height: 38px;
-}
-
-.btn-delete-selected:hover {
-  background-color: #f85149;
-  color: #fff;
-  border-color: #f85149;
-  transform: translateY(-1px);
-}
-
-.btn-delete-selected:active {
-  transform: translateY(0);
-}
-
-/* Swap Sort selector with Bulk Delete button in Edit Mode */
-.dashboard-controls.edit-active .sort-container {
-  display: none !important;
-}
-
-.dashboard-controls.edit-active .btn-delete-selected {
-  display: flex !important;
-}
-
-/* Card Selection styling (circle hidden per user request, using selection border instead) */
-.card-select-control {
-  display: none !important;
-}
-
-.card-progress.selected {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow) !important;
-}
-
-/* Edit Mode grid active state rules */
-.cards-grid.edit-mode .card-actions {
-  display: none !important;
-}
-
-.cards-grid.edit-mode .card-progress {
-  user-select: none;
-}
-
-.cards-grid.edit-mode .card-progress:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-/* If grid has selections, dim all non-selected cards to make selected ones stand out */
-.cards-grid.edit-mode.has-selections .card-progress:not(.selected) {
-  opacity: 0.45;
-  transform: none !important; /* disable lift translation */
-  box-shadow: none !important;
-  border-color: var(--card-border) !important;
-}
-
-.cards-grid.edit-mode.has-selections .card-progress:not(.selected):hover {
-  opacity: 0.75;
-  border-color: var(--text-muted) !important;
-}

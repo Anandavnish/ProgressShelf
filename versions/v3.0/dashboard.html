@@ -3,16 +3,16 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com; frame-src 'self' https://*.firebaseapp.com https://apis.google.com;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
-  <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
-  <link rel="stylesheet" href="index.css?v=3.5">
-  <link rel="manifest" href="../../manifest.json">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="index.css?v=2.0">
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="../../logo.svg">
+  <link rel="apple-touch-icon" href="logo.svg">
 </head>
 
 <body>
@@ -92,7 +92,7 @@
       </a>
       <!-- Global Search Bar -->
       <div class="nav-search-container">
-        <input type="text" id="global-search" class="nav-search-input" placeholder="Search for title..." autocomplete="off">
+        <input type="text" id="global-search" class="nav-search-input" placeholder="Search for title...">
         <button id="btn-clear-search" class="nav-search-clear hidden" title="Clear search">&times;</button>
         <button id="btn-search" class="nav-search-btn" title="Search">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -114,7 +114,7 @@
         <div class="version-selector">
           <select class="version-select" onchange="location = this.value;">
             <option value="../../dashboard.html">v4.0 (Latest)</option>
-            <option value="" disabled selected>v3.0 (Supabase)</option>
+            <option value="" disabled selected>v3.0 (Firebase)</option>
             <option value="../v2.0/dashboard.html">v2.0 (Stable)</option>
             <option value="../v1.0/dashboard.html">v1.0 (Basic)</option>
           </select>
@@ -269,39 +269,10 @@
       </button>
     </div>
 
+    <!-- Main Dashboard Section -->
     <main class="dashboard-main">
       <!-- Search Helper Notification -->
       <div id="search-helper" class="search-helper hidden"></div>
-
-      <!-- Controls Row (Sort & APK & Edit) -->
-      <div class="dashboard-controls">
-        <button id="btn-apk-download" class="btn-apk-download" title="Download Android APK">
-          <svg class="apk-icon" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
-            <path d="M40-240q9-107 65.5-197T256-580l-74-128q-6-9-3-19t13-15q8-5 18-2t16 12l74 128q86-36 180-36t180 36l74-128q6-9 16-12t18 2q10 5 13 15t-3 19l-74 128q94 53 150.5 143T920-240H40Zm240-110q21 0 35.5-14.5T330-400q0-21-14.5-35.5T280-450q-21 0-35.5 14.5T230-400q0 21 14.5 35.5T280-350Zm400 0q21 0 35.5-14.5T730-400q0-21-14.5-35.5T680-450q-21 0-35.5 14.5T630-400q0 21 14.5 35.5T680-350Z"/>
-          </svg>
-        </button>
-
-        <div class="controls-right-group">
-          <button id="btn-toggle-edit" class="btn-toggle-edit" title="Edit / Bulk Delete">
-            <svg class="edit-mode-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-
-          <div class="sort-container">
-            <label for="sort-select" class="sort-label">Sort by:</label>
-            <select id="sort-select" class="sort-select">
-              <option value="created-desc">Recently Created</option>
-              <option value="updated-desc">Recently Updated</option>
-            </select>
-          </div>
-          
-          <button id="btn-delete-selected" class="btn-delete-selected hidden" title="Delete Selected Cards">
-            Delete Selected (0)
-          </button>
-        </div>
-      </div>
 
       <!-- Grid Container -->
       <div id="cards-grid" class="cards-grid">
@@ -334,7 +305,7 @@
           <h2 id="modal-create-title" class="modal-title">Create Progress Bar</h2>
           <button class="btn-close-modal" data-close="modal-create">&times;</button>
         </div>
-        <form id="form-create" autocomplete="off">
+        <form id="form-create">
           <div class="modal-body">
 
             <!-- Tracker Type selector -->
@@ -421,10 +392,7 @@
             <div id="create-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="create-note-text">Note Text</label>
-                <textarea class="form-input" id="create-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
-                <div class="textarea-footer">
-                  <span class="char-counter" id="create-note-char-count">0 / 1600</span>
-                </div>
+                <textarea class="form-input" id="create-note-text" rows="5" placeholder="Write your note here..."></textarea>
               </div>
             </div>
 
@@ -459,61 +427,43 @@
                   <input type="time" class="form-input" id="deadline-time">
                 </div>
               </div>
-              <!-- Section divider -->
-              <div class="section-divider">
-                <hr><span>NOTIFICATION</span><hr>
-              </div>
-
               <!-- Notification Settings -->
-              <div class="notification-section" id="notification-section">
-                <!-- Header row with Toggle -->
-                <div class="notify-header-row">
-                  <span class="notify-title">Deadline Notifications</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="notify-toggle">
-                    <span class="toggle-slider"></span>
-                  </label>
+              <div class="notification-section disabled" id="notification-section">
+                <div class="notification-section-header">
+                  🔔 Notify me before deadline
                 </div>
                 
-                <!-- Collapse container -->
-                <div class="notify-settings-content collapsed" id="notify-settings-content">
-                  <!-- End Alert Checkbox (at the top) -->
-                  <div class="end-alert-row">
-                    <label class="end-alert-label">
-                      <input type="checkbox" id="end-alert-toggle-create"> 
-                      Notify at exact deadline
-                    </label>
+                <div class="notify-mode-a">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="notify-mode" value="fixed" checked>
+                    <span>Fixed time</span>
+                  </label>
+                  <div class="notify-mode-a-inputs">
+                    <input type="number" step="any" min="0" class="form-input" id="notify-hrs" placeholder="0">
+                    <span class="notify-sep">hr</span>
+                    <input type="number" step="any" min="0" class="form-input" id="notify-mins" placeholder="0">
+                    <span class="notify-sep">min</span>
+                    <span class="notify-suffix">before deadline</span>
                   </div>
-
-                  <div class="notify-mode-a" id="notify-mode-a-container">
-                    <span class="notify-sub-label">Fixed time</span>
-                    <div class="notify-inputs-wrapper">
-                      <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0">
-                        <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-mins" placeholder="0">
-                        <span class="notify-sep">min</span>
-                        <span class="notify-suffix">before deadline</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="or-divider">
-                    <hr><span>or</span><hr>
-                  </div>
-
-                  <div class="notify-mode-b" id="notify-mode-b-container">
-                    <span class="notify-sub-label">Remind at</span>
-                    <div class="notify-inputs-wrapper">
-                      <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0">
-                        <span class="notify-suffix">% of time remaining</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="notify-preview" id="notify-preview-create"></div>
                 </div>
+
+                <div class="or-divider">
+                  <hr><span>or</span><hr>
+                </div>
+
+                <div class="notify-mode-b">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="notify-mode" value="percent">
+                    <span>Percentage of time left</span>
+                  </label>
+                  <div class="notify-mode-b-inputs">
+                    <span class="notify-prefix">notify when</span>
+                    <input type="number" min="0" max="100" class="form-input" id="notify-percent" placeholder="0">
+                    <span class="notify-suffix">% of time remains</span>
+                  </div>
+                </div>
+
+                <div class="notify-preview hidden" id="notify-preview"></div>
               </div>
             </div>
 
@@ -534,7 +484,7 @@
           <h2 id="modal-edit-title" class="modal-title">Edit Tracker</h2>
           <button class="btn-close-modal" data-close="modal-edit">&times;</button>
         </div>
-        <form id="form-edit" autocomplete="off">
+        <form id="form-edit">
           <div class="modal-body">
 
             <!-- Title -->
@@ -601,10 +551,7 @@
             <div id="edit-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="edit-note-text">Note Text</label>
-                <textarea class="form-input" id="edit-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
-                <div class="textarea-footer">
-                  <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
-                </div>
+                <textarea class="form-input" id="edit-note-text" rows="5" placeholder="Write your note here..."></textarea>
               </div>
             </div>
 
@@ -639,60 +586,43 @@
                   <input type="time" class="form-input" id="edit-deadline-time">
                 </div>
               </div>
-              <!-- Section divider -->
-              <div class="section-divider">
-                <hr><span>NOTIFICATION</span><hr>
-              </div>
-
               <!-- Notification Settings -->
-              <div class="notification-section" id="edit-notification-section">
-                <!-- Header row with Toggle -->
-                <div class="notify-header-row">
-                  <span class="notify-title">Deadline Notifications</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="edit-notify-toggle">
-                    <span class="toggle-slider"></span>
+              <div class="notification-section disabled" id="edit-notification-section">
+                <div class="notification-section-header">
+                  🔔 Notify me before deadline
+                </div>
+                
+                <div class="notify-mode-a">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="edit-notify-mode" value="fixed" checked>
+                    <span>Fixed time</span>
                   </label>
+                  <div class="notify-mode-a-inputs">
+                    <input type="number" step="any" min="0" class="form-input" id="edit-notify-hrs" placeholder="0">
+                    <span class="notify-sep">hr</span>
+                    <input type="number" step="any" min="0" class="form-input" id="edit-notify-mins" placeholder="0">
+                    <span class="notify-sep">min</span>
+                    <span class="notify-suffix">before deadline</span>
+                  </div>
                 </div>
-                                <!-- Collapse container -->
-                <div class="notify-settings-content collapsed" id="edit-notify-settings-content">
-                  <!-- End Alert Checkbox (at the top) -->
-                  <div class="end-alert-row">
-                    <label class="end-alert-label">
-                      <input type="checkbox" id="edit-notify-toggle-deadline"> 
-                      Notify at exact deadline
-                    </label>
-                  </div>
 
-                  <div class="notify-mode-a" id="edit-notify-mode-a-container">
-                    <span class="notify-sub-label">Fixed time</span>
-                    <div class="notify-inputs-wrapper">
-                      <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0">
-                        <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-mins" placeholder="0">
-                        <span class="notify-sep">min</span>
-                        <span class="notify-suffix">before deadline</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="or-divider">
-                    <hr><span>or</span><hr>
-                  </div>
-
-                  <div class="notify-mode-b" id="edit-notify-mode-b-container">
-                    <span class="notify-sub-label">Remind at</span>
-                    <div class="notify-inputs-wrapper">
-                      <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0">
-                        <span class="notify-suffix">% of time remaining</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="notify-preview" id="notify-preview-edit"></div>
+                <div class="or-divider">
+                  <hr><span>or</span><hr>
                 </div>
+
+                <div class="notify-mode-b">
+                  <label class="notify-radio-label">
+                    <input type="radio" name="edit-notify-mode" value="percent">
+                    <span>Percentage of time left</span>
+                  </label>
+                  <div class="notify-mode-b-inputs">
+                    <span class="notify-prefix">notify when</span>
+                    <input type="number" min="0" max="100" class="form-input" id="edit-notify-percent" placeholder="0">
+                    <span class="notify-suffix">% of time remains</span>
+                  </div>
+                </div>
+
+                <div class="notify-preview hidden" id="edit-notify-preview"></div>
               </div>
 
               <!-- Remove deadline checkbox -->
@@ -721,7 +651,7 @@
           <h2 id="update-modal-title" class="modal-title">Update Progress</h2>
           <button class="btn-close-modal" data-close="modal-update">&times;</button>
         </div>
-        <form id="form-update" autocomplete="off">
+        <form id="form-update">
           <input type="hidden" id="update-bar-id">
           <div class="modal-body">
 
@@ -745,10 +675,7 @@
             <div id="update-note-fields" class="hidden">
               <p class="section-label">Note Text</p>
               <div class="form-group">
-                <textarea class="form-input" id="update-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
-                <div class="textarea-footer">
-                  <span class="char-counter" id="update-note-char-count">0 / 1600</span>
-                </div>
+                <textarea class="form-input" id="update-note-text" rows="5" placeholder="Write your note here..."></textarea>
               </div>
             </div>
 

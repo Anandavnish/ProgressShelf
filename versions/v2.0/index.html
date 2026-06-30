@@ -9,6 +9,16 @@
 </head>
 <body>
 
+  <!-- Version Selector -->
+  <div class="version-selector" style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+    <select class="version-select" onchange="location = this.value;" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; background: rgba(13, 17, 23, 0.8); border: 1px solid var(--card-border); color: var(--text-primary); cursor: pointer; outline: none; font-family: 'Outfit', sans-serif;">
+      <option value="../../index.html">v4.0 (Latest)</option>
+      <option value="../v3.0/index.html">v3.0 (Firebase)</option>
+      <option value="" disabled selected>v2.0 (Stable)</option>
+      <option value="../v1.0/index.html">v1.0 (Basic)</option>
+    </select>
+  </div>
+
   <!-- Configuration Warning Banner (Dynamic) -->
   <div id="config-banner" class="config-warning-banner hidden">
     <span>⚠️ <strong>Firebase Configuration Required:</strong> Copy <code>firebase-config.template.js</code> to <code>firebase-config.js</code> and fill in your project credentials to get started. Alternatively, you can use the local sandbox.</span>

@@ -1,29 +1,7 @@
-import { isConfigured } from "./supabase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars } from "./db.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
-
-// Initialize Firebase FCM if configured (keeps FCM token system intact)
-const firebaseConfig = {
-  apiKey: "AIzaSyCDV0zHk8kjcXgLFd5zIpREmwxuMJed7FQ",
-  authDomain: "progressshelf.firebaseapp.com",
-  projectId: "progressshelf",
-  storageBucket: "progressshelf.firebasestorage.app",
-  messagingSenderId: "311368772862",
-  appId: "1:311368772862:web:4806e3f2a41455c2b289af",
-  measurementId: "G-VK2HK44LT1"
-};
-
-let messaging = null;
-if (isConfigured) {
-  try {
-    const firebaseApp = initializeApp(firebaseConfig);
-    messaging = getMessaging(firebaseApp);
-  } catch (error) {
-    console.error("Firebase FCM initialization failed:", error);
-  }
-}
+import { isConfigured, messaging } from "./firebase-config.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount } from "./auth.js";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken } from "./db.js";
+import { getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
@@ -205,11 +183,9 @@ let selectedBar = null;
 let activeUnsubscribe = null;
 let authInitialized = false;
 let currentFilter = "all";
-let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
 let closedViaPopState = false;
 let searchClosedViaPopState = false;
-let lastInteractionCardId = null;
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -280,125 +256,6 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.innerText = str;
   return div.innerHTML;
-}
-
-// Lightweight Markdown-to-HTML parser
-function parseMarkdown(text) {
-  if (!text) return "";
-  
-  const lines = text.split("\n");
-  let inList = null; // 'ul', 'ol', 'code', or null
-  let htmlLines = [];
-  
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-    
-    // Code block check
-    if (line.trim().startsWith("```")) {
-      if (inList === 'code') {
-        htmlLines.push("</code></pre>");
-        inList = null;
-      } else {
-        // Close any active lists
-        if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-        if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-        htmlLines.push("<pre class=\"note-code-block\"><code>");
-        inList = 'code';
-      }
-      continue;
-    }
-    
-    if (inList === 'code') {
-      htmlLines.push(escapeHtml(line));
-      continue;
-    }
-    
-    // Escape standard line
-    let parsedLine = escapeHtml(line);
-    
-    // Formatting: Bold, Italic, Inline Code
-    parsedLine = parsedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    parsedLine = parsedLine.replace(/__(.*?)__/g, '<strong>$1</strong>');
-    parsedLine = parsedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    parsedLine = parsedLine.replace(/_(.*?)_/g, '<em>$1</em>');
-    parsedLine = parsedLine.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
-    
-    // Headers
-    if (parsedLine.startsWith("### ")) {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      htmlLines.push(`<h5 class="note-h3">${parsedLine.substring(4)}</h5>`);
-      continue;
-    }
-    if (parsedLine.startsWith("## ")) {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      htmlLines.push(`<h4 class="note-h2">${parsedLine.substring(3)}</h4>`);
-      continue;
-    }
-    if (parsedLine.startsWith("# ")) {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      htmlLines.push(`<h3 class="note-h1">${parsedLine.substring(2)}</h3>`);
-      continue;
-    }
-    
-    // Bullet lists (- or * or +)
-    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+)\s+(.*)$/);
-    if (bulletMatch) {
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      if (inList !== 'ul') {
-        htmlLines.push("<ul class=\"note-ul\">");
-        inList = 'ul';
-      }
-      let content = escapeHtml(bulletMatch[2]);
-      content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
-      content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
-      content = content.replace(/_(.*?)_/g, '<em>$1</em>');
-      content = content.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
-      htmlLines.push(`<li class="note-li">${content}</li>`);
-      continue;
-    }
-    
-    // Numbered lists (1. or 2. etc.)
-    const numberMatch = line.match(/^(\s*)(?:\d+)\.\s+(.*)$/);
-    if (numberMatch) {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList !== 'ol') {
-        htmlLines.push("<ol class=\"note-ol\">");
-        inList = 'ol';
-      }
-      let content = escapeHtml(numberMatch[2]);
-      content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
-      content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
-      content = content.replace(/_(.*?)_/g, '<em>$1</em>');
-      content = content.replace(/`(.*?)`/g, '<code class="note-code">$1</code>');
-      htmlLines.push(`<li class="note-li">${content}</li>`);
-      continue;
-    }
-    
-    // Empty line check
-    if (line.trim() === "") {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      htmlLines.push("<br>");
-      continue;
-    }
-    
-    // Normal line
-    if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-    if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-    htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
-  }
-  
-  // Clean up unclosed tags
-  if (inList === 'ul') htmlLines.push("</ul>");
-  if (inList === 'ol') htmlLines.push("</ol>");
-  if (inList === 'code') htmlLines.push("</code></pre>");
-  
-  return htmlLines.join("");
 }
 
 function formatNumber(value) {
@@ -514,7 +371,7 @@ function getProgressColor(percent) {
 
 function encodeToSmallest(levelValues, levels) {
   // levelValues: array ordered largest→smallest (matches form display order)
-  // levels: array ordered smallest→largest (matches Supabase schema)
+  // levels: array ordered smallest→largest (matches Firestore schema)
   // Reverse levelValues to align with levels array
   const vals = [...levelValues].reverse();
 
@@ -763,7 +620,6 @@ function filterBars(bars) {
 }
 
 function updateCardElement(card, bar) {
-  card._barData = bar;
   const barType = bar.type || "goal";
 
   // Check if card type changed
@@ -797,25 +653,10 @@ function updateCardElement(card, bar) {
   card.style.setProperty("--bar-color", barColor);
 
   // Update title
-  const titleTextEl = card.querySelector(".card-title-text");
-  if (titleTextEl) {
-    titleTextEl.textContent = bar.title;
-  } else {
-    const titleEl = card.querySelector(".card-title");
-    if (titleEl) {
-      titleEl.textContent = bar.title;
-    }
-  }
   const titleEl = card.querySelector(".card-title");
   if (titleEl) {
+    titleEl.textContent = bar.title;
     titleEl.setAttribute("title", bar.title);
-  }
-
-  // Restore/re-sync selected state if present
-  if (selectedBarIds.has(bar.id)) {
-    card.classList.add("selected");
-  } else {
-    card.classList.remove("selected");
   }
 
   // Re-bind action button click listeners with latest bar data
@@ -877,28 +718,11 @@ function updateCardElement(card, bar) {
       container.innerHTML = itemsHtml;
 
       // Re-register checkbox listeners
-      card.querySelectorAll(".card-checklist-item").forEach((label, idx) => {
-        const checkbox = label.querySelector("input[type='checkbox']");
-
-        label.addEventListener("click", (e) => {
-          const isExpanded = card.classList.contains("expanded");
-          const hasHiddenItems = items.length > 3;
-          if (hasHiddenItems && !isExpanded) {
-            e.preventDefault();
-            card.click();
-          }
+      card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
+        checkbox.addEventListener("click", (e) => {
+          e.stopPropagation();
         });
-
-        if (checkbox) {
-          checkbox.addEventListener("click", (e) => {
-            const isExpanded = card.classList.contains("expanded");
-            const hasHiddenItems = items.length > 3;
-            if (isExpanded || !hasHiddenItems) {
-              e.stopPropagation();
-            }
-          });
-
-          checkbox.addEventListener("change", async (e) => {
+        checkbox.addEventListener("change", async (e) => {
           const isChecked = e.target.checked;
           const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
           if (updatedItems[idx]) {
@@ -948,9 +772,8 @@ function updateCardElement(card, bar) {
             renderDashboard(currentBars);
           }
         });
-      }
-    });
-  }
+      });
+    }
 
     // Update show more / less indicators
     const showMoreBtn = card.querySelector(".show-more-indicator");
@@ -989,35 +812,7 @@ function updateCardElement(card, bar) {
     }
   } else if (barType === "note") {
     const textEl = card.querySelector(".card-note-text");
-    if (textEl) textEl.innerHTML = parseMarkdown(bar.text || "");
-
-    const text = bar.text || "";
-    const isLongNote = text.length > 150 || text.includes("\n");
-
-    let showMore = card.querySelector(".show-more-indicator");
-    let showLess = card.querySelector(".show-less-indicator");
-
-    if (isLongNote) {
-      if (!showMore) {
-        showMore = document.createElement("div");
-        showMore.className = "show-more-indicator";
-        showMore.textContent = "Show more";
-        textEl.after(showMore);
-      }
-      if (!showLess) {
-        showLess = document.createElement("div");
-        showLess.className = "show-less-indicator";
-        showLess.textContent = "Collapse";
-        showLess.addEventListener("click", (e) => {
-          e.stopPropagation();
-          collapseCard(card);
-        });
-        showMore.after(showLess);
-      }
-    } else {
-      if (showMore) showMore.remove();
-      if (showLess) showLess.remove();
-    }
+    if (textEl) textEl.textContent = bar.text || "";
   }
 
   // Update deadlines and SVG in-place
@@ -1095,7 +890,6 @@ function updateCardElement(card, bar) {
 
 function createCardElement(bar) {
   const card = document.createElement("div");
-  card._barData = bar;
   card.className = "card-progress";
   card.setAttribute("data-bar-id", bar.id);
 
@@ -1111,7 +905,7 @@ function createCardElement(bar) {
   // Set timestamp reference for the 5-minute background check
   let lastUpdatedMs = Date.now();
   if (bar.lastUpdated) {
-    // Handle Supabase/JS Timestamp vs client side local date
+    // Handle firestore Timestamp vs client side local date
     lastUpdatedMs = typeof bar.lastUpdated.toDate === 'function'
       ? bar.lastUpdated.toDate().getTime()
       : bar.lastUpdated;
@@ -1192,12 +986,9 @@ function createCardElement(bar) {
   } else if (barType === "note") {
     const text = bar.text || "";
     const isLongNote = text.length > 150 || text.includes("\n");
-    const showMoreBtnHtml = isLongNote ? `
-      <div class="show-more-indicator">Show more</div>
-      <div class="show-less-indicator">Collapse</div>
-    ` : "";
+    const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
     bodyHtml = `
-      <div class="card-note-text">${parseMarkdown(text)}</div>
+      <div class="card-note-text">${escapeHtml(text)}</div>
       ${showMoreBtnHtml}
     `;
   }
@@ -1222,17 +1013,7 @@ function createCardElement(bar) {
         </svg>
       </button>
     </div>
-    <h3 class="card-title" title="${escapeHtml(bar.title)}">
-      <!-- Select Control for Edit Mode -->
-      <span class="card-select-control">
-        <span class="card-select-circle">
-          <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </span>
-      </span>
-      <span class="card-title-text">${escapeHtml(bar.title)}</span>
-    </h3>
+    <h3 class="card-title" title="${escapeHtml(bar.title)}">${escapeHtml(bar.title)}</h3>
     ${bodyHtml}
     ${(isCompleted || getDeadlineMs(bar)) ? (() => {
       const dMs = getDeadlineMs(bar);
@@ -1280,44 +1061,26 @@ function createCardElement(bar) {
 
   card.querySelector('.btn-delete-confirm-inline').addEventListener('click', (e) => {
     e.stopPropagation();
-    const currentBar = card._barData;
-    deleteBar(isGuestMode() ? null : currentUser.uid, currentBar.id)
-      .then(() => showToast(`Deleted "${currentBar.title}".`, "success"))
+    deleteBar(isGuestMode() ? null : currentUser.uid, bar.id)
+      .then(() => showToast(`Deleted "${bar.title}".`, "success"))
       .catch(() => showToast("Failed to delete progress bar.", "error"));
   });
 
   card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
     e.stopPropagation();
-    openEditModal(card._barData);
+    openEditModal(bar);
   });
 
   // Checkbox toggling on the dashboard card itself
   if (barType === "checklist") {
-    card.querySelectorAll(".card-checklist-item").forEach((label, idx) => {
-      const checkbox = label.querySelector("input[type='checkbox']");
-
-      label.addEventListener("click", (e) => {
-        const isExpanded = card.classList.contains("expanded");
-        const hasHiddenItems = (card._barData.items || []).length > 3;
-        if (hasHiddenItems && !isExpanded) {
-          e.preventDefault();
-          card.click();
-        }
+    card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
+      checkbox.addEventListener("click", (e) => {
+        e.stopPropagation(); // Stop click from opening update modal / expanding card
       });
 
-      if (checkbox) {
-        checkbox.addEventListener("click", (e) => {
-          const isExpanded = card.classList.contains("expanded");
-          const hasHiddenItems = (card._barData.items || []).length > 3;
-          if (isExpanded || !hasHiddenItems) {
-            e.stopPropagation(); // Stop click from opening update modal / expanding card
-          }
-        });
-
       checkbox.addEventListener("change", async (e) => {
-        const currentBar = card._barData;
         const isChecked = e.target.checked;
-        const updatedItems = JSON.parse(JSON.stringify(currentBar.items || []));
+        const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
         if (updatedItems[idx]) {
           updatedItems[idx].done = isChecked;
         }
@@ -1354,8 +1117,8 @@ function createCardElement(bar) {
         }
 
         try {
-          await editBar(isGuestMode() ? null : currentUser.uid, currentBar.id, {
-            title: currentBar.title,
+          await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
+            title: bar.title,
             targetSmallest,
             currentSmallest,
             items: updatedItems,
@@ -1367,7 +1130,6 @@ function createCardElement(bar) {
           renderDashboard(currentBars); // Revert to database state on error
         }
       });
-      }
     });
   }
 
@@ -1375,30 +1137,13 @@ function createCardElement(bar) {
   const isTruncatable = (barType === "checklist" && bar.items && bar.items.length > 3) ||
     (barType === "note" && bar.text && (bar.text.length > 150 || bar.text.includes("\n")));
 
-  // Restore selected state if present
-  if (selectedBarIds.has(bar.id)) {
-    card.classList.add("selected");
-  }
-
-
-
-  card.addEventListener("click", (e) => {
-    // In Edit Mode, clicking the card toggles selection
-    const grid = document.getElementById("cards-grid");
-    if (grid && grid.classList.contains("edit-mode")) {
-      e.stopPropagation();
-      e.preventDefault();
-      toggleCardSelection(card);
-      return;
-    }
-
+  card.addEventListener("click", () => {
     if (!deleteConfirmPanel.classList.contains('hidden')) return;
-    const currentBar = card._barData;
 
     if (barType === "checklist") {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
-        expandedCardIds.add(currentBar.id);
+        expandedCardIds.add(bar.id);
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
@@ -1412,7 +1157,7 @@ function createCardElement(bar) {
     } else {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
-        expandedCardIds.add(currentBar.id);
+        expandedCardIds.add(bar.id);
         card.querySelectorAll(".collapsible-item").forEach(item => {
           item.style.display = "flex";
         });
@@ -1423,7 +1168,7 @@ function createCardElement(bar) {
         if (showMoreBtn) showMoreBtn.style.display = "none";
         if (showLessBtn) showLessBtn.style.display = "inline-block";
       } else {
-        openUpdateModal(currentBar);
+        openUpdateModal(bar);
       }
     }
   });
@@ -1444,42 +1189,9 @@ function createCardElement(bar) {
   return card;
 }
 
-function sortBars(bars) {
-  return [...bars].sort((a, b) => {
-    if (currentSort === "created-desc") {
-      // Invert comparator order because of .reverse() in the reconciliation loop!
-      return (a.createdAt || 0) - (b.createdAt || 0);
-    }
-    if (currentSort === "updated-desc") {
-      // Invert comparator order because of .reverse() in the reconciliation loop!
-      return (a.lastUpdated || 0) - (b.lastUpdated || 0);
-    }
-    if (currentSort === "manual") {
-      // Invert comparator order because of .reverse() in the reconciliation loop!
-      return (b.position ?? 0) - (a.position ?? 0);
-    }
-    return 0;
-  });
-}
-
 function renderDashboard(bars) {
   currentBars = bars;
-
-  // Hide Edit and Sort controls if 1 or fewer cards exist
-  const rightGroup = document.querySelector(".controls-right-group");
-  if (rightGroup) {
-    if (bars && bars.length >= 2) {
-      rightGroup.classList.remove("hidden");
-    } else {
-      rightGroup.classList.add("hidden");
-      if (editModeActive) {
-        exitEditMode();
-      }
-    }
-  }
-
-  const sortedBars = sortBars(bars);
-  const filtered = filterBars([...sortedBars]);
+  const filtered = filterBars([...bars]);
   updateOverallStats(bars);
 
   // Update search helper text for matches in other categories
@@ -1713,29 +1425,10 @@ window.addEventListener("click", (e) => {
   });
 });
 
-// Track card interaction origin to prevent collapse during scroll/swipe
-window.addEventListener("mousedown", (e) => {
-  const card = e.target.closest('.card-progress');
-  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
-}, { passive: true });
-
-window.addEventListener("touchstart", (e) => {
-  const card = e.target.closest('.card-progress');
-  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
-}, { passive: true });
-
-window.addEventListener("wheel", (e) => {
-  const card = e.target.closest('.card-progress');
-  lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
-}, { passive: true });
-
-// Close expanded checklist cards on scroll only if scroll originated outside the card
+// Close expanded checklist cards on scroll
 window.addEventListener("scroll", () => {
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
-    const cardBarId = card.getAttribute('data-bar-id');
-    if (cardBarId !== lastInteractionCardId) {
-      collapseCard(card);
-    }
+    collapseCard(card);
   });
 }, { passive: true });
 
@@ -1962,17 +1655,6 @@ function openCreateModal() {
   barPresetSelect.value = "";
   barPresetSelect.disabled = false;
   rebuildCreateFormInputs();
-  
-  const notifyToggle = document.getElementById("notify-toggle");
-  const settingsContent = document.getElementById("notify-settings-content");
-  const endAlertToggle = document.getElementById("end-alert-toggle-create");
-
-  if (notifyToggle) notifyToggle.checked = false;
-  if (settingsContent) settingsContent.classList.add("collapsed");
-  if (endAlertToggle) endAlertToggle.checked = false;
-
-  updateNotificationPreview("");
-
   openModal(modalCreate);
 }
 
@@ -2342,10 +2024,7 @@ function openUpdateModal(bar) {
       });
     });
   } else if (barType === "note") {
-    const textVal = bar.text || "";
-    document.getElementById("update-note-text").value = textVal;
-    const counter = document.getElementById("update-note-char-count");
-    if (counter) counter.textContent = `${textVal.length} / 1600`;
+    document.getElementById("update-note-text").value = bar.text || "";
   }
 
   // Handle Mark as Completed checkbox
@@ -2569,10 +2248,7 @@ function openEditModal(bar) {
     editChecklistItems = JSON.parse(JSON.stringify(bar.items || []));
     renderEditChecklist();
   } else if (barType === "note") {
-    const textVal = bar.text || "";
-    document.getElementById("edit-note-text").value = textVal;
-    const counter = document.getElementById("edit-note-char-count");
-    if (counter) counter.textContent = `${textVal.length} / 1600`;
+    document.getElementById("edit-note-text").value = bar.text || "";
   }
 
   // Clear relative inputs and checkbox first
@@ -2614,21 +2290,20 @@ function openEditModal(bar) {
   const editNotifyHrs = document.getElementById('edit-notify-hrs');
   const editNotifyMins = document.getElementById('edit-notify-mins');
   const editNotifyPercent = document.getElementById('edit-notify-percent');
-  const editNotifyToggle = document.getElementById('edit-notify-toggle');
-  const editSettingsContent = document.getElementById('edit-notify-settings-content');
-  const editEndAlertToggle = document.getElementById('edit-notify-toggle-deadline');
 
   if (editNotifyHrs) editNotifyHrs.value = "";
   if (editNotifyMins) editNotifyMins.value = "";
   if (editNotifyPercent) editNotifyPercent.value = "";
-  if (editEndAlertToggle) editEndAlertToggle.checked = bar.alertAtDeadline || false;
+
+  // Set default radio back to fixed
+  const defaultRadio = document.querySelector('input[name="edit-notify-mode"][value="fixed"]');
+  if (defaultRadio) defaultRadio.checked = true;
 
   if (bar.notifyAt && deadlineMs) {
-    if (editNotifyToggle) editNotifyToggle.checked = true;
-    if (editSettingsContent) editSettingsContent.classList.remove("collapsed");
-
     const notifyAt = Number(bar.notifyAt);
     if (bar.notifyPercent !== undefined && bar.notifyPercent !== null) {
+      const percentRadio = document.querySelector('input[name="edit-notify-mode"][value="percent"]');
+      if (percentRadio) percentRadio.checked = true;
       if (editNotifyPercent) editNotifyPercent.value = bar.notifyPercent;
     } else {
       const diffMs = deadlineMs - notifyAt;
@@ -2640,9 +2315,6 @@ function openEditModal(bar) {
         if (editNotifyMins) editNotifyMins.value = mins;
       }
     }
-  } else {
-    if (editNotifyToggle) editNotifyToggle.checked = false;
-    if (editSettingsContent) editSettingsContent.classList.add("collapsed");
   }
 
   // Force layout update for Edit modal notifications
@@ -2662,7 +2334,7 @@ function openEditModal(bar) {
 
 
 // ==========================================
-// Supabase Form Submissions (Write / Update / Delete)
+// Firestore Form Submissions (Write / Update / Delete)
 // ==========================================
 
 // Create Form Submit
@@ -2761,7 +2433,7 @@ formCreate.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (type === "note") {
-    text = document.getElementById("create-note-text").value.substring(0, 1600);
+    text = document.getElementById("create-note-text").value;
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -2813,31 +2485,24 @@ formCreate.addEventListener("submit", async (e) => {
   let notifyAt = null;
   let notified = false;
   let notifyPercent = null;
-  let alertAtDeadline = false;
-  
-  const notifyToggle = document.getElementById("notify-toggle");
-  if (deadlineAt && !completed && notifyToggle && notifyToggle.checked) {
+  if (deadlineAt && !completed) {
     const notifyRes = calculateNotifyAt("");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
-      const percentInput = document.getElementById('notify-percent');
-      const notifyMode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
+      const notifyModeRadio = document.querySelector('input[name="notify-mode"]:checked');
+      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
       if (notifyMode === "percent") {
+        const percentInput = document.getElementById('notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       }
     }
-    alertAtDeadline = document.getElementById("end-alert-toggle-create")?.checked || false;
   }
 
   try {
     closeModal(modalCreate);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
-    if ((notifyAt || alertAtDeadline) && targetUid) {
-      if (Notification.permission === "denied") {
-        showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
-      } else {
-        handleFCMSession(targetUid);
-      }
+    if (notifyAt && targetUid) {
+      handleFCMSession(targetUid);
     }
     await createBar(targetUid, {
       title,
@@ -2852,9 +2517,7 @@ formCreate.addEventListener("submit", async (e) => {
       deadlineAt,
       notifyAt,
       notified,
-      notifyPercent,
-      alertAtDeadline,
-      deadlineNotified: false
+      notifyPercent
     });
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
@@ -2922,7 +2585,7 @@ formEdit.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (barType === "note") {
-    text = document.getElementById("edit-note-text").value.substring(0, 1600);
+    text = document.getElementById("edit-note-text").value;
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -2984,57 +2647,36 @@ formEdit.addEventListener("submit", async (e) => {
   let notifyAt = selectedBar.notifyAt || null;
   let notified = selectedBar.notified || false;
   let notifyPercent = selectedBar.notifyPercent || null;
-  let alertAtDeadline = selectedBar.alertAtDeadline || false;
-  let deadlineNotified = selectedBar.deadlineNotified || false;
 
-  const editNotifyToggle = document.getElementById("edit-notify-toggle");
   if (completed) {
     notifyAt = null;
     notified = false;
     notifyPercent = null;
-    alertAtDeadline = false;
-    deadlineNotified = false;
-  } else if (editNotifyToggle && editNotifyToggle.checked) {
+  } else {
     const notifyRes = calculateNotifyAt("edit-");
     if (notifyRes.isValid && notifyRes.notifyAt) {
       notifyAt = notifyRes.notifyAt;
       notified = false;
-      const percentInput = document.getElementById('edit-notify-percent');
-      const notifyMode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
+      const notifyModeRadio = document.querySelector('input[name="edit-notify-mode"]:checked');
+      const notifyMode = notifyModeRadio ? notifyModeRadio.value : "fixed";
       if (notifyMode === "percent") {
+        const percentInput = document.getElementById('edit-notify-percent');
         notifyPercent = percentInput ? parseFloat(percentInput.value) : null;
       } else {
         notifyPercent = null;
       }
-    } else {
+    } else if (notifyRes.errorMsg || !notifyRes.notifyAt) {
       notifyAt = null;
       notified = false;
       notifyPercent = null;
     }
-    
-    alertAtDeadline = document.getElementById("edit-notify-toggle-deadline")?.checked || false;
-    if (deadlineAt !== selectedBar.deadlineAt) {
-      deadlineNotified = false; // Reset if deadline changed
-    }
-  } else {
-    notifyAt = null;
-    notified = false;
-    notifyPercent = null;
-    alertAtDeadline = false;
-    deadlineNotified = false;
   }
 
   try {
     closeModal(modalEdit);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
-    const notifyChanged = notifyAt !== selectedBar.notifyAt || alertAtDeadline !== selectedBar.alertAtDeadline;
-    const notifyEnabled = notifyAt || alertAtDeadline;
-    if (notifyChanged && notifyEnabled && targetUid) {
-      if (Notification.permission === "denied") {
-        showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
-      } else {
-        handleFCMSession(targetUid);
-      }
+    if (notifyAt && notifyAt !== selectedBar.notifyAt && targetUid) {
+      handleFCMSession(targetUid);
     }
     await editBar(targetUid, selectedBar.id, {
       title,
@@ -3048,9 +2690,7 @@ formEdit.addEventListener("submit", async (e) => {
       updateDeadline,
       notifyAt,
       notified,
-      notifyPercent,
-      alertAtDeadline,
-      deadlineNotified
+      notifyPercent
     });
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
@@ -3114,7 +2754,7 @@ formUpdate.addEventListener("submit", async (e) => {
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
-    const text = document.getElementById("update-note-text").value.substring(0, 1600);
+    const text = document.getElementById("update-note-text").value;
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3164,63 +2804,51 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
 // ==========================================
 // Guest Mode Migration
 // ==========================================
-let migrationInProgress = false;
-
-async function migrateGuestBarsToSupabase(uid) {
-  if (migrationInProgress) return;
-  migrationInProgress = true;
-
+async function migrateGuestBarsToFirestore(uid) {
   const localBars = getLocalBars();
   if (!localBars || localBars.length === 0) {
     exitGuestMode();
-    migrationInProgress = false;
     return;
   }
 
-  // Clear local bars immediately to prevent concurrent calls from re-triggering migration
-  localStorage.removeItem('progress_shelf_bars');
+  // Temporarily clear guest mode so that createBar calls during the migration loop
+  // write to Firestore instead of writing back to localStorage
   exitGuestMode();
 
   let failCount = 0;
-  const failedBars = [];
 
   for (const bar of localBars) {
     try {
-      const mapped = {
+      await createBar(uid, {
         title: bar.title,
-        type: bar.type,
+        type: bar.type || "goal",
         preset: bar.preset,
-        levels: bar.levels,
+        levels: bar.levels || (bar.type === "goal" || !bar.type ? [{ name: bar.preset || 'Units', conversionToNext: null }] : null),
         targetSmallest: bar.targetSmallest,
         currentSmallest: bar.currentSmallest,
-        items: bar.items,
-        text: bar.text,
-        completed: bar.completed,
+        items: bar.items || null,
+        text: bar.text || null,
+        completed: bar.completed || false,
         deadlineAt: bar.deadlineAt,
-        deadlineSetAt: bar.deadlineSetAt,
-        notifyAt: bar.notifyAt,
-        notified: bar.notified ?? false,
-        lastUpdated: bar.lastUpdated
-      };
-      await createBar(uid, mapped);
+        deadlineSetAt: bar.deadlineSetAt
+      });
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
       failCount++;
-      failedBars.push(bar);
     }
   }
 
-  if (failCount > 0) {
-    // Restore failed bars to localStorage
-    localStorage.setItem('progress_shelf_bars', JSON.stringify(failedBars));
+  if (failCount === 0) {
+    // All bars migrated successfully — safe to clear local data
+    localStorage.removeItem('progress_shelf_bars');
+  } else {
+    // Partial failure — restore guest mode so local data is not lost and user can retry
     sessionStorage.setItem('guest_mode', 'true');
     showToast(
       `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
       "error"
     );
   }
-
-  migrationInProgress = false;
 }
 
 if (btnBannerLogin) {
@@ -3276,29 +2904,6 @@ const setupStatsFilterListeners = () => {
   });
 };
 setupStatsFilterListeners();
-
-// Sort select event listener
-const setupSortSelectListener = () => {
-  const sortSelect = document.getElementById("sort-select");
-  if (sortSelect) {
-    sortSelect.value = currentSort;
-    sortSelect.addEventListener("change", async (e) => {
-      currentSort = e.target.value;
-      localStorage.setItem("ps_sort_order", currentSort);
-
-      renderDashboard(currentBars);
-
-      if (!isGuestMode() && currentUser && currentUser.uid) {
-        try {
-          await updateUserPreferredSort(currentSort);
-        } catch (err) {
-          console.error("Error saving sort preference to Supabase:", err);
-        }
-      }
-    });
-  }
-};
-setupSortSelectListener();
 
 // Helper to measure text width of placeholder dynamically
 function getPlaceholderWidth(input) {
@@ -3481,7 +3086,7 @@ btnDeleteAccount.addEventListener("click", async () => {
     // Show loading toast (persist it)
     const toast = showToast("Deleting account data...", "info", 0);
 
-    // 1. Delete all user bars from database (Supabase or LocalStorage)
+    // 1. Delete all user bars from database (Firestore or LocalStorage)
     await deleteUserData(uid);
 
     if (isGuest) {
@@ -3489,7 +3094,7 @@ btnDeleteAccount.addEventListener("click", async () => {
       if (toast) dismissToast(toast);
       window.location.href = "index.html";
     } else {
-      // 2. Delete user account from Supabase Auth
+      // 2. Delete user account from Firebase Auth
       await deleteCurrentUserAccount();
 
       // 3. Clear session states and logout
@@ -3503,28 +3108,6 @@ btnDeleteAccount.addEventListener("click", async () => {
   }
 });
 
-function showNotificationBanner(uid) {
-  if (document.getElementById("notification-banner")) return;
-  const banner = document.createElement("div");
-  banner.id = "notification-banner";
-  banner.className = "guest-banner notification-banner";
-  banner.innerHTML = `
-    <span>Enable notifications to get deadline alerts</span>
-    <button id="btn-allow-notifications" class="btn-banner-login">Allow</button>
-  `;
-  
-  const dashboardMain = document.querySelector(".dashboard-main");
-  const cardsGrid = document.getElementById("cards-grid");
-  if (dashboardMain && cardsGrid) {
-    dashboardMain.insertBefore(banner, cardsGrid);
-  }
-  
-  document.getElementById("btn-allow-notifications")?.addEventListener("click", async () => {
-    banner.remove();
-    await handleFCMSession(uid);
-  });
-}
-
 // Initialize auth check
 initAuthProtection(async (user) => {
   const localBars = getLocalBars();
@@ -3537,63 +3120,19 @@ initAuthProtection(async (user) => {
     // Show migration status
     showToast("Syncing your data to cloud account...", "info");
 
-    await migrateGuestBarsToSupabase(user.uid);
-    // exitGuestMode() already called inside migrateGuestBarsToSupabase
+    await migrateGuestBarsToFirestore(user.uid);
+    // exitGuestMode() already called inside migrateGuestBarsToFirestore
 
     // Instead of returning and getting stuck, let it fall through to 
     // the normal dashboard initialization below, which will setup UI
-    // for the logged-in user and start the proper Supabase subscription.
+    // for the logged-in user and start the proper Firestore subscription.
   }
 
   currentUser = user;
 
-  // Token Validity Check on App Load (Rule 7 & Rule 3)
-  if (user && user.uid && !isGuestMode()) {
-    const localToken = localStorage.getItem("ps_fcm_token");
-    if (localToken) {
-      checkFCMTokenExists(user.uid, localToken).then(async (exists) => {
-        if (!exists) {
-          console.log("Local FCM token is missing from the database. Re-registering...");
-          if (Notification.permission === "granted") {
-            await handleFCMSession(user.uid);
-          }
-        }
-      }).catch(err => console.error("Error verifying FCM token on load:", err));
-    } else {
-      if (Notification.permission === "granted") {
-        console.log("No FCM token found locally, but permission is granted. Registering fresh token...");
-        handleFCMSession(user.uid);
-      }
-    }
-
-    // Periodically re-sync FCM token every 3 minutes while app is active
-    setInterval(async () => {
-      if (currentUser && currentUser.uid && !isGuestMode() && Notification.permission === 'granted') {
-        await handleFCMSession(currentUser.uid);
-      }
-    }, 3 * 60 * 1000);
-  }
-
-  // Token re-sync on app foreground
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && currentUser && currentUser.uid && !isGuestMode()) {
-      if (Notification.permission === 'granted') {
-        await handleFCMSession(currentUser.uid);
-      }
-    }
-  });
-
-  // Load preferred sort setting from user metadata or local storage
-  if (user && user.preferredSort) {
-    currentSort = user.preferredSort;
-  } else {
-    currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
-  }
-
-  // Update sort dropdown value in UI to match currentSort
-  const sortSelect = document.getElementById("sort-select");
-  if (sortSelect) {
-    sortSelect.value = currentSort;
+  // If notification permission is already granted, verify/renew token registration in the DB
+  if (Notification.permission === "granted" && user && user.uid) {
+    handleFCMSession(user.uid);
   }
 
   // Render guest banner on dashboard if in guest mode
@@ -3614,7 +3153,7 @@ initAuthProtection(async (user) => {
       banner.style.backgroundColor = "rgba(74, 144, 217, 0.1)";
       banner.style.color = "var(--accent)";
       banner.style.borderBottom = "1px solid var(--card-border)";
-      banner.innerHTML = `<span>ℹ️ <strong>Sandbox Mode:</strong> Running locally. Update <code>supabase-config.js</code> with your project credentials to connect Supabase.</span>`;
+      banner.innerHTML = `<span>ℹ️ <strong>Sandbox Mode:</strong> Running locally. Copy <code>firebase-config.template.js</code> to <code>firebase-config.js</code> and fill in credentials to connect Firebase.</span>`;
       appContent.insertBefore(banner, appContent.firstChild);
     }
   }
@@ -3639,19 +3178,6 @@ initAuthProtection(async (user) => {
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
-      
-      // Dynamic Notification Permission Banner check (Rule 3)
-      if (user && user.uid && Notification.permission === "default") {
-        const hasNotifyAt = (bars || []).some(bar => bar.notifyAt);
-        if (hasNotifyAt) {
-          showNotificationBanner(user.uid);
-        } else {
-          document.getElementById("notification-banner")?.remove();
-        }
-      } else {
-        document.getElementById("notification-banner")?.remove();
-      }
-
       if (firstLoad) {
         firstLoad = false;
         if (navLogoSvg) {
@@ -3672,7 +3198,7 @@ initAuthProtection(async (user) => {
           <div class="empty-state" style="border-color: var(--error);">
             <div class="empty-icon" style="color: var(--error)">⚠️</div>
             <h3 class="empty-title">Offline or Load Failed</h3>
-            <p class="empty-desc">Could not connect to Supabase database. Please check your internet connection.</p>
+            <p class="empty-desc">Could not connect to Firestore database. Please check your internet connection.</p>
             <button class="btn btn-secondary" onclick="window.location.reload()" style="margin-top: 16px;">Retry Connection</button>
           </div>
         `;
@@ -3758,11 +3284,6 @@ const FCM_VAPID_KEY = "BBMQHPcnjNhugmwdap8XCS8fKkWcS6MhYFCDfEsibb_tLTWFhvRi_CukI
  * @returns {{ notifyAt: number | null, isValid: boolean, errorMsg: string | null }}
  */
 function calculateNotifyAt(prefix) {
-  const toggle = document.getElementById(prefix + 'notify-toggle');
-  if (toggle && !toggle.checked) {
-    return { notifyAt: null, isValid: true, errorMsg: null };
-  }
-
   const dateInput = document.getElementById(prefix + 'deadline-date');
   const timeInput = document.getElementById(prefix + 'deadline-time');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
@@ -3805,8 +3326,8 @@ function calculateNotifyAt(prefix) {
     return { notifyAt: null, isValid: false, errorMsg: null };
   }
 
-  const percentInput = document.getElementById(prefix + 'notify-percent');
-  const mode = (percentInput && percentInput.value !== "") ? "percent" : "fixed";
+  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
+  const mode = modeRadio ? modeRadio.value : "fixed";
 
   if (mode === "fixed") {
     const notifyHrsInput = document.getElementById(prefix + 'notify-hrs');
@@ -3874,29 +3395,11 @@ function calculateNotifyAt(prefix) {
  * Updates the disabled state and calculated preview inside modals.
  * @param {string} prefix "" or "edit-"
  */
-/**
- * Updates the disabled state and calculated preview inside modals.
- * @param {string} prefix "" or "edit-"
- */
 function updateNotificationPreview(prefix) {
   const section = document.getElementById(prefix + 'notification-section');
-  const previewEl = document.getElementById(prefix === "edit-" ? "notify-preview-edit" : "notify-preview-create");
+  const previewEl = document.getElementById(prefix + 'notify-preview');
 
   if (!section || !previewEl) return;
-
-  const toggle = document.getElementById(prefix + 'notify-toggle');
-  const settingsContent = document.getElementById(prefix === "edit-" ? "edit-notify-settings-content" : "notify-settings-content");
-
-  if (toggle && settingsContent) {
-    if (!toggle.checked) {
-      settingsContent.classList.add("collapsed");
-      previewEl.classList.remove("visible", "valid", "invalid");
-      previewEl.textContent = "";
-      return;
-    } else {
-      settingsContent.classList.remove("collapsed");
-    }
-  }
 
   const dateInput = document.getElementById(prefix + 'deadline-date');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
@@ -3912,65 +3415,54 @@ function updateNotificationPreview(prefix) {
   const isCleared = prefix === "edit-" && clearCheckbox?.checked;
 
   if (!hasDeadline || isCleared) {
-    previewEl.classList.add("visible", "invalid");
-    previewEl.classList.remove("valid");
-    previewEl.textContent = "⚠ Please set a deadline first";
-    
-    // Disable inputs
+    section.classList.add("disabled");
+    previewEl.classList.add("hidden");
+    previewEl.textContent = "";
     if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
     if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
     if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
     return;
   }
 
-  // Ensure all inputs are enabled
-  if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
-  if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
-  if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
+  section.classList.remove("disabled");
 
-  const modeAHasValue = (notifyHrsInput?.value !== "") || (notifyMinsInput?.value !== "");
-  const modeBHasValue = (notifyPercentInput?.value !== "");
+  const modeRadio = document.querySelector(`input[name="${prefix}notify-mode"]:checked`);
+  const mode = modeRadio ? modeRadio.value : "fixed";
 
-  // Auto-detect mode dynamically based on inputs
-  const mode = modeBHasValue ? "percent" : "fixed";
-
-  // Calculate and update preview
-  const hasInputs = mode === "fixed" ? modeAHasValue : (mode === "percent" ? modeBHasValue : false);
-  if (!hasInputs) {
-    previewEl.classList.remove("visible", "valid", "invalid");
-    previewEl.textContent = "";
+  if (mode === "fixed") {
+    if (notifyHrsInput) notifyHrsInput.removeAttribute("disabled");
+    if (notifyMinsInput) notifyMinsInput.removeAttribute("disabled");
+    if (notifyPercentInput) notifyPercentInput.setAttribute("disabled", "true");
   } else {
-    const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
-    if (errorMsg) {
-      previewEl.classList.add("visible", "invalid");
-      previewEl.classList.remove("valid");
-      let displayMsg = errorMsg;
-      if (displayMsg && displayMsg.includes("outside the valid range")) {
-        displayMsg = "⚠ Outside valid range";
-      }
-      previewEl.textContent = displayMsg;
-    } else if (isValid && notifyAt) {
-      previewEl.classList.add("visible", "valid");
-      previewEl.classList.remove("invalid");
+    if (notifyHrsInput) notifyHrsInput.setAttribute("disabled", "true");
+    if (notifyMinsInput) notifyMinsInput.setAttribute("disabled", "true");
+    if (notifyPercentInput) notifyPercentInput.removeAttribute("disabled");
+  }
 
-      const dt = new Date(notifyAt);
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const dayName = days[dt.getDay()];
-      const monthName = months[dt.getMonth()];
-      const dateNum = dt.getDate();
-      let hours = dt.getHours();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      hours = hours % 12;
-      hours = hours ? hours : 12;
-      const minutesStr = String(dt.getMinutes()).padStart(2, '0');
-      const customFormatted = `${dayName}, ${monthName} ${dateNum} at ${hours}:${minutesStr} ${ampm}`;
+  const { notifyAt, isValid, errorMsg } = calculateNotifyAt(prefix);
 
-      previewEl.textContent = `📅 ${customFormatted}`;
-    } else {
-      previewEl.classList.remove("visible", "valid", "invalid");
-      previewEl.textContent = "";
-    }
+  if (errorMsg) {
+    previewEl.classList.remove("hidden", "valid");
+    previewEl.classList.add("invalid");
+    previewEl.textContent = errorMsg;
+  } else if (isValid && notifyAt) {
+    previewEl.classList.remove("hidden", "invalid");
+    previewEl.classList.add("valid");
+
+    const options = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
+    };
+    const formattedDate = new Date(notifyAt).toLocaleDateString('en-US', options);
+    previewEl.textContent = `You'll be notified on ${formattedDate}`;
+  } else {
+    previewEl.classList.add("hidden");
+    previewEl.textContent = "";
   }
 }
 
@@ -4020,8 +3512,8 @@ function setupNotificationListeners(prefix = "") {
   const notifyHrs = document.getElementById(prefix + 'notify-hrs');
   const notifyMins = document.getElementById(prefix + 'notify-mins');
   const notifyPercent = document.getElementById(prefix + 'notify-percent');
-  const toggle = document.getElementById(prefix + 'notify-toggle');
-  const endAlertToggle = document.getElementById(prefix === "edit-" ? "edit-notify-toggle-deadline" : "end-alert-toggle-create");
+
+  const modeRadios = document.querySelectorAll(`input[name="${prefix}notify-mode"]`);
 
   const runUpdate = () => updateNotificationPreview(prefix);
 
@@ -4031,7 +3523,7 @@ function setupNotificationListeners(prefix = "") {
     if (notifyPercent) notifyPercent.value = "";
   };
 
-  // Bind change/input listeners for deadline changes
+  // Bind change/input listeners
   dateInput?.addEventListener('input', () => {
     if (prefix === "edit-") clearNotificationInputs();
     runUpdate();
@@ -4063,32 +3555,14 @@ function setupNotificationListeners(prefix = "") {
     });
   }
 
-  // Toggle switch listeners
-  toggle?.addEventListener('change', runUpdate);
-  endAlertToggle?.addEventListener('change', runUpdate);
-
-  // Auto-clearing input triggers
-  const onFixedType = () => {
-    if (notifyPercent) notifyPercent.value = "";
-    runUpdate();
-  };
-
-  const onPercentType = () => {
-    if (notifyHrs) notifyHrs.value = "";
-    if (notifyMins) notifyMins.value = "";
-    runUpdate();
-  };
-
-  notifyHrs?.addEventListener('input', onFixedType);
-  notifyMins?.addEventListener('input', onFixedType);
-  notifyPercent?.addEventListener('input', onPercentType);
-
-  notifyHrs?.addEventListener('change', onFixedType);
-  notifyMins?.addEventListener('change', onFixedType);
-  notifyPercent?.addEventListener('change', onPercentType);
+  notifyHrs?.addEventListener('input', runUpdate);
+  notifyMins?.addEventListener('input', runUpdate);
+  notifyPercent?.addEventListener('input', runUpdate);
+  notifyHrs?.addEventListener('change', runUpdate);
+  notifyMins?.addEventListener('change', runUpdate);
+  notifyPercent?.addEventListener('change', runUpdate);
 
   const requestPermissionOnInteraction = () => {
-    if (Notification.permission === "denied") return;
     if (typeof currentUser !== 'undefined') {
       const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
       handleFCMSession(uid);
@@ -4101,335 +3575,17 @@ function setupNotificationListeners(prefix = "") {
   notifyHrs?.addEventListener('click', requestPermissionOnInteraction);
   notifyMins?.addEventListener('click', requestPermissionOnInteraction);
   notifyPercent?.addEventListener('click', requestPermissionOnInteraction);
-  endAlertToggle?.addEventListener('click', requestPermissionOnInteraction);
+
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', runUpdate);
+    radio.addEventListener('click', requestPermissionOnInteraction);
+  });
 
   runUpdate();
 }
 
 setupNotificationListeners("");
 setupNotificationListeners("edit-");
-
-// Setup character count listeners for Notes textareas
-function setupNoteCharCounters() {
-  const textareas = [
-    { id: "create-note-text", counterId: "create-note-char-count" },
-    { id: "edit-note-text", counterId: "edit-note-char-count" },
-    { id: "update-note-text", counterId: "update-note-char-count" }
-  ];
-
-  textareas.forEach(({ id, counterId }) => {
-    const el = document.getElementById(id);
-    const counter = document.getElementById(counterId);
-    if (el && counter) {
-      const update = () => {
-        counter.textContent = `${el.value.length} / 1600`;
-      };
-      el.addEventListener("input", update);
-      el.addEventListener("change", update);
-    }
-  });
-}
-setupNoteCharCounters();
-
-// ==========================================
-// APK & Edit Mode & Manual Ordering Controls
-// ==========================================
-const selectedBarIds = new Set();
-let editModeActive = false;
-
-
-
-// Toggles selection state of a card in Edit Mode
-function toggleCardSelection(card) {
-  const barId = card.getAttribute("data-bar-id");
-  if (!barId) return;
-
-  if (selectedBarIds.has(barId)) {
-    selectedBarIds.delete(barId);
-    card.classList.remove("selected");
-  } else {
-    selectedBarIds.add(barId);
-    card.classList.add("selected");
-  }
-
-  const grid = document.getElementById("cards-grid");
-  if (grid) {
-    if (selectedBarIds.size > 0) {
-      grid.classList.add("has-selections");
-    } else {
-      grid.classList.remove("has-selections");
-    }
-  }
-
-  updateDeleteSelectedButton();
-}
-
-// Update state/label of the delete selected button
-function updateDeleteSelectedButton() {
-  const btn = document.getElementById("btn-delete-selected");
-  if (btn) {
-    btn.textContent = `Delete Selected (${selectedBarIds.size})`;
-    if (selectedBarIds.size > 0) {
-      btn.classList.remove("hidden");
-    } else {
-      btn.classList.add("hidden");
-    }
-  }
-}
-
-// Setup APK button toast triggers with shake animation
-function setupAPKButton() {
-  const btn = document.getElementById("btn-apk-download");
-  if (btn) {
-    btn.addEventListener("click", () => {
-      btn.classList.add("shake-anim");
-      btn.addEventListener("animationend", () => {
-        btn.classList.remove("shake-anim");
-      }, { once: true });
-      showToast("Thanks for showing interest. APK is under development.", "info");
-    });
-  }
-}
-
-let isPopStateExit = false;
-
-window.addEventListener("popstate", (event) => {
-  if (editModeActive) {
-    isPopStateExit = true;
-    exitEditMode();
-    isPopStateExit = false;
-  }
-});
-
-// Setup Edit Mode and Batch Delete interactions
-function setupEditModeControls() {
-  const btnToggle = document.getElementById("btn-toggle-edit");
-  const btnDelete = document.getElementById("btn-delete-selected");
-  const grid = document.getElementById("cards-grid");
-
-  if (!btnToggle || !grid) return;
-
-  btnToggle.addEventListener("click", () => {
-    editModeActive = !editModeActive;
-    const controls = document.querySelector(".dashboard-controls");
-    if (editModeActive) {
-      btnToggle.classList.add("active");
-      grid.classList.add("edit-mode");
-      if (controls) controls.classList.add("edit-active");
-      window.history.pushState({ editMode: true }, "");
-      resetHeaderScroll();
-    } else {
-      exitEditMode();
-    }
-  });
-
-  if (btnDelete) {
-    btnDelete.addEventListener("click", async () => {
-      if (selectedBarIds.size === 0) return;
-      const count = selectedBarIds.size;
-      const confirmMessage = `Are you sure you want to permanently delete the ${count} selected progress bar${count === 1 ? '' : 's'}?`;
-      if (!window.confirm(confirmMessage)) return;
-
-      const idsToDelete = [...selectedBarIds];
-      const toast = showToast(`Deleting ${count} card${count === 1 ? '' : 's'}...`, "info", 0);
-
-      try {
-        await deleteMultipleBars(isGuestMode() ? null : (currentUser ? currentUser.uid : null), idsToDelete);
-        if (toast) dismissToast(toast);
-        showToast(`Deleted ${count} card${count === 1 ? '' : 's'} successfully.`, "success");
-        
-        // Remove deleted items locally if in guest mode
-        if (isGuestMode()) {
-          const bars = getLocalBars().filter(b => !idsToDelete.includes(b.id));
-          renderDashboard(bars);
-        }
-        
-        selectedBarIds.clear();
-        exitEditMode();
-      } catch (err) {
-        if (toast) dismissToast(toast);
-        showToast("Failed to delete selected cards.", "error");
-        console.error("Error performing batch deletion:", err);
-      }
-    });
-  }
-
-  // Auto-exit Edit Mode when clicking elements outside the grid and control buttons
-  document.addEventListener("click", (event) => {
-    if (!editModeActive) return;
-
-    const toggleEditBtn = document.getElementById("btn-toggle-edit");
-    const deleteSelectedBtn = document.getElementById("btn-delete-selected");
-
-    const clickedInsideGrid = grid && grid.contains(event.target);
-    const clickedToggleEdit = toggleEditBtn && toggleEditBtn.contains(event.target);
-    const clickedDeleteSelected = deleteSelectedBtn && deleteSelectedBtn.contains(event.target);
-
-    if (!clickedInsideGrid && !clickedToggleEdit && !clickedDeleteSelected) {
-      exitEditMode();
-    }
-  }, true);
-}
-
-function exitEditMode() {
-  const btnToggle = document.getElementById("btn-toggle-edit");
-  const grid = document.getElementById("cards-grid");
-  const controls = document.querySelector(".dashboard-controls");
-
-  editModeActive = false;
-  selectedBarIds.clear();
-  updateDeleteSelectedButton();
-
-  if (btnToggle) {
-    btnToggle.classList.remove("active");
-  }
-  if (grid) {
-    grid.classList.remove("edit-mode");
-    grid.classList.remove("has-selections");
-    // Remove selected highlights
-    grid.querySelectorAll(".card-progress.selected").forEach(card => {
-      card.classList.remove("selected");
-    });
-  }
-  if (controls) {
-    controls.classList.remove("edit-active");
-  }
-
-  // Clean history state if manual close
-  if (!isPopStateExit) {
-    if (window.history.state && window.history.state.editMode) {
-      window.history.back();
-    }
-  }
-  resetHeaderScroll();
-}
-
-// Run initializers
-setupAPKButton();
-setupEditModeControls();
-
-// Scroll state variables at module scope so edit mode controls can reset them
-let y_stats = 0;
-let y_controls = 0;
-
-function resetHeaderScroll() {
-  y_stats = 0;
-  y_controls = 0;
-  const statsEl = document.getElementById("stats-banner");
-  const controlsEl = document.querySelector(".dashboard-controls");
-  if (statsEl) statsEl.style.transform = "translateY(0px)";
-  if (controlsEl) controlsEl.style.transform = "translateY(0px)";
-}
-
-function setupStaggeredHeaderScroll() {
-  let lastScrollY = window.scrollY;
-  let H_nav = 57;
-  let H_stats = 0;
-  let H_controls = 45;
-  let scrollTicking = false;
-
-  function updateHeaderScroll() {
-    const currentScrollY = window.scrollY;
-    const deltaY = currentScrollY - lastScrollY;
-    lastScrollY = currentScrollY;
-
-    const statsEl = document.getElementById("stats-banner");
-    const controlsEl = document.querySelector(".dashboard-controls");
-
-    // Don't scroll or hide panels if Edit Mode is active
-    if (editModeActive) {
-      resetHeaderScroll();
-      scrollTicking = false;
-      return;
-    }
-
-    // Clear translations at the top of the page
-    if (currentScrollY <= 0) {
-      resetHeaderScroll();
-      scrollTicking = false;
-      return;
-    }
-
-    // Measure dynamic heights with subpixel precision
-    const navbarEl = document.querySelector(".navbar");
-    H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
-    H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
-
-    // Push offsets to document so sticky tops align dynamically
-    document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
-    document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
-
-    if (deltaY > 0) {
-      // Scrolling down -> hide dashboard controls first, then stats banner
-      if (y_controls < H_controls) {
-        y_controls = Math.min(H_controls, y_controls + deltaY);
-        const remaining = deltaY - (H_controls - y_controls);
-        if (remaining > 0) {
-          y_stats = Math.min(H_stats, y_stats + remaining);
-        }
-      } else {
-        y_stats = Math.min(H_stats, y_stats + deltaY);
-      }
-    } else if (deltaY < 0) {
-      // Scrolling up -> reveal stats banner first, then dashboard controls
-      if (y_stats > 0) {
-        y_stats = Math.max(0, y_stats + deltaY);
-        const remaining = deltaY + y_stats; // deltaY is negative
-        if (remaining < 0) {
-          y_controls = Math.max(0, y_controls + remaining);
-        }
-      } else {
-        y_controls = Math.max(0, y_controls + deltaY);
-      }
-    }
-
-    if (statsEl) {
-      statsEl.style.transform = `translateY(-${y_stats}px)`;
-    }
-    if (controlsEl) {
-      controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
-    }
-
-    scrollTicking = false;
-  }
-
-  // Handle window resizing and height re-evaluation
-  function handleResize() {
-    const statsEl = document.getElementById("stats-banner");
-    const controlsEl = document.querySelector(".dashboard-controls");
-    const navbarEl = document.querySelector(".navbar");
-    
-    H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
-    H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
-
-    document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
-    document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
-
-    if (editModeActive) {
-      resetHeaderScroll();
-    } else {
-      y_stats = Math.min(y_stats, H_stats);
-      y_controls = Math.min(y_controls, H_controls);
-      if (statsEl) statsEl.style.transform = `translateY(-${y_stats}px)`;
-      if (controlsEl) controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
-    }
-  }
-
-  window.addEventListener("scroll", () => {
-    if (!scrollTicking) {
-      window.requestAnimationFrame(updateHeaderScroll);
-      scrollTicking = true;
-    }
-  }, { passive: true });
-
-  window.addEventListener("resize", handleResize, { passive: true });
-
-  // Initial trigger to register initial heights
-  handleResize();
-}
-setupStaggeredHeaderScroll();
 
 // ==========================================
 // Service Worker Registration & Updates
@@ -4452,18 +3608,12 @@ if ('serviceWorker' in navigator) {
           reg.update().catch(err => console.log('SW update check failed:', err));
         }, 60000);
 
-        // If there's already a waiting worker, skip waiting immediately
-        if (reg.waiting) {
-          reg.waiting.postMessage({ action: 'skipWaiting' });
-        }
-
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('New service worker version detected. Skipping waiting...');
-                newWorker.postMessage({ action: 'skipWaiting' });
+                console.log('New service worker version detected.');
               }
             });
           }
