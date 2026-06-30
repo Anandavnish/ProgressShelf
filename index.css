@@ -584,11 +584,10 @@ body {
   color: var(--error);
   background-color: rgba(255, 77, 77, 0.05);
 }
-
 /* Overall Stats Bar (3D Glossy Buttons) - Smaller & Centered */
 .stats-banner {
   position: sticky;
-  top: 57px;
+  top: var(--navbar-height, 57px);
   z-index: 99;
   background-color: rgba(13, 17, 23, 0.92);
   backdrop-filter: blur(16px);
@@ -596,6 +595,7 @@ body {
   border-bottom: 1px solid var(--card-border);
   padding: 14px 16px;
   animation: fadeIn 0.4s var(--transition-ease);
+  will-change: transform;
 }
 
 .stats-skeleton {
@@ -876,14 +876,21 @@ body {
   padding: 40px 24px;
   animation: fadeIn 0.4s var(--transition-ease);
 }
-
 /* Dashboard Controls */
 .dashboard-controls {
+  position: sticky;
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px));
+  z-index: 98;
+  background-color: rgba(13, 17, 23, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 16px 24px;
+  margin: 0 -24px 24px -24px !important;
+  border-bottom: 1px solid var(--card-border);
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  margin-bottom: 24px;
-  margin-top: -16px;
+  will-change: transform;
 }
 
 .sort-container {
@@ -1513,6 +1520,11 @@ body {
 
   .dashboard-main {
     padding: 24px 16px;
+  }
+
+  .dashboard-controls {
+    padding: 16px 16px;
+    margin: 0 -16px 24px -16px !important;
   }
 
   .modal-overlay {
@@ -2979,14 +2991,21 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Controls layout wrapper */
 .dashboard-controls {
+  position: sticky;
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px));
+  z-index: 98;
+  background-color: rgba(13, 17, 23, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 16px 24px;
+  margin: 0 -24px 24px -24px !important;
+  border-bottom: 1px solid var(--card-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  margin-top: -16px;
   flex-wrap: wrap;
   gap: 16px;
-  width: 100%;
+  will-change: transform;
 }
 
 .controls-right-group {

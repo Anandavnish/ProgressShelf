@@ -4307,6 +4307,115 @@ setupAPKButton();
 setupEditModeControls();
 
 // ==========================================
+// Scroll-to-Hide Staggered Header Controller
+// ==========================================
+function setupStaggeredHeaderScroll() {
+  let lastScrollY = window.scrollY;
+  let y_stats = 0;
+  let y_controls = 0;
+  
+  let H_nav = 57;
+  let H_stats = 0;
+  let H_controls = 45;
+  let scrollTicking = false;
+
+  function updateHeaderScroll() {
+    const currentScrollY = window.scrollY;
+    const deltaY = currentScrollY - lastScrollY;
+    lastScrollY = currentScrollY;
+
+    const statsEl = document.getElementById("stats-banner");
+    const controlsEl = document.querySelector(".dashboard-controls");
+
+    // Clear translations at the top of the page
+    if (currentScrollY <= 0) {
+      y_stats = 0;
+      y_controls = 0;
+      if (statsEl) statsEl.style.transform = "translateY(0px)";
+      if (controlsEl) controlsEl.style.transform = "translateY(0px)";
+      scrollTicking = false;
+      return;
+    }
+
+    // Measure dynamic heights
+    const navbarEl = document.querySelector(".navbar");
+    H_nav = navbarEl ? navbarEl.offsetHeight : 57;
+    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.offsetHeight : 0;
+    H_controls = controlsEl ? controlsEl.offsetHeight : 45;
+
+    // Push offsets to document so sticky tops align dynamically
+    document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
+    document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
+
+    if (deltaY > 0) {
+      // Scrolling down -> hide headers (stats first, then controls)
+      if (y_stats < H_stats) {
+        y_stats = Math.min(H_stats, y_stats + deltaY);
+        const remaining = deltaY - (H_stats - y_stats);
+        if (remaining > 0) {
+          y_controls = Math.min(H_controls, y_controls + remaining);
+        }
+      } else {
+        y_controls = Math.min(H_controls, y_controls + deltaY);
+      }
+    } else if (deltaY < 0) {
+      // Scrolling up -> show headers (controls first, then stats)
+      if (y_controls > 0) {
+        y_controls = Math.max(0, y_controls + deltaY);
+        const remaining = deltaY + y_controls; // deltaY is negative
+        if (remaining < 0) {
+          y_stats = Math.max(0, y_stats + remaining);
+        }
+      } else {
+        y_stats = Math.max(0, y_stats + deltaY);
+      }
+    }
+
+    if (statsEl) {
+      statsEl.style.transform = `translateY(-${y_stats}px)`;
+    }
+    if (controlsEl) {
+      controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+    }
+
+    scrollTicking = false;
+  }
+
+  // Handle window resizing and height re-evaluation
+  function handleResize() {
+    const statsEl = document.getElementById("stats-banner");
+    const controlsEl = document.querySelector(".dashboard-controls");
+    const navbarEl = document.querySelector(".navbar");
+    
+    H_nav = navbarEl ? navbarEl.offsetHeight : 57;
+    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.offsetHeight : 0;
+    H_controls = controlsEl ? controlsEl.offsetHeight : 45;
+
+    document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
+    document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
+
+    y_stats = Math.min(y_stats, H_stats);
+    y_controls = Math.min(y_controls, H_controls);
+
+    if (statsEl) statsEl.style.transform = `translateY(-${y_stats}px)`;
+    if (controlsEl) controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+  }
+
+  window.addEventListener("scroll", () => {
+    if (!scrollTicking) {
+      window.requestAnimationFrame(updateHeaderScroll);
+      scrollTicking = true;
+    }
+  }, { passive: true });
+
+  window.addEventListener("resize", handleResize, { passive: true });
+
+  // Initial trigger to register initial heights
+  handleResize();
+}
+setupStaggeredHeaderScroll();
+
+// ==========================================
 // Service Worker Registration & Updates
 // ==========================================
 if ('serviceWorker' in navigator) {
