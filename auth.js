@@ -27,9 +27,8 @@ function mapSupabaseUser(supabaseUser) {
  * Initiates the Google Sign-In flow using OAuth redirect.
  */
 export async function signInWithGoogle() {
-  const redirectUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? window.location.origin + '/dashboard.html'
-    : window.location.origin + '/ProgressShelf/dashboard.html';
+  const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
+  const redirectUrl = window.location.origin + pathPrefix + 'dashboard.html';
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
