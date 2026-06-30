@@ -2983,7 +2983,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-  margin-top: 16px;
+  margin-top: -16px;
   flex-wrap: wrap;
   gap: 16px;
   width: 100%;
@@ -3112,13 +3112,17 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Card Selection overlay styling */
 .card-select-control {
-  display: none; /* Hidden by default */
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  margin-right: 10px; /* Space between circle and title text */
+  width: 0;
+  opacity: 0;
+  margin-right: 0;
+  overflow: hidden;
   flex-shrink: 0;
   cursor: pointer;
+  transition: width 0.3s var(--transition-ease), opacity 0.3s var(--transition-ease), margin-right 0.3s var(--transition-ease);
 }
 
 .card-select-circle {
@@ -3154,7 +3158,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Edit Mode grid active state rules */
 .cards-grid.edit-mode .card-select-control {
-  display: inline-flex;
+  width: 22px;
+  opacity: 1;
+  margin-right: 10px;
 }
 
 .cards-grid.edit-mode .card-actions {

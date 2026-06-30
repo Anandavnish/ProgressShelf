@@ -1449,6 +1449,20 @@ function sortBars(bars) {
 
 function renderDashboard(bars) {
   currentBars = bars;
+
+  // Hide Edit and Sort controls if 2 or fewer cards exist
+  const rightGroup = document.querySelector(".controls-right-group");
+  if (rightGroup) {
+    if (bars && bars.length > 2) {
+      rightGroup.classList.remove("hidden");
+    } else {
+      rightGroup.classList.add("hidden");
+      if (editModeActive) {
+        exitEditMode();
+      }
+    }
+  }
+
   const sortedBars = sortBars(bars);
   const filtered = filterBars([...sortedBars]);
   updateOverallStats(bars);
