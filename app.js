@@ -4162,9 +4162,11 @@ function setupEditModeControls() {
 
   btnToggle.addEventListener("click", () => {
     editModeActive = !editModeActive;
+    const controls = document.querySelector(".dashboard-controls");
     if (editModeActive) {
       btnToggle.classList.add("active");
       grid.classList.add("edit-mode");
+      if (controls) controls.classList.add("edit-active");
     } else {
       exitEditMode();
     }
@@ -4205,6 +4207,7 @@ function setupEditModeControls() {
 function exitEditMode() {
   const btnToggle = document.getElementById("btn-toggle-edit");
   const grid = document.getElementById("cards-grid");
+  const controls = document.querySelector(".dashboard-controls");
 
   editModeActive = false;
   selectedBarIds.clear();
@@ -4219,6 +4222,9 @@ function exitEditMode() {
     grid.querySelectorAll(".card-progress.selected").forEach(card => {
       card.classList.remove("selected");
     });
+  }
+  if (controls) {
+    controls.classList.remove("edit-active");
   }
 }
 

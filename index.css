@@ -3071,7 +3071,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Delete Selected Button */
 .btn-delete-selected {
-  display: flex;
+  display: none; /* Hidden by default, shown via edit-active swap */
   align-items: center;
   background-color: rgba(248, 81, 73, 0.15);
   border: 1px solid rgba(248, 81, 73, 0.3);
@@ -3094,6 +3094,15 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .btn-delete-selected:active {
   transform: translateY(0);
+}
+
+/* Swap Sort selector with Bulk Delete button in Edit Mode */
+.dashboard-controls.edit-active .sort-container {
+  display: none !important;
+}
+
+.dashboard-controls.edit-active .btn-delete-selected {
+  display: flex !important;
 }
 
 /* Card Selection overlay styling */
