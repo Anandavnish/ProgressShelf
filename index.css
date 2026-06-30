@@ -2250,7 +2250,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 
   .stats-banner {
-    top: 51px;
+    top: var(--navbar-height, 51px);
   }
 
   .nav-container {
