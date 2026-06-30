@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v40';
+const CACHE_NAME = 'progressshelf-cache-v41';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Serve cached assets when offline, otherwise fetch
+// Fetch Event - Serve cached assets immediately, fetch updates in background (Stale-While-Revalidate)
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
@@ -64,27 +64,24 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      
-      // Fallback to network
-      return fetch(event.request).then((response) => {
-        // Cache new successful GET requests from the same origin
-        if (response.status === 200 && url.startsWith(self.location.origin)) {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, response.clone());
-            return response;
-          });
-        }
-        return response;
-      }).catch((err) => {
-        // Offline fallback for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('./', { ignoreSearch: true });
-        }
-        console.error('[Service Worker] Fetch failed:', err);
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+        // Fetch new version from network in parallel
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch((err) => {
+          // If offline and navigate request fails, return offline fallback from cache
+          if (event.request.mode === 'navigate') {
+            return caches.match('./', { ignoreSearch: true });
+          }
+          console.warn('[Service Worker] Fetch failed, using cache:', err);
+        });
+
+        // Serve cached version immediately if available, otherwise wait for network
+        return cachedResponse || fetchPromise;
       });
     })
   );
@@ -159,4 +156,11 @@ self.addEventListener('notificationclick', event => {
       }
     })
   );
+});
+
+// Message Event - Skip Waiting on command
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });

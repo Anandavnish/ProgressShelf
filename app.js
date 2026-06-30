@@ -3439,6 +3439,13 @@ initAuthProtection(async (user) => {
         handleFCMSession(user.uid);
       }
     }
+
+    // Periodically re-sync FCM token every 3 minutes while app is active
+    setInterval(async () => {
+      if (currentUser && currentUser.uid && !isGuestMode() && Notification.permission === 'granted') {
+        await handleFCMSession(currentUser.uid);
+      }
+    }, 3 * 60 * 1000);
   }
 
   // Token re-sync on app foreground
@@ -4019,12 +4026,18 @@ if ('serviceWorker' in navigator) {
           reg.update().catch(err => console.log('SW update check failed:', err));
         }, 60000);
 
+        // If there's already a waiting worker, skip waiting immediately
+        if (reg.waiting) {
+          reg.waiting.postMessage({ action: 'skipWaiting' });
+        }
+
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('New service worker version detected.');
+                console.log('New service worker version detected. Skipping waiting...');
+                newWorker.postMessage({ action: 'skipWaiting' });
               }
             });
           }
