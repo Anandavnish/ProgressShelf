@@ -32,6 +32,8 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Custom Scrollbar */
@@ -168,7 +170,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
+  flex: 1;
   padding: 24px;
   position: relative;
   background: radial-gradient(circle at 50% -20%, rgba(74, 144, 217, 0.15) 0%, rgba(13, 17, 23, 0) 60%);
