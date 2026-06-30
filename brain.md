@@ -109,9 +109,15 @@ To prevent scope conflicts, all caching and push notification functions are cons
 The scheduled runner (`notifier.js`) is designed to query all trackers where `notifyAt <= now + 5 minutes` and `notified !== true`. This catches overdue alerts even if the GitHub Actions cron is delayed.
 * **Self-Healing Diagnostics:** If the scheduler queries the database and finds zero due trackers, it immediately executes an unfiltered collection group query to print a list of all trackers in your database, along with their `notifyAt`, `notified`, and `completed` fields inside the GitHub actions console log. This allows you to check active tracker states without creating mock datasets.
 
-### D. Sticky Navigation & Stats Pre-Load Skeletons
-* **Double-sticky Layout:** The navigation bar is sticky at `top: 0` (desktop height: `56px`, mobile height: `52px`). The stats banner is sticky below it (`top: 57px` on desktop, `top: 51px` on mobile media queries) to prevent any gaps.
+### D. Triple-Sticky Staggered Scroll-to-Hide Layout & Pre-Load Skeletons
+* **Triple-Sticky Staggered Layout:** The navigation bar is sticky at `top: 0` (desktop height: `56px`, mobile height: `52px`). The stats banner is sticky below it (`top: var(--navbar-height)`), and the dashboard controls are sticky below that (`top: calc(var(--navbar-height) + var(--stats-height) - 2px)`).
+* **Scroll-to-Hide Controller:** On scroll, headers are dynamically translated to slide out of view. Scrolling down hides the Dashboard Controls first, then the Stats Banner. Scrolling up reveals the Stats Banner first, then the Dashboard Controls. This is throttled via `requestAnimationFrame` for performance.
+* **Subpixel Gap Protection:** Height dimensions are measured dynamically using `getBoundingClientRect().height` for floating-point subpixel accuracy. Additionally, a `2px` negative top margin and matching sticky offset are applied to `.dashboard-controls` to overlap `.stats-banner`, preventing any scrolling cards from showing through subpixel gaps on high-DPI screens.
+* **Edit Mode Stationary Hold:** The scroll-to-hide controller is completely disabled when `editModeActive` is true, forcing all controls to be fully revealed and stationary to ensure action buttons are always accessible.
 * **Stat Skeletons:** The statistics numbers (`#stat-total`, `#stat-deadlines`, etc.) are rendered with a `.stats-skeleton` class on page load, displaying a pulsing animation. As soon as the Firestore subscription yields data, `app.js` strips the skeleton classes and populates the text. If the user has zero trackers, the stats banner fades out automatically.
+
+### E. Card Selection Border Feedback
+To maximize screen real estate and reduce layout shifting, standard checkbox selections have been removed. Instead, selected cards receive a `2px` inset/outset border ring (`box-shadow: 0 0 0 2px var(--accent)`) and a glowing background drop shadow. When one or more cards are selected, all non-selected cards are automatically dimmed to `0.45` opacity to create visual focus.
 
 ### E. PWA Launcher Icon Scaling & Centering
 To meet PWA install guidelines and ensure mobile launcher compatibility:
@@ -135,8 +141,11 @@ Builds a fresh card DOM element including custom attributes, progress fills, and
 - **Parameters:** `bar: ProgressTracker`
 - **Returns:** `HTMLElement` (representing a `.card-progress` card)
 
-### Function: `updateCardInPlace(card, bar)`
+### Function: `updateCardElement(card, bar)`
 Mutates an existing card element's properties without replacing the element, preventing DOM flickers and preserving active SVG progress transitions.
+
+### Function: `setupStaggeredHeaderScroll()`
+Orchestrates the scroll-to-hide staggered transition of the Stats Banner and Dashboard Controls. Listens to window scroll events using a requestAnimationFrame-throttled controller, applying calculated transforms to hide and show headers based on scroll direction. In Edit Mode, it forces headers to remain visible and stationary.
 
 ### Function: `setupChecklistReordering(listContainer, itemsArray, renderFn, setArrayCallback)`
 Configures HTML5 drag-and-drop on desktops and touch event element reordering on mobile screens.
@@ -167,7 +176,7 @@ When adding features or upgrading ProgressShelf, use this guide to locate target
 ### Adding a New Tracker Type (e.g. Time Tracking)
 1. **File:** `brain.md` -> Update the data model schema options for the `type` field.
 2. **File:** `app.js` -> Update `createCardElement` to add formatting layout templates for the new type.
-3. **File:** `app.js` -> Update `updateCardInPlace` to handle updating the values for the new layout.
+3. **File:** `app.js` -> Update `updateCardElement` to handle updating the values for the new layout.
 4. **File:** `dashboard.html` -> Add the option elements to the creation and editing modals.
 
 ### Moving off GitHub Actions Scheduler to Real-Time Cron
