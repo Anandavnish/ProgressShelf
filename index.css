@@ -879,7 +879,7 @@ body {
 /* Dashboard Controls */
 .dashboard-controls {
   position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px));
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 1px);
   z-index: 98;
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);
@@ -2991,7 +2991,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 /* Controls layout wrapper */
 .dashboard-controls {
   position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px));
+  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 1px);
   z-index: 98;
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);

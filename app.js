@@ -4350,11 +4350,11 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
-    // Measure dynamic heights
+    // Measure dynamic heights with subpixel precision
     const navbarEl = document.querySelector(".navbar");
-    H_nav = navbarEl ? navbarEl.offsetHeight : 57;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.offsetHeight : 0;
-    H_controls = controlsEl ? controlsEl.offsetHeight : 45;
+    H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
+    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
+    H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
 
     // Push offsets to document so sticky tops align dynamically
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
@@ -4400,9 +4400,9 @@ function setupStaggeredHeaderScroll() {
     const controlsEl = document.querySelector(".dashboard-controls");
     const navbarEl = document.querySelector(".navbar");
     
-    H_nav = navbarEl ? navbarEl.offsetHeight : 57;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.offsetHeight : 0;
-    H_controls = controlsEl ? controlsEl.offsetHeight : 45;
+    H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
+    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
+    H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
 
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
