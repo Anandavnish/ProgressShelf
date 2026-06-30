@@ -2995,16 +2995,14 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .btn-apk-download {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   background-color: rgba(74, 222, 128, 0.1);
   border: 1px solid rgba(74, 222, 128, 0.25);
   border-radius: 8px;
-  padding: 8px 16px;
-  color: #4ADE80;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
+  width: 38px;
   height: 38px;
+  color: #4ADE80;
+  cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(74, 222, 128, 0.05);
 }
@@ -3024,20 +3022,28 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   flex-shrink: 0;
 }
 
+/* Shake Animation */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-4px); }
+  30%, 60% { transform: translateX(4px); }
+}
+.shake-anim {
+  animation: shake 0.4s ease;
+}
+
 /* Edit Mode Button */
 .btn-toggle-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   background-color: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  padding: 8px 16px;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
+  width: 38px;
   height: 38px;
+  color: var(--text-primary);
+  cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -3056,7 +3062,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-color: var(--accent);
   background-color: var(--accent);
   color: #000;
-  font-weight: 600;
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
@@ -3132,34 +3137,8 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   display: block;
 }
 
-/* Card Drag Handle styling */
-.card-drag-handle {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 5;
-  cursor: move;
-  color: var(--text-muted);
-  display: none;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.card-drag-handle:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background-color: rgba(56, 189, 248, 0.1);
-}
-
 /* Edit Mode grid active state rules */
-.cards-grid.edit-mode .card-select-control,
-.cards-grid.edit-mode .card-drag-handle {
+.cards-grid.edit-mode .card-select-control {
   display: flex;
 }
 
@@ -3169,11 +3148,4 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .cards-grid.edit-mode .card-progress {
   user-select: none;
-}
-
-/* Make card dragging visual semi-transparent */
-.card-progress.dragging {
-  opacity: 0.4;
-  border: 2px dashed var(--accent) !important;
-  background-color: rgba(56, 189, 248, 0.05) !important;
 }

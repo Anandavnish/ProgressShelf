@@ -1198,14 +1198,6 @@ function createCardElement(bar) {
         </svg>
       </div>
     </div>
-    
-    <!-- Drag Handle for Arrange Mode -->
-    <div class="card-drag-handle">
-      <svg class="drag-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M12 2v20M12 2l-3 3m3-3l3 3M12 22l-3-3m3 3l3-3" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M2 12h20M2 12l3-3m-3 3l3 3M22 12l-3-3m3 3l3 3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
 
     <div class="card-actions">
       <button class="btn-card-delete" title="Delete">
@@ -1372,44 +1364,7 @@ function createCardElement(bar) {
     card.classList.add("selected");
   }
 
-  // HTML5 Drag and Drop events
-  const dragHandle = card.querySelector('.card-drag-handle');
-  if (dragHandle) {
-    let dragAllowed = false;
-    dragHandle.addEventListener('mousedown', () => {
-      dragAllowed = true;
-      card.setAttribute('draggable', 'true');
-    });
-    dragHandle.addEventListener('mouseup', () => {
-      dragAllowed = false;
-      card.removeAttribute('draggable');
-    });
-    dragHandle.addEventListener('touchstart', (e) => {
-      dragAllowed = true;
-      card.setAttribute('draggable', 'true');
-    });
-    dragHandle.addEventListener('touchend', () => {
-      dragAllowed = false;
-      card.removeAttribute('draggable');
-    });
 
-    card.addEventListener('dragstart', (e) => {
-      if (!dragAllowed) {
-        e.preventDefault();
-        return;
-      }
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', bar.id);
-    });
-
-    card.addEventListener('dragend', async () => {
-      card.classList.remove('dragging');
-      card.removeAttribute('draggable');
-      dragAllowed = false;
-      await saveNewManualOrder();
-    });
-  }
 
   card.addEventListener("click", (e) => {
     // In Edit Mode, clicking the card toggles selection
@@ -3301,14 +3256,6 @@ const setupSortSelectListener = () => {
       currentSort = e.target.value;
       localStorage.setItem("ps_sort_order", currentSort);
 
-      if (currentSort === "manual" && !hasEverManualOrdered()) {
-        if (!editModeActive) {
-          const btnToggle = document.getElementById("btn-toggle-edit");
-          if (btnToggle) btnToggle.click();
-          showToast("Arrange mode active. Drag handles to reorder cards!", "info");
-        }
-      }
-
       renderDashboard(currentBars);
 
       if (!isGuestMode() && currentUser && currentUser.uid) {
@@ -4160,29 +4107,7 @@ setupNoteCharCounters();
 const selectedBarIds = new Set();
 let editModeActive = false;
 
-// Custom 2D Drag-and-Drop Drop Indicator resolver
-function getDragAfterElement(container, y, x) {
-  const draggableElements = [...container.querySelectorAll('.card-progress:not(.dragging)')];
 
-  return draggableElements.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const childX = box.left + box.width / 2;
-    const childY = box.top + box.height / 2;
-    const distance = Math.hypot(x - childX, y - childY);
-
-    if (distance < closest.distance) {
-      return { distance: distance, element: child };
-    } else {
-      return closest;
-    }
-  }, { distance: Number.POSITIVE_INFINITY }).element;
-}
-
-// Check if user has ever manual ordered cards
-function hasEverManualOrdered() {
-  if (currentBars.length <= 1) return true;
-  return currentBars.some(bar => bar.position !== undefined && bar.position !== 0);
-}
 
 // Toggles selection state of a card in Edit Mode
 function toggleCardSelection(card) {
@@ -4213,51 +4138,15 @@ function updateDeleteSelectedButton() {
   }
 }
 
-// Saves new manual order coordinates to LocalStorage or database
-async function saveNewManualOrder() {
-  const grid = document.getElementById("cards-grid");
-  if (!grid) return;
-
-  const orderedIds = [...grid.querySelectorAll('.card-progress')].map(card => card.getAttribute('data-bar-id'));
-  if (orderedIds.length === 0) return;
-
-  // Switch sort to manual dynamically if it wasn't already manual
-  if (currentSort !== "manual") {
-    currentSort = "manual";
-    localStorage.setItem("ps_sort_order", currentSort);
-    const sortSelect = document.getElementById("sort-select");
-    if (sortSelect) sortSelect.value = "manual";
-    if (!isGuestMode() && currentUser && currentUser.uid) {
-      updateUserPreferredSort(currentSort).catch(err => console.error("Error saving manual sort preference:", err));
-    }
-  }
-
-  // Update position local objects
-  orderedIds.forEach((id, idx) => {
-    const bar = currentBars.find(b => b.id === id);
-    if (bar) bar.position = idx;
-  });
-
-  if (isGuestMode()) {
-    localStorage.setItem("guest_progress_bars", JSON.stringify(currentBars));
-  } else if (currentUser && currentUser.uid) {
-    try {
-      const updates = orderedIds.map((id, index) => {
-        return editBar(currentUser.uid, id, { position: index });
-      });
-      await Promise.all(updates);
-    } catch (err) {
-      console.error("Error saving manual positions to Supabase:", err);
-      showToast("Failed to sync card order to database.", "error");
-    }
-  }
-}
-
-// Setup APK button toast triggers
+// Setup APK button toast triggers with shake animation
 function setupAPKButton() {
   const btn = document.getElementById("btn-apk-download");
   if (btn) {
     btn.addEventListener("click", () => {
+      btn.classList.add("shake-anim");
+      btn.addEventListener("animationend", () => {
+        btn.classList.remove("shake-anim");
+      }, { once: true });
       showToast("Thanks for showing interest. APK is under development.", "info");
     });
   }
@@ -4275,7 +4164,6 @@ function setupEditModeControls() {
     editModeActive = !editModeActive;
     if (editModeActive) {
       btnToggle.classList.add("active");
-      btnToggle.querySelector("span").textContent = "Close Edit";
       grid.classList.add("edit-mode");
     } else {
       exitEditMode();
@@ -4312,23 +4200,6 @@ function setupEditModeControls() {
       }
     });
   }
-
-  // Setup HTML5 dragover grid target reordering
-  grid.addEventListener('dragover', (e) => {
-    // Only allow dragover reordering in edit mode
-    if (!editModeActive) return;
-    
-    e.preventDefault();
-    const draggingCard = document.querySelector('.card-progress.dragging');
-    if (!draggingCard) return;
-
-    const afterElement = getDragAfterElement(grid, e.clientY, e.clientX);
-    if (afterElement === undefined || afterElement === null) {
-      grid.appendChild(draggingCard);
-    } else {
-      grid.insertBefore(draggingCard, afterElement);
-    }
-  });
 }
 
 function exitEditMode() {
@@ -4341,7 +4212,6 @@ function exitEditMode() {
 
   if (btnToggle) {
     btnToggle.classList.remove("active");
-    btnToggle.querySelector("span").textContent = "Edit Mode";
   }
   if (grid) {
     grid.classList.remove("edit-mode");
