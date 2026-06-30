@@ -864,7 +864,14 @@ function updateCardElement(card, bar) {
       // Re-register checkbox listeners
       card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
         checkbox.addEventListener("click", (e) => {
-          e.stopPropagation();
+          const isExpanded = card.classList.contains("expanded");
+          const hasHiddenItems = items.length > 3;
+          if (hasHiddenItems && !isExpanded) {
+            e.preventDefault();
+            card.click();
+          } else {
+            e.stopPropagation();
+          }
         });
         checkbox.addEventListener("change", async (e) => {
           const isChecked = e.target.checked;
@@ -957,6 +964,34 @@ function updateCardElement(card, bar) {
   } else if (barType === "note") {
     const textEl = card.querySelector(".card-note-text");
     if (textEl) textEl.innerHTML = parseMarkdown(bar.text || "");
+
+    const text = bar.text || "";
+    const isLongNote = text.length > 150 || text.includes("\n");
+
+    let showMore = card.querySelector(".show-more-indicator");
+    let showLess = card.querySelector(".show-less-indicator");
+
+    if (isLongNote) {
+      if (!showMore) {
+        showMore = document.createElement("div");
+        showMore.className = "show-more-indicator";
+        showMore.textContent = "Show more";
+        textEl.after(showMore);
+      }
+      if (!showLess) {
+        showLess = document.createElement("div");
+        showLess.className = "show-less-indicator";
+        showLess.textContent = "Collapse";
+        showLess.addEventListener("click", (e) => {
+          e.stopPropagation();
+          collapseCard(card);
+        });
+        showMore.after(showLess);
+      }
+    } else {
+      if (showMore) showMore.remove();
+      if (showLess) showLess.remove();
+    }
   }
 
   // Update deadlines and SVG in-place
@@ -1131,7 +1166,10 @@ function createCardElement(bar) {
   } else if (barType === "note") {
     const text = bar.text || "";
     const isLongNote = text.length > 150 || text.includes("\n");
-    const showMoreBtnHtml = isLongNote ? `<div class="show-more-indicator">Show more</div>` : "";
+    const showMoreBtnHtml = isLongNote ? `
+      <div class="show-more-indicator">Show more</div>
+      <div class="show-less-indicator">Collapse</div>
+    ` : "";
     bodyHtml = `
       <div class="card-note-text">${parseMarkdown(text)}</div>
       ${showMoreBtnHtml}
@@ -1221,7 +1259,14 @@ function createCardElement(bar) {
   if (barType === "checklist") {
     card.querySelectorAll(".card-checklist-item input[type='checkbox']").forEach((checkbox, idx) => {
       checkbox.addEventListener("click", (e) => {
-        e.stopPropagation(); // Stop click from opening update modal / expanding card
+        const isExpanded = card.classList.contains("expanded");
+        const hasHiddenItems = (card._barData.items || []).length > 3;
+        if (hasHiddenItems && !isExpanded) {
+          e.preventDefault();
+          card.click();
+        } else {
+          e.stopPropagation(); // Stop click from opening update modal / expanding card
+        }
       });
 
       checkbox.addEventListener("change", async (e) => {

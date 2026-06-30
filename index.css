@@ -958,7 +958,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 180px;
   height: auto;
   transition: transform var(--transition-speed) var(--transition-ease),
@@ -1845,6 +1845,7 @@ body {
   background: var(--card-border);
   margin: 12px 0 0 0;
   width: 100%;
+  margin-top: auto;
 }
 
 /* Deadline SVG Border styles */
@@ -2497,6 +2498,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   max-height: 120px;
   overflow: hidden;
   transition: max-height 0.35s ease;
+  flex-grow: 1;
 }
 
 .card-progress.expanded .card-checklist-container {
@@ -2544,7 +2546,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .card-note-text {
   font-size: 0.92rem;
   line-height: 1.6;
-  color: var(--text-primary);
+  color: #c9d1d9;
   margin-top: 12px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2556,6 +2558,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   text-overflow: ellipsis;
   max-height: 96px; /* 4 lines approx */
   transition: max-height 0.35s ease;
+  flex-grow: 1;
 }
 
 .card-progress.expanded .card-note-text {
@@ -2894,12 +2897,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-muted);
 }
 
-/* Markdown formatting inside Notes Cards */
-.card-note-text {
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
 
 .card-note-text .note-h1 {
   font-size: 1.15rem;
