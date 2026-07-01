@@ -88,19 +88,30 @@ self.addEventListener('fetch', (event) => {
 });
 
 // --- FCM Push Notification Integration ---
-importScripts('firebase-config.js');
+try {
+  importScripts('firebase-config.js');
+} catch (e) {
+  console.warn('[sw.js] Could not load firebase-config.js, FCM will be disabled.');
+}
+
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-if (self.firebaseConfig) {
-  firebase.initializeApp(self.firebaseConfig);
+let messaging = null;
+if (self.firebaseConfig && self.firebaseConfig.apiKey) {
+  try {
+    firebase.initializeApp(self.firebaseConfig);
+    messaging = firebase.messaging();
+  } catch (err) {
+    console.error('[sw.js] Firebase initialization failed:', err);
+  }
 }
 
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage((payload) => {
-  console.log('[sw.js] Received background message ', payload);
-});
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[sw.js] Received background message ', payload);
+  });
+}
 
 self.addEventListener('push', event => {
   let data = { title: 'ProgressShelf', body: 'You have a deadline alert.' };
