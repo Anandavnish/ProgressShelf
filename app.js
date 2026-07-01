@@ -3320,6 +3320,13 @@ function adjustSearchLayout() {
 
   if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar) return;
 
+  // On mobile screens, always force pill mode (since version select & github link are moved to secondary bar)
+  if (window.innerWidth <= 768) {
+    searchContainer.classList.add("search-pill-mode");
+    searchContainer.classList.remove("expanded");
+    return;
+  }
+
   // If mobile overlay is currently expanded, don't collapse it
   if (searchContainer.classList.contains("expanded")) {
     return;

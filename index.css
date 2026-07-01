@@ -2244,6 +2244,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   top: auto;
   background-color: #1f242c;
 }
+.mobile-subbar {
+  display: none;
+}
 
 /* --- Mobile Responsive Collapsible Navbar Layout --- */
 @media (max-width: 768px) {
@@ -2275,6 +2278,57 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
   .nav-toolbar {
     gap: 8px !important;
+  }
+
+  /* Hide original Version selector and GitHub icon from the main navbar on mobile */
+  .navbar .nav-github-link,
+  .navbar .version-selector {
+    display: none !important;
+  }
+
+  /* Force search pill mode to occupy all middle space on mobile */
+  .nav-search-container.search-pill-mode {
+    margin: 0 8px !important;
+    flex-grow: 1;
+    max-width: none !important;
+  }
+
+  /* Secondary mobile subbar stylesheet */
+  .mobile-subbar {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: rgba(13, 17, 23, 0.6);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--card-border);
+    z-index: 99;
+  }
+
+  .mobile-subbar-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .mobile-github-link {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    transition: color 0.2s ease;
+  }
+
+  .mobile-github-link:hover {
+    color: var(--text-primary);
+  }
+
+  .mobile-version-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
   }
 
   .version-select {
