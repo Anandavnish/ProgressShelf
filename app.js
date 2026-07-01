@@ -5,15 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebas
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // Initialize Firebase FCM if configured (keeps FCM token system intact)
-const firebaseConfig = {
-  apiKey: "AIzaSyCDV0zHk8kjcXgLFd5zIpREmwxuMJed7FQ",
-  authDomain: "progressshelf.firebaseapp.com",
-  projectId: "progressshelf",
-  storageBucket: "progressshelf.firebasestorage.app",
-  messagingSenderId: "311368772862",
-  appId: "1:311368772862:web:4806e3f2a41455c2b289af",
-  measurementId: "G-VK2HK44LT1"
-};
+const firebaseConfig = window.firebaseConfig || {};
 
 let messaging = null;
 if (isConfigured) {
