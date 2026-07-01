@@ -427,6 +427,27 @@ body {
   gap: 16px;
 }
 
+.nav-refresh-btn {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color var(--transition-speed) ease, transform var(--transition-speed) ease;
+}
+
+.nav-refresh-btn:hover {
+  color: var(--text-primary);
+}
+
+.nav-refresh-btn:active {
+  transform: scale(0.9);
+}
+
 .nav-github-link {
   color: var(--text-muted);
   display: flex;
@@ -589,8 +610,8 @@ body {
 /* Overall Stats Bar (3D Glossy Buttons) - Smaller & Centered */
 .stats-banner {
   position: sticky;
-  top: var(--navbar-height, 57px);
-  z-index: 99;
+  top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px));
+  z-index: 98;
   background-color: rgba(13, 17, 23, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -881,8 +902,8 @@ body {
 /* Dashboard Controls */
 .dashboard-controls {
   position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
-  z-index: 98;
+  top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px) + var(--stats-height, 0px) - 2px);
+  z-index: 97;
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -2295,8 +2316,10 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
   /* Secondary mobile subbar stylesheet */
   .mobile-subbar {
+    position: sticky !important;
+    top: var(--navbar-height, 51px) !important;
     display: flex !important;
-    justify-content: center;
+    justify-content: flex-start !important; /* Move them to start from left */
     align-items: center;
     padding: 8px 16px;
     background-color: rgba(13, 17, 23, 0.6);
@@ -2304,11 +2327,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--card-border);
     z-index: 99;
+    will-change: transform;
   }
 
   .mobile-subbar-container {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start; /* Move them to start from left */
     align-items: center;
     gap: 16px;
     width: 100%;
@@ -2321,6 +2345,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     transition: color 0.2s ease;
   }
 
+  .mobile-github-link svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
   .mobile-github-link:hover {
     color: var(--text-primary);
   }
@@ -2329,6 +2359,27 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     position: relative;
     display: flex;
     align-items: center;
+  }
+
+  .mobile-refresh-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+
+  .mobile-refresh-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .mobile-refresh-btn:active {
+    transform: scale(0.9);
   }
 
   .version-select {

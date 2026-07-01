@@ -4316,14 +4316,19 @@ setupAPKButton();
 setupEditModeControls();
 
 // Scroll state variables at module scope so edit mode controls can reset them
+// Scroll state variables at module scope so edit mode controls can reset them
+let y_subbar = 0;
 let y_stats = 0;
 let y_controls = 0;
 
 function resetHeaderScroll() {
+  y_subbar = 0;
   y_stats = 0;
   y_controls = 0;
+  const subbarEl = document.querySelector(".mobile-subbar");
   const statsEl = document.getElementById("stats-banner");
   const controlsEl = document.querySelector(".dashboard-controls");
+  if (subbarEl) subbarEl.style.transform = "translateY(0px)";
   if (statsEl) statsEl.style.transform = "translateY(0px)";
   if (controlsEl) controlsEl.style.transform = "translateY(0px)";
 }
@@ -4331,6 +4336,7 @@ function resetHeaderScroll() {
 function setupStaggeredHeaderScroll() {
   let lastScrollY = window.scrollY;
   let H_nav = 57;
+  let H_subbar = 0;
   let H_stats = 0;
   let H_controls = 45;
   let scrollTicking = false;
@@ -4340,6 +4346,7 @@ function setupStaggeredHeaderScroll() {
     const deltaY = currentScrollY - lastScrollY;
     lastScrollY = currentScrollY;
 
+    const subbarEl = document.querySelector(".mobile-subbar");
     const statsEl = document.getElementById("stats-banner");
     const controlsEl = document.querySelector(".dashboard-controls");
 
@@ -4350,26 +4357,42 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
-    // Clear translations at the top of the page
-    if (currentScrollY <= 0) {
-      resetHeaderScroll();
-      scrollTicking = false;
-      return;
-    }
-
     // Measure dynamic heights with subpixel precision
     const navbarEl = document.querySelector(".navbar");
     H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
+    H_subbar = (subbarEl && window.getComputedStyle(subbarEl).display !== "none") ? subbarEl.getBoundingClientRect().height : 0;
     H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
     H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
 
     // Push offsets to document so sticky tops align dynamically
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
+    document.documentElement.style.setProperty("--subbar-height", `${H_subbar}px`);
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
+    // Clear translations at the top of the page and bring back mobile subbar
+    if (currentScrollY <= 5) {
+      resetHeaderScroll();
+      scrollTicking = false;
+      return;
+    }
+
     if (deltaY > 0) {
-      // Scrolling down -> hide dashboard controls first, then stats banner
-      if (y_controls < H_controls) {
+      // Scrolling down (page content moving up): hide mobile subbar -> then controls -> then stats panel
+      if (H_subbar > 0 && y_subbar < H_subbar) {
+        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
+        const remaining = deltaY - (H_subbar - y_subbar);
+        if (remaining > 0) {
+          if (y_controls < H_controls) {
+            y_controls = Math.min(H_controls, y_controls + remaining);
+            const remaining2 = remaining - (H_controls - y_controls);
+            if (remaining2 > 0) {
+              y_stats = Math.min(H_stats, y_stats + remaining2);
+            }
+          } else {
+            y_stats = Math.min(H_stats, y_stats + remaining);
+          }
+        }
+      } else if (y_controls < H_controls) {
         y_controls = Math.min(H_controls, y_controls + deltaY);
         const remaining = deltaY - (H_controls - y_controls);
         if (remaining > 0) {
@@ -4379,23 +4402,27 @@ function setupStaggeredHeaderScroll() {
         y_stats = Math.min(H_stats, y_stats + deltaY);
       }
     } else if (deltaY < 0) {
-      // Scrolling up -> reveal stats banner first, then dashboard controls
-      if (y_stats > 0) {
-        y_stats = Math.max(0, y_stats + deltaY);
-        const remaining = deltaY + y_stats; // deltaY is negative
+      // Scrolling up (page content moving down): instantly show controls -> then stats panel.
+      // Wait to bring back the mobile subcontainer (y_subbar stays H_subbar until we hit the top/scrollY <= 5).
+      if (y_controls > 0) {
+        y_controls = Math.max(0, y_controls + deltaY);
+        const remaining = deltaY + (y_controls); // deltaY is negative
         if (remaining < 0) {
-          y_controls = Math.max(0, y_controls + remaining);
+          y_stats = Math.max(0, y_stats + remaining);
         }
       } else {
-        y_controls = Math.max(0, y_controls + deltaY);
+        y_stats = Math.max(0, y_stats + deltaY);
       }
     }
 
+    if (subbarEl) {
+      subbarEl.style.transform = `translateY(-${y_subbar}px)`;
+    }
     if (statsEl) {
-      statsEl.style.transform = `translateY(-${y_stats}px)`;
+      statsEl.style.transform = `translateY(-${y_subbar + y_stats}px)`;
     }
     if (controlsEl) {
-      controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+      controlsEl.style.transform = `translateY(-${y_subbar + y_stats + y_controls}px)`;
     }
 
     scrollTicking = false;
@@ -4403,24 +4430,29 @@ function setupStaggeredHeaderScroll() {
 
   // Handle window resizing and height re-evaluation
   function handleResize() {
+    const subbarEl = document.querySelector(".mobile-subbar");
     const statsEl = document.getElementById("stats-banner");
     const controlsEl = document.querySelector(".dashboard-controls");
     const navbarEl = document.querySelector(".navbar");
     
     H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
+    H_subbar = (subbarEl && window.getComputedStyle(subbarEl).display !== "none") ? subbarEl.getBoundingClientRect().height : 0;
     H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
     H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
 
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
+    document.documentElement.style.setProperty("--subbar-height", `${H_subbar}px`);
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
     if (editModeActive) {
       resetHeaderScroll();
     } else {
+      y_subbar = Math.min(y_subbar, H_subbar);
       y_stats = Math.min(y_stats, H_stats);
       y_controls = Math.min(y_controls, H_controls);
-      if (statsEl) statsEl.style.transform = `translateY(-${y_stats}px)`;
-      if (controlsEl) controlsEl.style.transform = `translateY(-${y_stats + y_controls}px)`;
+      if (subbarEl) subbarEl.style.transform = `translateY(-${y_subbar}px)`;
+      if (statsEl) statsEl.style.transform = `translateY(-${y_subbar + y_stats}px)`;
+      if (controlsEl) controlsEl.style.transform = `translateY(-${y_subbar + y_stats + y_controls}px)`;
     }
   }
 
@@ -4437,6 +4469,66 @@ function setupStaggeredHeaderScroll() {
   handleResize();
 }
 setupStaggeredHeaderScroll();
+
+// ==========================================
+// Manual Refresh Actions (Credentials & Service Worker Cache)
+// ==========================================
+const setupRefreshListeners = () => {
+  const btnRefresh = document.getElementById("btn-refresh");
+  const btnMobileRefresh = document.getElementById("mobile-btn-refresh");
+
+  const onRefresh = async () => {
+    if (btnRefresh) btnRefresh.style.pointerEvents = "none";
+    if (btnMobileRefresh) btnMobileRefresh.style.pointerEvents = "none";
+
+    const toast = showToast("Refreshing App data & register credentials...", "info", 0);
+    try {
+      // 1. Refresh FCM Token in Supabase
+      if (!isGuestMode() && currentUser && currentUser.uid) {
+        const oldToken = localStorage.getItem("ps_fcm_token");
+        if (oldToken) {
+          try {
+            await deleteFCMToken(currentUser.uid, oldToken);
+          } catch (e) {
+            console.warn("Error deleting old token:", e);
+          }
+          localStorage.removeItem("ps_fcm_token");
+        }
+        // Re-register FCM session
+        await handleFCMSession(currentUser.uid);
+      }
+
+      // 2. Clear browser cache for this site
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      }
+
+      // 3. Trigger Service Worker update check
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(reg => reg.update()));
+      }
+
+      dismissToast(toast);
+      showToast("App refreshed successfully! Reloading...", "success");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      console.error("Manual refresh failed:", error);
+      dismissToast(toast);
+      showToast("Refresh failed. Reloading anyway...", "error");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    }
+  };
+
+  btnRefresh?.addEventListener("click", onRefresh);
+  btnMobileRefresh?.addEventListener("click", onRefresh);
+};
+setupRefreshListeners();
 
 // ==========================================
 // Service Worker Registration & Updates
