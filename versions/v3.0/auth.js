@@ -97,7 +97,13 @@ export function initAuthProtection(onUserActive) {
       }
     } else {
       if (isDashboard) {
-        window.location.href = "index.html";
+        // No auth state on dashboard and Firebase not configured:
+        // Auto-enter guest mode so the dashboard loads correctly
+        // (happens when navigating via version selector from another version)
+        sessionStorage.setItem('guest_mode', 'true');
+        if (onUserActive) {
+          setTimeout(() => onUserActive({ uid: null, displayName: "Guest" }), 100);
+        }
       }
     }
     return;

@@ -1,4 +1,5 @@
 firebase-config.js
+!versions/*/firebase-config.js
 
 node_modules/
 functions/node_modules/
