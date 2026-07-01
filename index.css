@@ -928,6 +928,28 @@ body {
   padding: 8px 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   height: 38px;
+  transition: all 0.2s ease;
+}
+
+.sort-container.danger-active {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.sort-container.danger-active:hover {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.sort-container.danger-active .delete-del-btn {
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.select-del-title {
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 .sort-label {

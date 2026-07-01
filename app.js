@@ -4213,16 +4213,65 @@ function toggleCardSelection(card) {
   updateDeleteSelectedButton();
 }
 
-// Update state/label of the delete selected button
+// Update state/label of the delete selected button and sort select replacement
 function updateDeleteSelectedButton() {
   const btn = document.getElementById("btn-delete-selected");
   if (btn) {
     btn.textContent = `Delete Selected (${selectedBarIds.size})`;
-    if (selectedBarIds.size > 0) {
-      btn.classList.remove("hidden");
-    } else {
-      btn.classList.add("hidden");
+    btn.classList.add("hidden");
+  }
+
+  const sortContainer = document.querySelector(".sort-container");
+  if (!sortContainer) return;
+
+  if (editModeActive) {
+    // Hide original sort select elements
+    const label = sortContainer.querySelector(".sort-label");
+    const select = sortContainer.querySelector("#sort-select");
+    if (label) label.style.display = "none";
+    if (select) select.style.display = "none";
+
+    // Check if our custom edit container exists
+    let editContainer = sortContainer.querySelector(".edit-selection-status");
+    if (!editContainer) {
+      editContainer = document.createElement("div");
+      editContainer.className = "edit-selection-status";
+      sortContainer.appendChild(editContainer);
     }
+
+    if (selectedBarIds.size === 0) {
+      editContainer.innerHTML = `<span class="select-del-title">Select the card to del</span>`;
+      sortContainer.style.cursor = "default";
+      sortContainer.onclick = null;
+      sortContainer.classList.remove("danger-active");
+    } else {
+      editContainer.innerHTML = `<span class="delete-del-btn">Delete Selected (${selectedBarIds.size})</span>`;
+      sortContainer.style.cursor = "pointer";
+      sortContainer.classList.add("danger-active");
+      
+      // Bind click handler to sort container to execute delete
+      sortContainer.onclick = (e) => {
+        e.stopPropagation();
+        const btnDeleteReal = document.getElementById("btn-delete-selected");
+        if (btnDeleteReal) {
+          btnDeleteReal.click();
+        }
+      };
+    }
+  } else {
+    // Restore original sort select elements
+    const label = sortContainer.querySelector(".sort-label");
+    const select = sortContainer.querySelector("#sort-select");
+    if (label) label.style.display = "";
+    if (select) select.style.display = "";
+
+    const editContainer = sortContainer.querySelector(".edit-selection-status");
+    if (editContainer) {
+      editContainer.remove();
+    }
+    sortContainer.style.cursor = "";
+    sortContainer.onclick = null;
+    sortContainer.classList.remove("danger-active");
   }
 }
 
@@ -4267,6 +4316,7 @@ function setupEditModeControls() {
       if (controls) controls.classList.add("edit-active");
       window.history.pushState({ editMode: true }, "");
       resetHeaderScroll();
+      updateDeleteSelectedButton();
     } else {
       exitEditMode();
     }
@@ -4392,13 +4442,6 @@ function setupStaggeredHeaderScroll() {
     const statsEl = document.getElementById("stats-banner");
     const controlsEl = document.querySelector(".dashboard-controls");
 
-    // Don't scroll or hide panels if Edit Mode is active
-    if (editModeActive) {
-      resetHeaderScroll();
-      scrollTicking = false;
-      return;
-    }
-
     // Measure dynamic heights with subpixel precision
     const navbarEl = document.querySelector(".navbar");
     H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
@@ -4418,7 +4461,13 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
-    if (deltaY > 0) {
+    if (editModeActive) {
+      y_stats = 0;
+      y_controls = 0;
+      if (deltaY > 0 && H_subbar > 0) {
+        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
+      }
+    } else if (deltaY > 0) {
       // Scrolling down (hide elements): Controls first -> then Stats banner -> then Mobile subbar
       let toDistribute = deltaY;
       
