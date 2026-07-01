@@ -4293,7 +4293,9 @@ function setupAPKButton() {
 let isPopStateExit = false;
 
 window.addEventListener("popstate", (event) => {
-  if (editModeActive) {
+  if (isTerraceOpen) {
+    closeTerracePage(true);
+  } else if (editModeActive) {
     isPopStateExit = true;
     exitEditMode();
     isPopStateExit = false;
@@ -4693,3 +4695,155 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// ==========================================
+// Terrace Updates Overlay Page Logic
+// ==========================================
+let isTerraceOpen = false;
+
+const terraceUpdates = [
+  {
+    version: "v4.0 (Latest)",
+    date: "July 2, 2026",
+    isLatest: true,
+    title: "Supabase Integration, FMC Sync & Controls Dashboard",
+    content: `
+### Backend Migration
+* Migrated database and user authentication framework from Firebase to **Supabase** to secure direct DB queries and custom user sessions.
+
+### Dynamic Controls Dashboard
+* Introduced the **Controls Dashboard** container underneath the stats banner, carrying version select and GitHub shortcuts.
+* Added the manual **App Refresh** button, featuring a smooth rhythmic rotation animation, ensuring Sw cache clearance and FMC token updates.
+* Supported **Bulk Card Deletion**: Users can toggle Edit Mode, check multiple items, and trigger batch deletion directly from the sort dropdown.
+
+### Scrolling Sequential Animations
+* Implemented an overlay-hiding cascading scroll logic: scrolling down hides controls -> then stats -> then mobile subbar. Scrolling up brings them back sequentially.
+
+### Layout Optimization
+* Capped search container to max-width **341px** and height **32px**.
+* Enabled DOM width caching to remove resizing event loop lags.
+    `
+  },
+  {
+    version: "v3.0",
+    date: "July 1, 2026",
+    isLatest: false,
+    title: "Checking Stats, Multi-Card Types & Refined Alerts",
+    content: `
+### Dynamic Stats Banner
+* Introduced the **Stats Banner** dashboard summary buttons displaying active count, checklist progress, due dates, and quick notes.
+
+### Multi-Card Type Support
+* Expanded card formats from basic progress trackers to support **Checklist** lists and **Quick Notes**.
+
+### Instant Search Bar
+* Added a header search bar allowing live filtering of dashboard progress cards.
+
+### Enhanced Alerts & Back gestures
+* Refined in-app deadlines alerts and system back-gesture interceptions for mobile viewports.
+    `
+  },
+  {
+    version: "v2.0",
+    date: "June 25, 2026",
+    isLatest: false,
+    title: "Deadline Border Highlights & Custom Due Dates",
+    content: `
+### Card Deadlines
+* Integrated date-picker properties for individual trackers.
+* Added progress card border color variations depending on proximity to the due date.
+    `
+  },
+  {
+    version: "v1.0",
+    date: "June 23, 2026",
+    isLatest: false,
+    title: "Initial Launch of ProgressShelf",
+    content: `
+### Main Features
+* Simple dashboard page for tracking custom progress percentages.
+* Goal parameters, manual completion metrics, and browser local storage options.
+    `
+  }
+];
+
+function parseTerraceMarkdown(text) {
+  return text
+    .trim()
+    .split('\n')
+    .map(line => {
+      line = line.trim();
+      if (line.startsWith("### ")) {
+        return `<h3>${line.substring(4)}</h3>`;
+      }
+      if (line.startsWith("* ")) {
+        let content = line.substring(2);
+        content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        return `<li>${content}</li>`;
+      }
+      return line;
+    })
+    .join('\n')
+    .replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/<\/ul>\s*<ul>/g, '');
+}
+
+function renderTerraceUpdates() {
+  const container = document.getElementById("terrace-content");
+  if (!container) return;
+
+  container.innerHTML = terraceUpdates.map(up => `
+    <div class="terrace-card ${up.isLatest ? 'latest' : ''}">
+      <div class="terrace-card-header">
+        <span class="terrace-version-badge">${up.version}</span>
+        <span class="terrace-date">${up.date}</span>
+        <h2 class="terrace-version-title">${up.title}</h2>
+      </div>
+      <div class="terrace-body">
+        ${parseTerraceMarkdown(up.content)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openTerracePage() {
+  isTerraceOpen = true;
+  const overlay = document.getElementById("terrace-overlay");
+  if (overlay) {
+    overlay.classList.add("visible");
+  }
+  renderTerraceUpdates();
+  window.history.pushState({ terraceOpen: true }, "");
+}
+
+function closeTerracePage(isPopState = false) {
+  isTerraceOpen = false;
+  const overlay = document.getElementById("terrace-overlay");
+  if (overlay) {
+    overlay.classList.remove("visible");
+  }
+  if (!isPopState) {
+    window.history.back();
+  }
+}
+
+// Bind Terrace event triggers
+const setupTerracePage = () => {
+  const btnTerrace = document.getElementById("btn-terrace");
+  const btnCloseTerrace = document.getElementById("btn-close-terrace");
+
+  if (btnTerrace) {
+    btnTerrace.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (profileDropdown) profileDropdown.classList.remove("active");
+      openTerracePage();
+    });
+  }
+
+  if (btnCloseTerrace) {
+    btnCloseTerrace.addEventListener("click", () => {
+      closeTerracePage(false);
+    });
+  }
+};
+setupTerracePage();

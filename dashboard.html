@@ -136,7 +136,16 @@
               <p id="user-name" class="dropdown-user-name">Loading...</p>
               <p id="user-status" class="dropdown-user-status">Online Mode</p>
             </div>
-            <div class="dropdown-divider"></div>
+             <div class="dropdown-divider"></div>
+             <button id="btn-terrace" class="dropdown-item btn-terrace">
+               <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                 <path d="M3 3v5h5"></path>
+                 <path d="M12 7v5l4 2"></path>
+               </svg>
+               What's New (Terrace)
+             </button>
+             <div class="dropdown-divider"></div>
             <button id="btn-logout" class="dropdown-item btn-logout">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -812,6 +821,29 @@
       </div>
     </footer>
 
+  </div>
+
+  <!-- Terrace Updates Overlay Page -->
+  <div id="terrace-overlay" class="terrace-overlay">
+    <div class="terrace-header">
+      <button id="btn-close-terrace" class="terrace-back-btn" title="Back / Close">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div class="terrace-title-group">
+        <svg class="terrace-title-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+          <path d="M12 7v5l4 2"></path>
+        </svg>
+        <span class="terrace-title-text">Terrace Updates</span>
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+    
+    <div id="terrace-content" class="terrace-content"></div>
   </div>
 
   <!-- Toast Notification Container -->
