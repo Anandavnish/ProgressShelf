@@ -104,8 +104,9 @@
       <div class="nav-toolbar">
         <!-- Refresh Button -->
         <button id="btn-refresh" class="nav-refresh-btn" title="Refresh App & Cache">
-          <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor">
-            <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 126.5 27T710-680h-80q-34-26-75.5-38T480-731q-106 0-179.5 73.5T227-480q0 106 73.5 179.5T480-227q84 0 148-47.5T712-400h81q-21 113-106.5 186.5T480-160Zm240-320v-200l-63 63q-38-38-90-58t-107-20v80q42 0 77 15t63 43l-63 63h240Z"/>
+          <svg class="refresh-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.72 2.78L21 8"></path>
+            <polyline points="21 3 21 8 16 8"></polyline>
           </svg>
         </button>
         <!-- GitHub Link -->
@@ -167,29 +168,6 @@
     <!-- Secondary Mobile Subbar (Version select & GitHub link for mobile screen space optimization) -->
     <div class="mobile-subbar">
       <div class="mobile-subbar-container">
-        <!-- Version Selector -->
-        <div class="mobile-version-selector">
-          <select class="version-select" onchange="location = this.value;">
-            <option value="" disabled selected>v4.0 (Latest)</option>
-            <option value="versions/v3.0/dashboard.html">v3.0 (Firebase)</option>
-            <option value="versions/v2.0/dashboard.html">v2.0 (Stable)</option>
-            <option value="versions/v1.0/dashboard.html">v1.0 (Basic)</option>
-          </select>
-        </div>
-        <!-- Refresh Button -->
-        <button id="mobile-btn-refresh" class="mobile-refresh-btn" title="Refresh App & Cache">
-          <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
-            <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 126.5 27T710-680h-80q-34-26-75.5-38T480-731q-106 0-179.5 73.5T227-480q0 106 73.5 179.5T480-227q84 0 148-47.5T712-400h81q-21 113-106.5 186.5T480-160Zm240-320v-200l-63 63q-38-38-90-58t-107-20v80q42 0 77 15t63 43l-63 63h240Z"/>
-          </svg>
-        </button>
-        <!-- GitHub Link -->
-        <a class="mobile-github-link" href="https://github.com/Anandavnish/ProgressShelf" target="_blank"
-          rel="noopener noreferrer" title="View Source on GitHub">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" clip-rule="evenodd"
-              d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-          </svg>
-        </a>
       </div>
     </div>
 

@@ -896,7 +896,7 @@ body {
 .dashboard-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 0 24px 40px 24px;
   animation: fadeIn 0.4s var(--transition-ease);
 }
 /* Dashboard Controls */
@@ -2319,7 +2319,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     position: sticky !important;
     top: var(--navbar-height, 51px) !important;
     display: flex !important;
-    justify-content: flex-start !important; /* Move them to start from left */
+    justify-content: flex-end !important; /* Align from right */
     align-items: center;
     padding: 8px 16px;
     background-color: rgba(13, 17, 23, 0.6);
@@ -2332,63 +2332,27 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
   .mobile-subbar-container {
     display: flex;
-    justify-content: flex-start; /* Move them to start from left */
+    justify-content: flex-end; /* Align from right */
     align-items: center;
     gap: 16px;
     width: 100%;
   }
 
-  .mobile-github-link {
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    transition: color 0.2s ease;
-  }
-
-  .mobile-github-link svg {
-    width: 18px;
-    height: 18px;
-    display: block;
-  }
-
-  .mobile-github-link:hover {
-    color: var(--text-primary);
-  }
-
-  .mobile-version-selector {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .mobile-refresh-btn {
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--text-muted);
-    cursor: pointer;
+  /* Style toolbar items when dynamically moved to the mobile subbar */
+  .mobile-subbar .nav-refresh-btn,
+  .mobile-subbar .nav-github-link,
+  .mobile-subbar .version-selector {
     display: flex !important;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: color 0.2s ease, transform 0.2s ease;
   }
 
-  .mobile-refresh-btn:hover {
-    color: var(--text-primary);
-  }
-
-  .mobile-refresh-btn:active {
-    transform: scale(0.9);
-  }
-
-  .version-select {
+  .mobile-subbar .version-select {
     font-size: 0.6rem !important;
     padding: 4px 15px 4px 6px !important;
     background-position: right 4px center !important;
   }
 
-  .nav-github-link svg {
+  .mobile-subbar .nav-github-link svg,
+  .mobile-subbar .nav-refresh-btn svg {
     width: 18px !important;
     height: 18px !important;
   }

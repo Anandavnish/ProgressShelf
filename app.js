@@ -3310,52 +3310,88 @@ function getPlaceholderWidth(input) {
   return context.measureText(text).width;
 }
 
-// Adjusts the search layout dynamically based on available screen space
+// Measure search container width representing 4 characters + "..."
+function getThresholdSearchWidth(input) {
+  const text = "Sear...";
+  const canvas = getThresholdSearchWidth.canvas || (getThresholdSearchWidth.canvas = document.createElement("canvas"));
+  const context = canvas.getContext("2d");
+  const style = window.getComputedStyle(input);
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  // Add input paddings and search button width (left padding 16px, search button 32px, clear button gap, etc. = ~75px)
+  return context.measureText(text).width + 75;
+}
+
+// Adjusts the search layout dynamically based on available screen space and placeholder visibility
 function adjustSearchLayout() {
   const searchInput = document.getElementById("global-search");
   const searchContainer = document.querySelector(".nav-search-container");
   const navContainer = document.querySelector(".nav-container");
   const logo = document.querySelector(".nav-logo");
   const toolbar = document.querySelector(".nav-toolbar");
+  const profileBadge = document.querySelector(".profile-menu-container");
+  const subbarEl = document.querySelector(".mobile-subbar");
+  const subbarContainer = document.querySelector(".mobile-subbar-container");
 
-  if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar) return;
+  if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar || !subbarEl || !subbarContainer) return;
 
-  // On mobile screens, always force pill mode (since version select & github link are moved to secondary bar)
-  if (window.innerWidth <= 768) {
-    searchContainer.classList.add("search-pill-mode");
-    searchContainer.classList.remove("expanded");
-    return;
+  const btnRefresh = document.getElementById("btn-refresh");
+  const githubLink = document.querySelector(".nav-github-link");
+  const versionSelector = document.querySelector(".version-selector");
+
+  // Temporarily return elements to desktop toolbar to measure natural desktop layout widths
+  if (btnRefresh && btnRefresh.parentElement !== toolbar) {
+    toolbar.appendChild(btnRefresh);
+  }
+  if (githubLink && githubLink.parentElement !== toolbar) {
+    toolbar.appendChild(githubLink);
+  }
+  if (versionSelector && versionSelector.parentElement !== toolbar) {
+    toolbar.appendChild(versionSelector);
   }
 
-  // If mobile overlay is currently expanded, don't collapse it
-  if (searchContainer.classList.contains("expanded")) {
-    return;
-  }
+  // Set subbar to display none temporarily to measure natural clientWidths
+  subbarEl.style.display = "none";
 
-  // If there's an active query, keep pill mode so user can see it
-  if (searchInput.value.trim() !== "") {
-    searchContainer.classList.add("search-pill-mode");
-    return;
-  }
-
-  // Calculate available space in nav bar for search pill (excluding search bar itself)
   const navWidth = navContainer.clientWidth;
   const logoWidth = logo.getBoundingClientRect().width;
+  const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
   const toolbarWidth = toolbar.getBoundingClientRect().width;
 
-  // Space available = total navbar width - logo - toolbar - two gaps of 22.65px (45.3px)
-  const availableWidth = navWidth - logoWidth - toolbarWidth - 45.3;
+  // Space available for search container = total navbar width - logo - profile - toolbar - margins/gaps
+  const availableWidth = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
 
-  // Minimum required width for pill-mode (placeholder text + paddings/buttons gap)
-  // Left padding 16px, search button 32px, gap 8px, right padding 3px = 59px. Let's add 5px safety buffer.
-  const placeholderWidth = getPlaceholderWidth(searchInput);
-  const minRequiredWidth = placeholderWidth + 64;
+  // Search input width threshold below which the placeholder shows 4 or fewer characters
+  const thresholdWidth = getThresholdSearchWidth(searchInput);
 
-  if (availableWidth >= minRequiredWidth) {
+  if (availableWidth < thresholdWidth && window.innerWidth <= 768) {
+    // Search placeholder starts to hide/clip too much -> Move toolbar items to mobile subbar
+    // Append them in order: Refresh Button -> GitHub Link -> Version Selector so they align
+    // in mobile subbar from left-to-right as: Refresh -> GitHub -> Version Selector.
+    // Since subbar uses justify-content: flex-end, they read from right-to-left as: Version -> GitHub -> Refresh.
+    if (btnRefresh) subbarContainer.appendChild(btnRefresh);
+    if (githubLink) subbarContainer.appendChild(githubLink);
+    if (versionSelector) subbarContainer.appendChild(versionSelector);
+
+    subbarEl.style.display = ""; // Show subbar
     searchContainer.classList.add("search-pill-mode");
+    searchContainer.classList.remove("expanded");
   } else {
-    searchContainer.classList.remove("search-pill-mode");
+    // Enough space to keep all elements in navbar
+    subbarEl.style.display = "none"; // Hide subbar
+
+    // Check if search bar should be pill mode or icon-only on desktop
+    const minRequiredWidth = getPlaceholderWidth(searchInput) + 64;
+    const availableWidthWithDesktopToolbar = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
+
+    if (searchInput.value.trim() !== "" || availableWidthWithDesktopToolbar >= minRequiredWidth) {
+      searchContainer.classList.add("search-pill-mode");
+    } else {
+      searchContainer.classList.remove("search-pill-mode");
+    }
   }
+
+  // Force re-evaluation of staggered heights so scroll offsets are correct for the new layout
+  window.dispatchEvent(new Event('resize'));
 }
 
 // Setup global search input listener
@@ -4377,41 +4413,42 @@ function setupStaggeredHeaderScroll() {
     }
 
     if (deltaY > 0) {
-      // Scrolling down (page content moving up): hide mobile subbar -> then controls -> then stats panel
-      if (H_subbar > 0 && y_subbar < H_subbar) {
-        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
-        const remaining = deltaY - (H_subbar - y_subbar);
-        if (remaining > 0) {
-          if (y_controls < H_controls) {
-            y_controls = Math.min(H_controls, y_controls + remaining);
-            const remaining2 = remaining - (H_controls - y_controls);
-            if (remaining2 > 0) {
-              y_stats = Math.min(H_stats, y_stats + remaining2);
-            }
-          } else {
-            y_stats = Math.min(H_stats, y_stats + remaining);
-          }
-        }
-      } else if (y_controls < H_controls) {
+      // Scrolling down (hide elements): Controls first -> then Stats banner -> then Mobile subbar
+      if (y_controls < H_controls) {
         y_controls = Math.min(H_controls, y_controls + deltaY);
         const remaining = deltaY - (H_controls - y_controls);
         if (remaining > 0) {
-          y_stats = Math.min(H_stats, y_stats + remaining);
+          if (y_stats < H_stats) {
+            y_stats = Math.min(H_stats, y_stats + remaining);
+            const remaining2 = remaining - (H_stats - y_stats);
+            if (remaining2 > 0 && H_subbar > 0) {
+              y_subbar = Math.min(H_subbar, y_subbar + remaining2);
+            }
+          } else if (H_subbar > 0) {
+            y_subbar = Math.min(H_subbar, y_subbar + remaining);
+          }
         }
-      } else {
+      } else if (y_stats < H_stats) {
         y_stats = Math.min(H_stats, y_stats + deltaY);
+        const remaining = deltaY - (H_stats - y_stats);
+        if (remaining > 0 && H_subbar > 0) {
+          y_subbar = Math.min(H_subbar, y_subbar + remaining);
+        }
+      } else if (H_subbar > 0) {
+        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
       }
     } else if (deltaY < 0) {
-      // Scrolling up (page content moving down): instantly show controls -> then stats panel.
-      // Wait to bring back the mobile subcontainer (y_subbar stays H_subbar until we hit the top/scrollY <= 5).
-      if (y_controls > 0) {
-        y_controls = Math.max(0, y_controls + deltaY);
-        const remaining = deltaY + (y_controls); // deltaY is negative
+      // Scrolling up (reveal elements): Stats banner first -> then Controls
+      // (Subbar remains hidden at H_subbar until we reach the very top of the page)
+      if (y_stats > 0) {
+        const old_y_stats = y_stats;
+        y_stats = Math.max(0, y_stats + deltaY);
+        const remaining = deltaY + old_y_stats;
         if (remaining < 0) {
-          y_stats = Math.max(0, y_stats + remaining);
+          y_controls = Math.max(0, y_controls + remaining);
         }
       } else {
-        y_stats = Math.max(0, y_stats + deltaY);
+        y_controls = Math.max(0, y_controls + deltaY);
       }
     }
 
@@ -4475,11 +4512,9 @@ setupStaggeredHeaderScroll();
 // ==========================================
 const setupRefreshListeners = () => {
   const btnRefresh = document.getElementById("btn-refresh");
-  const btnMobileRefresh = document.getElementById("mobile-btn-refresh");
 
   const onRefresh = async () => {
     if (btnRefresh) btnRefresh.style.pointerEvents = "none";
-    if (btnMobileRefresh) btnMobileRefresh.style.pointerEvents = "none";
 
     const toast = showToast("Refreshing App data & register credentials...", "info", 0);
     try {
@@ -4526,7 +4561,6 @@ const setupRefreshListeners = () => {
   };
 
   btnRefresh?.addEventListener("click", onRefresh);
-  btnMobileRefresh?.addEventListener("click", onRefresh);
 };
 setupRefreshListeners();
 
