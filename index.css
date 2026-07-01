@@ -2277,10 +2277,6 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     padding: 10px 12px;
   }
 
-  .stats-banner {
-    top: var(--navbar-height, 51px);
-  }
-
   .nav-container {
     display: flex !important;
     justify-content: space-between !important;
