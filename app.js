@@ -3491,7 +3491,7 @@ btnProfileBadge?.addEventListener("click", (e) => {
 
 // Close profile dropdown when clicking outside
 window.addEventListener("click", (e) => {
-  if (profileDropdown && profileDropdown.classList.contains("active") && !profileDropdown.contains(e.target) && e.target !== btnProfileBadge) {
+  if (profileDropdown && profileDropdown.classList.contains("active") && !profileDropdown.contains(e.target) && (!btnProfileBadge || !btnProfileBadge.contains(e.target))) {
     profileDropdown.classList.remove("active");
     if (history.state && history.state.profileDropdown) {
       profileClosedViaPopState = true;
