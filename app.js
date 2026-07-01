@@ -3340,30 +3340,21 @@ function adjustSearchLayout() {
   const githubLink = document.querySelector(".nav-github-link");
   const versionSelector = document.querySelector(".version-selector");
 
-  // Determine if elements are currently in the mobile subbar
-  const isMobileLayout = btnRefresh && btnRefresh.parentElement === subbarContainer;
+  // Mobile layout threshold at 494px wide
+  const isMobileSize = window.innerWidth < 494;
+  const isCurrentlyInMobileDOM = btnRefresh && btnRefresh.parentElement === subbarContainer;
 
   // Cache toolbar width when in desktop mode so we don't do layout thrashing on resize
-  if (!isMobileLayout && toolbar.clientWidth > 0) {
+  if (!isCurrentlyInMobileDOM && toolbar.clientWidth > 0) {
     cachedToolbarWidth = toolbar.getBoundingClientRect().width;
   }
 
   // Fallback if not cached yet
   const toolbarWidth = cachedToolbarWidth || 180;
 
-  const navWidth = navContainer.clientWidth;
-  const logoWidth = logo.getBoundingClientRect().width;
-  const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-
-  // Space available for search container = total navbar width - logo - profile - toolbar - margins/gaps
-  const availableWidth = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
-
-  // Search input width threshold below which the placeholder shows 4 or fewer characters
-  const thresholdWidth = getThresholdSearchWidth(searchInput);
-
-  if (availableWidth < thresholdWidth && window.innerWidth <= 768) {
-    if (!isMobileLayout) {
-      // Move toolbar items to mobile subbar
+  if (isMobileSize) {
+    if (!isCurrentlyInMobileDOM) {
+      // Mobile layout: move elements to mobile subbar
       if (btnRefresh) subbarContainer.appendChild(btnRefresh);
       if (githubLink) subbarContainer.appendChild(githubLink);
       if (versionSelector) subbarContainer.appendChild(versionSelector);
@@ -3376,11 +3367,17 @@ function adjustSearchLayout() {
       window.updateStickyOffsets?.();
     }
   } else {
-    if (isMobileLayout) {
-      // Move toolbar items back to desktop navbar toolbar
-      if (btnRefresh) toolbar.appendChild(btnRefresh);
-      if (githubLink) toolbar.appendChild(githubLink);
-      if (versionSelector) toolbar.appendChild(versionSelector);
+    if (isCurrentlyInMobileDOM) {
+      // Desktop layout: move elements back to navbar (before profile badge)
+      if (profileBadge) {
+        if (btnRefresh) toolbar.insertBefore(btnRefresh, profileBadge);
+        if (githubLink) toolbar.insertBefore(githubLink, profileBadge);
+        if (versionSelector) toolbar.insertBefore(versionSelector, profileBadge);
+      } else {
+        if (btnRefresh) toolbar.appendChild(btnRefresh);
+        if (githubLink) toolbar.appendChild(githubLink);
+        if (versionSelector) toolbar.appendChild(versionSelector);
+      }
 
       subbarEl.style.display = "none"; // Hide subbar
 
@@ -3389,6 +3386,10 @@ function adjustSearchLayout() {
     }
 
     // Check if search bar should be pill mode or icon-only on desktop
+    const navWidth = navContainer.clientWidth;
+    const logoWidth = logo.getBoundingClientRect().width;
+    const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
+    
     const minRequiredWidth = getPlaceholderWidth(searchInput) + 64;
     const availableWidthWithDesktopToolbar = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
 
@@ -4574,7 +4575,10 @@ const setupRefreshListeners = () => {
   const btnRefresh = document.getElementById("btn-refresh");
 
   const onRefresh = async () => {
-    if (btnRefresh) btnRefresh.style.pointerEvents = "none";
+    if (btnRefresh) {
+      btnRefresh.style.pointerEvents = "none";
+      btnRefresh.classList.add("spinning");
+    }
 
     const toast = showToast("Refreshing App data & register credentials...", "info", 0);
     try {
