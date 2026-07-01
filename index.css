@@ -1543,11 +1543,11 @@ body {
   }
 
   .dashboard-main {
-    padding: 24px 16px;
+    padding: 0 16px 24px 16px;
   }
 
   .dashboard-controls {
-    padding: 18px 16px 16px 16px;
+    padding: 12px 16px;
     margin: -2px -16px 12px -16px !important;
   }
 

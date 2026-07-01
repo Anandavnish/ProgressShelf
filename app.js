@@ -3321,6 +3321,8 @@ function getThresholdSearchWidth(input) {
   return context.measureText(text).width + 75;
 }
 
+let cachedToolbarWidth = null;
+
 // Adjusts the search layout dynamically based on available screen space and placeholder visibility
 function adjustSearchLayout() {
   const searchInput = document.getElementById("global-search");
@@ -3338,24 +3340,20 @@ function adjustSearchLayout() {
   const githubLink = document.querySelector(".nav-github-link");
   const versionSelector = document.querySelector(".version-selector");
 
-  // Temporarily return elements to desktop toolbar to measure natural desktop layout widths
-  if (btnRefresh && btnRefresh.parentElement !== toolbar) {
-    toolbar.appendChild(btnRefresh);
-  }
-  if (githubLink && githubLink.parentElement !== toolbar) {
-    toolbar.appendChild(githubLink);
-  }
-  if (versionSelector && versionSelector.parentElement !== toolbar) {
-    toolbar.appendChild(versionSelector);
+  // Determine if elements are currently in the mobile subbar
+  const isMobileLayout = btnRefresh && btnRefresh.parentElement === subbarContainer;
+
+  // Cache toolbar width when in desktop mode so we don't do layout thrashing on resize
+  if (!isMobileLayout && toolbar.clientWidth > 0) {
+    cachedToolbarWidth = toolbar.getBoundingClientRect().width;
   }
 
-  // Set subbar to display none temporarily to measure natural clientWidths
-  subbarEl.style.display = "none";
+  // Fallback if not cached yet
+  const toolbarWidth = cachedToolbarWidth || 180;
 
   const navWidth = navContainer.clientWidth;
   const logoWidth = logo.getBoundingClientRect().width;
   const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-  const toolbarWidth = toolbar.getBoundingClientRect().width;
 
   // Space available for search container = total navbar width - logo - profile - toolbar - margins/gaps
   const availableWidth = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
@@ -3364,20 +3362,31 @@ function adjustSearchLayout() {
   const thresholdWidth = getThresholdSearchWidth(searchInput);
 
   if (availableWidth < thresholdWidth && window.innerWidth <= 768) {
-    // Search placeholder starts to hide/clip too much -> Move toolbar items to mobile subbar
-    // Append them in order: Refresh Button -> GitHub Link -> Version Selector so they align
-    // in mobile subbar from left-to-right as: Refresh -> GitHub -> Version Selector.
-    // Since subbar uses justify-content: flex-end, they read from right-to-left as: Version -> GitHub -> Refresh.
-    if (btnRefresh) subbarContainer.appendChild(btnRefresh);
-    if (githubLink) subbarContainer.appendChild(githubLink);
-    if (versionSelector) subbarContainer.appendChild(versionSelector);
+    if (!isMobileLayout) {
+      // Move toolbar items to mobile subbar
+      if (btnRefresh) subbarContainer.appendChild(btnRefresh);
+      if (githubLink) subbarContainer.appendChild(githubLink);
+      if (versionSelector) subbarContainer.appendChild(versionSelector);
 
-    subbarEl.style.display = ""; // Show subbar
-    searchContainer.classList.add("search-pill-mode");
-    searchContainer.classList.remove("expanded");
+      subbarEl.style.display = ""; // Show subbar
+      searchContainer.classList.add("search-pill-mode");
+      searchContainer.classList.remove("expanded");
+
+      // Update sticky offsets since heights changed
+      window.updateStickyOffsets?.();
+    }
   } else {
-    // Enough space to keep all elements in navbar
-    subbarEl.style.display = "none"; // Hide subbar
+    if (isMobileLayout) {
+      // Move toolbar items back to desktop navbar toolbar
+      if (btnRefresh) toolbar.appendChild(btnRefresh);
+      if (githubLink) toolbar.appendChild(githubLink);
+      if (versionSelector) toolbar.appendChild(versionSelector);
+
+      subbarEl.style.display = "none"; // Hide subbar
+
+      // Update sticky offsets since heights changed
+      window.updateStickyOffsets?.();
+    }
 
     // Check if search bar should be pill mode or icon-only on desktop
     const minRequiredWidth = getPlaceholderWidth(searchInput) + 64;
@@ -3389,9 +3398,6 @@ function adjustSearchLayout() {
       searchContainer.classList.remove("search-pill-mode");
     }
   }
-
-  // Force re-evaluation of staggered heights so scroll offsets are correct for the new layout
-  window.dispatchEvent(new Event('resize'));
 }
 
 // Setup global search input listener
@@ -4414,41 +4420,43 @@ function setupStaggeredHeaderScroll() {
 
     if (deltaY > 0) {
       // Scrolling down (hide elements): Controls first -> then Stats banner -> then Mobile subbar
+      let toDistribute = deltaY;
+      
       if (y_controls < H_controls) {
-        y_controls = Math.min(H_controls, y_controls + deltaY);
-        const remaining = deltaY - (H_controls - y_controls);
-        if (remaining > 0) {
-          if (y_stats < H_stats) {
-            y_stats = Math.min(H_stats, y_stats + remaining);
-            const remaining2 = remaining - (H_stats - y_stats);
-            if (remaining2 > 0 && H_subbar > 0) {
-              y_subbar = Math.min(H_subbar, y_subbar + remaining2);
-            }
-          } else if (H_subbar > 0) {
-            y_subbar = Math.min(H_subbar, y_subbar + remaining);
-          }
-        }
-      } else if (y_stats < H_stats) {
-        y_stats = Math.min(H_stats, y_stats + deltaY);
-        const remaining = deltaY - (H_stats - y_stats);
-        if (remaining > 0 && H_subbar > 0) {
-          y_subbar = Math.min(H_subbar, y_subbar + remaining);
-        }
-      } else if (H_subbar > 0) {
-        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
+        const space = H_controls - y_controls;
+        const take = Math.min(space, toDistribute);
+        y_controls += take;
+        toDistribute -= take;
+      }
+      
+      if (toDistribute > 0 && y_stats < H_stats) {
+        const space = H_stats - y_stats;
+        const take = Math.min(space, toDistribute);
+        y_stats += take;
+        toDistribute -= take;
+      }
+      
+      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar) {
+        const space = H_subbar - y_subbar;
+        const take = Math.min(space, toDistribute);
+        y_subbar += take;
+        toDistribute -= take;
       }
     } else if (deltaY < 0) {
       // Scrolling up (reveal elements): Stats banner first -> then Controls
       // (Subbar remains hidden at H_subbar until we reach the very top of the page)
+      let toDistribute = -deltaY;
+      
       if (y_stats > 0) {
-        const old_y_stats = y_stats;
-        y_stats = Math.max(0, y_stats + deltaY);
-        const remaining = deltaY + old_y_stats;
-        if (remaining < 0) {
-          y_controls = Math.max(0, y_controls + remaining);
-        }
-      } else {
-        y_controls = Math.max(0, y_controls + deltaY);
+        const take = Math.min(y_stats, toDistribute);
+        y_stats -= take;
+        toDistribute -= take;
+      }
+      
+      if (toDistribute > 0 && y_controls > 0) {
+        const take = Math.min(y_controls, toDistribute);
+        y_controls -= take;
+        toDistribute -= take;
       }
     }
 
@@ -4492,6 +4500,9 @@ function setupStaggeredHeaderScroll() {
       if (controlsEl) controlsEl.style.transform = `translateY(-${y_subbar + y_stats + y_controls}px)`;
     }
   }
+
+  // Expose handleResize globally so other layout updates can sync scroll offsets
+  window.updateStickyOffsets = handleResize;
 
   window.addEventListener("scroll", () => {
     if (!scrollTicking) {
