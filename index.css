@@ -907,11 +907,13 @@ body {
   background-color: rgba(13, 17, 23, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 18px 24px 16px 24px;
+  padding: 16px 24px;
   margin: -2px -24px 12px -24px !important;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   will-change: transform;
 }
 
@@ -3060,23 +3062,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   margin-top: 8px;
 }
 
-/* Controls layout wrapper */
-.dashboard-controls {
-  position: sticky;
-  top: calc(var(--navbar-height, 57px) + var(--stats-height, 0px) - 2px);
-  z-index: 98;
-  background-color: rgba(13, 17, 23, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 18px 24px 16px 24px;
-  margin: -2px -24px 12px -24px !important;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  will-change: transform;
-}
+
 
 .controls-right-group {
   display: flex;
