@@ -336,7 +336,7 @@ function parseMarkdown(text) {
     }
     
     // Bullet lists (- or * or +)
-    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+)\s+(.*)$/);
+    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+|•)\s+(.*)$/);
     if (bulletMatch) {
       if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
       if (inList !== 'ul') {

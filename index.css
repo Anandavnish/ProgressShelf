@@ -3037,7 +3037,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .card-note-text .note-ul,
 .card-note-text .note-ol {
-  margin: 8px 0;
+  margin: 6px 0;
   padding-left: 20px;
 }
 
@@ -3051,7 +3051,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 .card-note-text .note-li {
   margin-bottom: 4px;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.card-note-text .note-li::marker {
+  font-size: 1.25rem;
 }
 
 .card-note-text .note-code {
@@ -3079,13 +3084,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .card-note-text .note-p {
-  margin-bottom: 8px;
-}
-
-.card-note-text br {
-  content: "";
-  display: block;
-  margin-top: 8px;
+  margin-bottom: 0px;
 }
 
 
@@ -3476,3 +3475,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 
+
+
+/* Note Textareas Sizing & Line-Spacing */
+#create-note-text,
+#edit-note-text,
+#update-note-text {
+  min-height: 180px;
+  line-height: 1.6;
+}
