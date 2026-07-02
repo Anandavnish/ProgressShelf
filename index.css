@@ -3475,42 +3475,4 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     transform: translateY(0);
   }
 }
-/* Note Contenteditable Editor */
-.note-editor {
-  min-height: 120px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 10px 12px;
-  line-height: 1.5;
-  font-size: 0.95rem;
-  font-family: inherit;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  cursor: text;
-  outline: none;
-  position: relative;
-}
 
-/* Placeholder behavior */
-.note-editor:empty::before {
-  content: attr(data-placeholder);
-  color: var(--text-muted);
-  pointer-events: none;
-  position: absolute;
-}
-
-/* Inline formatting inside editor */
-.note-editor h1 { font-size: 1.2rem; font-weight: 700; margin: 4px 0; color: var(--text-primary); }
-.note-editor h2 { font-size: 1.05rem; font-weight: 600; margin: 3px 0; color: var(--text-primary); }
-.note-editor h3 { font-size: 0.95rem; font-weight: 600; margin: 2px 0; color: var(--text-primary); }
-.note-editor strong { font-weight: 700; }
-.note-editor em { font-style: italic; }
-.note-editor code { font-family: monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; font-size: 0.875rem; }
-.note-editor ul { margin: 2px 0 2px 20px; padding: 0; list-style: disc; }
-.note-editor ol { margin: 2px 0 2px 20px; padding: 0; list-style: decimal; }
-.note-editor li { margin: 1px 0; line-height: 1.5; }
-.note-editor p { margin: 2px 0; }
-
-/* Hide spinners and keep clean */
-.note-editor:focus { outline: none; }
