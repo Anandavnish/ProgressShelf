@@ -336,7 +336,7 @@ function parseMarkdown(text) {
     }
     
     // Bullet lists (- or * or +)
-    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+|•)\s+(.*)$/);
+    const bulletMatch = line.match(/^(\s*)(?:-|\*|\+|•|●)\s+(.*)$/);
     if (bulletMatch) {
       if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
       if (inList !== 'ul') {
@@ -4183,11 +4183,27 @@ function setupNoteCharCounters() {
       const lineStart = beforeCursor.lastIndexOf('\n') + 1;
       const currentLine = beforeCursor.substring(lineStart);
 
+      // ── Smart Backspace: exit list formatting in one click ──────────────────
+      if (e.key === 'Backspace') {
+        // If the line consists strictly of optional spaces + a list prefix + a trailing space
+        // and the cursor is at the end of the line, we delete the entire prefix and spaces.
+        // Matches e.g. "    ● ", "    • ", "    1. ", "    a) "
+        const emptyListRegex = /^(\s*)([•●]|\d+[.)]|[a-zA-Z][.)]|(i{1,3}|iv|vi{0,3}|ix|x)[.)])\s$/i;
+        if (emptyListRegex.test(currentLine)) {
+          e.preventDefault();
+          const newVal = val.substring(0, lineStart) + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart;
+          updateCounter();
+          return;
+        }
+      }
+
       // ── Smart Enter: continue or exit list ───────────────────────────────
       if (e.key === 'Enter') {
 
-        // Bullet: - or * or • (allowing optional leading whitespace)
-        const bulletMatch = currentLine.match(/^(\s*)([-*•]) (.*)$/);
+        // Bullet: - or * or • or ● (allowing optional leading whitespace)
+        const bulletMatch = currentLine.match(/^(\s*)([-*•●]) (.*)$/);
         if (bulletMatch) {
           e.preventDefault();
           const indent = bulletMatch[1];
@@ -4276,7 +4292,7 @@ function setupNoteCharCounters() {
         if (bulletTyped) {
           e.preventDefault();
           const indent = bulletTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + '• ' + val.substring(start);
+          const newVal = val.substring(0, lineStart) + indent + '● ' + val.substring(start);
           el.value = newVal;
           el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
           updateCounter();
