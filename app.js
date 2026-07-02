@@ -2336,9 +2336,8 @@ function openUpdateModal(bar) {
   } else if (barType === "note") {
     const textVal = bar.text || "";
     const updateTextEl = document.getElementById("update-note-text");
-    if (updateTextEl) {
-      updateTextEl.value = textVal;
-      updateTextEl.dispatchEvent(new Event("input"));
+    if (updateTextEl && typeof updateTextEl.setValue === "function") {
+      updateTextEl.setValue(textVal);
     }
   }
 
@@ -2565,9 +2564,8 @@ function openEditModal(bar) {
   } else if (barType === "note") {
     const textVal = bar.text || "";
     const editTextEl = document.getElementById("edit-note-text");
-    if (editTextEl) {
-      editTextEl.value = textVal;
-      editTextEl.dispatchEvent(new Event("input"));
+    if (editTextEl && typeof editTextEl.setValue === "function") {
+      editTextEl.setValue(textVal);
     }
   }
 
@@ -2757,7 +2755,7 @@ formCreate.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (type === "note") {
-    text = document.getElementById("create-note-text").value.substring(0, 1600);
+    text = document.getElementById("create-note-text").getValue().substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -2918,7 +2916,7 @@ formEdit.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (barType === "note") {
-    text = document.getElementById("edit-note-text").value.substring(0, 1600);
+    text = document.getElementById("edit-note-text").getValue().substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3110,7 +3108,7 @@ formUpdate.addEventListener("submit", async (e) => {
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
-    const text = document.getElementById("update-note-text").value.substring(0, 1600);
+    const text = document.getElementById("update-note-text").getValue().substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -4155,150 +4153,274 @@ function setupNotificationListeners(prefix = "") {
 setupNotificationListeners("");
 setupNotificationListeners("edit-");
 
-// Setup character count listeners and smart behaviors for Notes textareas
-function setupNoteCharCounters() {
-  const textareas = [
-    { id: "create-note-text", counterId: "create-note-char-count", previewId: "create-note-preview" },
-    { id: "edit-note-text", counterId: "edit-note-char-count", previewId: "edit-note-preview" },
-    { id: "update-note-text", counterId: "update-note-char-count", previewId: "update-note-preview" }
+function setupNoteEditors() {
+  const editors = [
+    { id: 'create-note-text', counterId: 'create-note-char-count' },
+    { id: 'edit-note-text',   counterId: 'edit-note-char-count'   },
+    { id: 'update-note-text', counterId: 'update-note-char-count' }
   ];
 
-  textareas.forEach(({ id, counterId, previewId }) => {
+  editors.forEach(({ id, counterId }) => {
     const el = document.getElementById(id);
     const counter = document.getElementById(counterId);
-    const previewEl = document.getElementById(previewId);
-    
-    if (el && counter) {
-      const update = () => {
-        counter.textContent = `${el.value.length} / 1600`;
-        if (previewEl) {
-          previewEl.innerHTML = parseMarkdown(el.value);
-        }
-      };
-      
-      el.addEventListener("input", update);
-      el.addEventListener("change", update);
-      
-      // Auto-replace typed hyphen/star space at start of line to bullet point "• "
-      el.addEventListener("input", (e) => {
-        const start = el.selectionStart;
-        const text = el.value;
-        const beforeCursor = text.substring(0, start);
-        const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-        const currentLine = beforeCursor.substring(lineStart);
+    if (!el) return;
 
-        if (currentLine === "- " || currentLine === "* ") {
-          e.preventDefault();
-          const newValue = text.substring(0, lineStart) + "• " + text.substring(start);
-          el.value = newValue;
-          el.selectionStart = el.selectionEnd = lineStart + 2;
-          update();
+    // ── Markdown → HTML renderer (inline, called on every keystroke) ──────────
+    function mdToHtml(md) {
+      const lines = md.split('\n');
+      let html = '';
+      let inUL = false, inOL = false;
+
+      const closeUL = () => { if (inUL) { html += '</ul>'; inUL = false; } };
+      const closeOL = () => { if (inOL) { html += '</ol>'; inOL = false; } };
+
+      lines.forEach(line => {
+        // Headings
+        if (/^### (.+)/.test(line)) { closeUL(); closeOL(); html += `<h3>${line.slice(4)}</h3>`; return; }
+        if (/^## (.+)/.test(line))  { closeUL(); closeOL(); html += `<h2>${line.slice(3)}</h2>`; return; }
+        if (/^# (.+)/.test(line))   { closeUL(); closeOL(); html += `<h1>${line.slice(2)}</h1>`; return; }
+
+        // Bullet lists: - or * or •
+        if (/^[-*•] (.+)/.test(line)) {
+          closeOL();
+          if (!inUL) { html += '<ul>'; inUL = true; }
+          html += `<li>${inlineFormat(line.replace(/^[-*•] /, ''))}</li>`;
+          return;
         }
+
+        // Numbered lists: 1. or 1)
+        if (/^\d+[.)]\s+(.+)/.test(line)) {
+          closeUL();
+          if (!inOL) { html += '<ol>'; inOL = true; }
+          html += `<li>${inlineFormat(line.replace(/^\d+[.)]\s+/, ''))}</li>`;
+          return;
+        }
+
+        // Roman numeral lists: i. ii. iii. iv. (lowercase and uppercase)
+        if (/^(i{1,3}|iv|v|vi{0,3}|ix|x|XI{0,3}|XIV|XV|I{1,3}|IV|V|VI{0,3}|IX|X)[.)]\s+(.+)/i.test(line)) {
+          closeUL();
+          if (!inOL) { html += '<ol style="list-style:lower-roman">'; inOL = true; }
+          html += `<li>${inlineFormat(line.replace(/^[^.)]+[.)]\s+/, ''))}</li>`;
+          return;
+        }
+
+        // Alphabetical lists: a. b. A. B. a) A)
+        if (/^[a-zA-Z][.)]\s+(.+)/.test(line)) {
+          closeUL();
+          if (!inOL) { html += '<ol style="list-style:lower-alpha">'; inOL = true; }
+          html += `<li>${inlineFormat(line.replace(/^[a-zA-Z][.)]\s+/, ''))}</li>`;
+          return;
+        }
+
+        // Empty line
+        if (line.trim() === '') { closeUL(); closeOL(); html += '<br>'; return; }
+
+        // Default paragraph
+        closeUL(); closeOL();
+        html += `<p>${inlineFormat(line)}</p>`;
       });
 
-      // Smart list keys: Enter copies lists, empty list exits
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          const start = el.selectionStart;
-          const end = el.selectionEnd;
-          const text = el.value;
-
-          // Find start of current line
-          const beforeCursor = text.substring(0, start);
-          const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-          const currentLine = beforeCursor.substring(lineStart);
-
-          // 1. Bullet lists: matches "- ", "* ", "• "
-          const bulletRegex = /^(\s*)([-*•])\s+(.*)$/;
-          const bulletMatch = currentLine.match(bulletRegex);
-          if (bulletMatch) {
-            const indent = bulletMatch[1];
-            const bulletChar = bulletMatch[2];
-            const content = bulletMatch[3].trim();
-
-            if (content === "") {
-              // Empty bullet: clear prefix and exit list
-              e.preventDefault();
-              const newValue = text.substring(0, lineStart) + text.substring(start);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = lineStart;
-            } else {
-              // Populate matching bullet on new line
-              e.preventDefault();
-              const insertText = `\n${indent}${bulletChar} `;
-              const newValue = beforeCursor + insertText + text.substring(end);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = start + insertText.length;
-            }
-            update();
-            return;
-          }
-
-          // 2. Numbered lists: matches "1. ", "2) ", etc.
-          const numberRegex = /^(\s*)(\d+)([\.\)])\s+(.*)$/;
-          const numberMatch = currentLine.match(numberRegex);
-          if (numberMatch) {
-            const indent = numberMatch[1];
-            const numVal = parseInt(numberMatch[2], 10);
-            const separator = numberMatch[3];
-            const content = numberMatch[4].trim();
-
-            if (content === "") {
-              // Empty numbered prefix: clear it
-              e.preventDefault();
-              const newValue = text.substring(0, lineStart) + text.substring(start);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = lineStart;
-            } else {
-              // Populate incremented prefix
-              e.preventDefault();
-              const nextNum = numVal + 1;
-              const insertText = `\n${indent}${nextNum}${separator} `;
-              const newValue = beforeCursor + insertText + text.substring(end);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = start + insertText.length;
-            }
-            update();
-            return;
-          }
-
-          // 3. Alphabetical lists: matches "a. ", "B. ", "a) ", "B) "
-          const alphaRegex = /^(\s*)([a-zA-Z])([\.\)])\s+(.*)$/;
-          const alphaMatch = currentLine.match(alphaRegex);
-          if (alphaMatch) {
-            const indent = alphaMatch[1];
-            const charStr = alphaMatch[2];
-            const separator = alphaMatch[3];
-            const content = alphaMatch[4].trim();
-
-            if (content === "") {
-              // Empty alpha line: clear it
-              e.preventDefault();
-              const newValue = text.substring(0, lineStart) + text.substring(start);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = lineStart;
-            } else {
-              // Increment letter
-              e.preventDefault();
-              const charCode = charStr.charCodeAt(0);
-              const nextChar = String.fromCharCode(charCode + 1);
-              const insertText = `\n${indent}${nextChar}${separator} `;
-              const newValue = beforeCursor + insertText + text.substring(end);
-              el.value = newValue;
-              el.selectionStart = el.selectionEnd = start + insertText.length;
-            }
-            update();
-            return;
-          }
-        }
-      });
-
-      // Initial run
-      update();
+      closeUL(); closeOL();
+      return html;
     }
+
+    // Inline formatting: bold, italic, code
+    function inlineFormat(text) {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/_(.+?)_/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>');
+    }
+
+    // ── HTML → Markdown extractor (for saving to DB) ─────────────────────────
+    function htmlToMd(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+
+      function nodeToMd(node) {
+        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+        const tag = node.tagName?.toLowerCase();
+        const inner = Array.from(node.childNodes).map(nodeToMd).join('');
+        switch (tag) {
+          case 'h1': return `# ${inner}\n`;
+          case 'h2': return `## ${inner}\n`;
+          case 'h3': return `### ${inner}\n`;
+          case 'strong': case 'b': return `**${inner}**`;
+          case 'em': case 'i': return `_${inner}_`;
+          case 'code': return `\`${inner}\``;
+          case 'ul': return Array.from(node.children).map(li => `- ${li.textContent}\n`).join('');
+          case 'ol': {
+            const style = node.getAttribute('style') || '';
+            if (style.includes('lower-roman')) {
+              const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x'];
+              return Array.from(node.children).map((li, i) => `${romans[i] || i+1}. ${li.textContent}\n`).join('');
+            }
+            if (style.includes('lower-alpha')) {
+              return Array.from(node.children).map((li, i) => `${String.fromCharCode(97+i)}. ${li.textContent}\n`).join('');
+            }
+            return Array.from(node.children).map((li, i) => `${i+1}. ${li.textContent}\n`).join('');
+          }
+          case 'li': return inner;
+          case 'br': return '\n';
+          case 'p': return `${inner}\n`;
+          case 'div': return `${inner}\n`;
+          default: return inner;
+        }
+      }
+
+      return Array.from(div.childNodes).map(nodeToMd).join('').trim();
+    }
+
+    // ── Save cursor position across innerHTML updates ─────────────────────────
+    function saveCursor(el) {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return null;
+      const range = sel.getRangeAt(0);
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(el);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      return preRange.toString().length;
+    }
+
+    function restoreCursor(el, offset) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      let charCount = 0;
+      let found = false;
+
+      function traverseNodes(node) {
+        if (found) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+          const next = charCount + node.textContent.length;
+          if (next >= offset) {
+            range.setStart(node, offset - charCount);
+            range.collapse(true);
+            found = true;
+          } else {
+            charCount = next;
+          }
+        } else {
+          for (const child of node.childNodes) traverseNodes(child);
+        }
+      }
+
+      traverseNodes(el);
+      if (!found) range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // ── Get raw markdown from editor ──────────────────────────────────────────
+    el.getValue = () => htmlToMd(el.innerHTML);
+
+    // ── Set markdown into editor (for loading existing note) ──────────────────
+    el.setValue = (md) => {
+      el.innerHTML = mdToHtml(md || '');
+      updateCounter();
+    };
+
+    // ── Update char counter ───────────────────────────────────────────────────
+    function updateCounter() {
+      if (counter) {
+        const text = el.getValue();
+        counter.textContent = `${text.length} / 1600`;
+      }
+    }
+
+    // ── Live render on input ──────────────────────────────────────────────────
+    el.addEventListener('input', () => {
+      const cursorPos = saveCursor(el);
+      const rawText = el.innerText;
+
+      // Only re-render if markdown syntax detected — otherwise let browser handle
+      const hasMd = /^[-*•#]|^\d+[.)]\s|^[a-z][.)]\s|\*\*|__|\`/im.test(rawText);
+      if (hasMd) {
+        el.innerHTML = mdToHtml(rawText);
+        restoreCursor(el, cursorPos);
+      }
+      updateCounter();
+    });
+
+    // ── Smart Enter key handling ──────────────────────────────────────────────
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+
+      // Get current line text
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(el);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      const textBefore = preRange.toString();
+      const lines = textBefore.split('\n');
+      const currentLine = lines[lines.length - 1];
+
+      // Bullet list continuation
+      const bulletMatch = currentLine.match(/^([-*•]) (.*)$/);
+      if (bulletMatch) {
+        e.preventDefault();
+        const content = bulletMatch[2].trim();
+        if (content === '') {
+          // Exit list — delete the empty bullet
+          document.execCommand('delete', false, null);
+          document.execCommand('delete', false, null);
+          document.execCommand('insertParagraph', false, null);
+        } else {
+          document.execCommand('insertText', false, `\n${bulletMatch[1]} `);
+        }
+        updateCounter();
+        return;
+      }
+
+      // Numbered list continuation
+      const numMatch = currentLine.match(/^(\d+)([.)]) (.*)$/);
+      if (numMatch) {
+        e.preventDefault();
+        const content = numMatch[3].trim();
+        if (content === '') {
+          document.execCommand('delete', false, null);
+          document.execCommand('insertParagraph', false, null);
+        } else {
+          const next = parseInt(numMatch[1]) + 1;
+          document.execCommand('insertText', false, `\n${next}${numMatch[2]} `);
+        }
+        updateCounter();
+        return;
+      }
+
+      // Alphabetical list continuation
+      const alphaMatch = currentLine.match(/^([a-zA-Z])([.)]) (.*)$/);
+      if (alphaMatch) {
+        e.preventDefault();
+        const content = alphaMatch[3].trim();
+        if (content === '') {
+          document.execCommand('delete', false, null);
+          document.execCommand('insertParagraph', false, null);
+        } else {
+          const next = String.fromCharCode(alphaMatch[1].charCodeAt(0) + 1);
+          document.execCommand('insertText', false, `\n${next}${alphaMatch[2]} `);
+        }
+        updateCounter();
+        return;
+      }
+    });
+
+    // ── Paste as plain text only ──────────────────────────────────────────────
+    el.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      document.execCommand('insertText', false, text);
+      updateCounter();
+    });
   });
 }
-setupNoteCharCounters();
+
+// Replace old call
+setupNoteEditors();
 
 // ==========================================
 // APK & Edit Mode & Manual Ordering Controls

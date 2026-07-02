@@ -3475,88 +3475,42 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     transform: translateY(0);
   }
 }
-
-
-/* Note Live Preview Styling */
-.note-preview-container {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.note-preview-container .form-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-.note-preview-box {
-  min-height: 80px;
-  max-height: 180px;
+/* Note Contenteditable Editor */
+.note-editor {
+  min-height: 120px;
+  max-height: 320px;
   overflow-y: auto;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  background: rgba(13, 17, 23, 0.4);
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  padding: 10px 12px;
   line-height: 1.5;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  cursor: text;
+  outline: none;
+  position: relative;
 }
-.note-preview-box:empty::before {
-  content: "Start typing to see live formatting preview...";
+
+/* Placeholder behavior */
+.note-editor:empty::before {
+  content: attr(data-placeholder);
   color: var(--text-muted);
-  font-style: italic;
+  pointer-events: none;
+  position: absolute;
 }
-/* Style overrides for note markup in preview box */
-.note-preview-box .note-p {
-  margin-bottom: 8px;
-}
-.note-preview-box .note-ul, .note-preview-box .note-ol {
-  margin-left: 20px;
-  margin-bottom: 8px;
-}
-.note-preview-box .note-li {
-  margin-bottom: 4px;
-}
-.note-preview-box .note-h1 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-  margin-top: 8px;
-}
-.note-preview-box .note-h2 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-  margin-top: 6px;
-}
-.note-preview-box .note-h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-  margin-top: 4px;
-}
-.note-preview-box .note-code {
-  font-family: monospace;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #ff79c6;
-}
-.note-preview-box .note-code-block {
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 8px;
-  border-radius: 6px;
-  overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  margin-bottom: 8px;
-}
+
+/* Inline formatting inside editor */
+.note-editor h1 { font-size: 1.2rem; font-weight: 700; margin: 4px 0; color: var(--text-primary); }
+.note-editor h2 { font-size: 1.05rem; font-weight: 600; margin: 3px 0; color: var(--text-primary); }
+.note-editor h3 { font-size: 0.95rem; font-weight: 600; margin: 2px 0; color: var(--text-primary); }
+.note-editor strong { font-weight: 700; }
+.note-editor em { font-style: italic; }
+.note-editor code { font-family: monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; font-size: 0.875rem; }
+.note-editor ul { margin: 2px 0 2px 20px; padding: 0; list-style: disc; }
+.note-editor ol { margin: 2px 0 2px 20px; padding: 0; list-style: decimal; }
+.note-editor li { margin: 1px 0; line-height: 1.5; }
+.note-editor p { margin: 2px 0; }
+
+/* Hide spinners and keep clean */
+.note-editor:focus { outline: none; }

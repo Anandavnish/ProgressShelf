@@ -443,14 +443,10 @@
             <div id="create-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="create-note-text">Note Text</label>
-                <textarea class="form-input" id="create-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="note-editor form-input" id="create-note-text" contenteditable="true" data-placeholder="Write your note here..." spellcheck="true"></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="create-note-char-count">0 / 1600</span>
                 </div>
-              </div>
-              <div class="note-preview-container">
-                <label class="form-label">Live Preview</label>
-                <div id="create-note-preview" class="note-preview-box"></div>
               </div>
             </div>
 
@@ -627,14 +623,10 @@
             <div id="edit-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="edit-note-text">Note Text</label>
-                <textarea class="form-input" id="edit-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="note-editor form-input" id="edit-note-text" contenteditable="true" data-placeholder="Write your note here..." spellcheck="true"></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
                 </div>
-              </div>
-              <div class="note-preview-container">
-                <label class="form-label">Live Preview</label>
-                <div id="edit-note-preview" class="note-preview-box"></div>
               </div>
             </div>
 
@@ -775,14 +767,10 @@
             <div id="update-note-fields" class="hidden">
               <p class="section-label">Note Text</p>
               <div class="form-group">
-                <textarea class="form-input" id="update-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="note-editor form-input" id="update-note-text" contenteditable="true" data-placeholder="Write your note here..." spellcheck="true"></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="update-note-char-count">0 / 1600</span>
                 </div>
-              </div>
-              <div class="note-preview-container">
-                <label class="form-label">Live Preview</label>
-                <div id="update-note-preview" class="note-preview-box"></div>
               </div>
             </div>
 
