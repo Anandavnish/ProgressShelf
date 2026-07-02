@@ -4186,18 +4186,19 @@ function setupNoteCharCounters() {
       // ── Smart Enter: continue or exit list ───────────────────────────────
       if (e.key === 'Enter') {
 
-        // Bullet: - or * or •
-        const bulletMatch = currentLine.match(/^([-*•]) (.*)$/);
+        // Bullet: - or * or • (allowing optional leading whitespace)
+        const bulletMatch = currentLine.match(/^(\s*)([-*•]) (.*)$/);
         if (bulletMatch) {
           e.preventDefault();
-          const content = bulletMatch[2].trim();
+          const indent = bulletMatch[1];
+          const content = bulletMatch[3].trim();
           if (content === '') {
-            // Empty bullet → exit list, delete the bullet prefix
+            // Empty bullet → exit list, delete the bullet prefix and spaces
             const newVal = val.substring(0, lineStart) + val.substring(start);
             el.value = newVal;
             el.selectionStart = el.selectionEnd = lineStart;
           } else {
-            const insert = `\n${bulletMatch[1]} `;
+            const insert = `\n${indent}${bulletMatch[2]} `;
             el.value = val.substring(0, start) + insert + val.substring(start);
             el.selectionStart = el.selectionEnd = start + insert.length;
           }
@@ -4205,18 +4206,19 @@ function setupNoteCharCounters() {
           return;
         }
 
-        // Numbered: 1. or 1)
-        const numMatch = currentLine.match(/^(\d+)([.)]) (.*)$/);
+        // Numbered: 1. or 1) (allowing optional leading whitespace)
+        const numMatch = currentLine.match(/^(\s*)(\d+)([.)]) (.*)$/);
         if (numMatch) {
           e.preventDefault();
-          const content = numMatch[3].trim();
+          const indent = numMatch[1];
+          const content = numMatch[4].trim();
           if (content === '') {
             const newVal = val.substring(0, lineStart) + val.substring(start);
             el.value = newVal;
             el.selectionStart = el.selectionEnd = lineStart;
           } else {
-            const next = parseInt(numMatch[1]) + 1;
-            const insert = `\n${next}${numMatch[2]} `;
+            const next = parseInt(numMatch[2]) + 1;
+            const insert = `\n${indent}${next}${numMatch[3]} `;
             el.value = val.substring(0, start) + insert + val.substring(start);
             el.selectionStart = el.selectionEnd = start + insert.length;
           }
@@ -4224,18 +4226,19 @@ function setupNoteCharCounters() {
           return;
         }
 
-        // Alphabetical: a. or a)
-        const alphaMatch = currentLine.match(/^([a-zA-Z])([.)]) (.*)$/);
+        // Alphabetical: a. or a) (allowing optional leading whitespace)
+        const alphaMatch = currentLine.match(/^(\s*)([a-zA-Z])([.)]) (.*)$/);
         if (alphaMatch) {
           e.preventDefault();
-          const content = alphaMatch[3].trim();
+          const indent = alphaMatch[1];
+          const content = alphaMatch[4].trim();
           if (content === '') {
             const newVal = val.substring(0, lineStart) + val.substring(start);
             el.value = newVal;
             el.selectionStart = el.selectionEnd = lineStart;
           } else {
-            const next = String.fromCharCode(alphaMatch[1].charCodeAt(0) + 1);
-            const insert = `\n${next}${alphaMatch[2]} `;
+            const next = String.fromCharCode(alphaMatch[2].charCodeAt(0) + 1);
+            const insert = `\n${indent}${next}${alphaMatch[3]} `;
             el.value = val.substring(0, start) + insert + val.substring(start);
             el.selectionStart = el.selectionEnd = start + insert.length;
           }
@@ -4243,20 +4246,21 @@ function setupNoteCharCounters() {
           return;
         }
 
-        // Roman numerals: i. ii. iii. etc
-        const romanMatch = currentLine.match(/^(i{1,3}|iv|vi{0,3}|ix|x)([.)]) (.*)$/i);
+        // Roman numerals (allowing optional leading whitespace)
+        const romanMatch = currentLine.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)]) (.*)$/i);
         if (romanMatch) {
           e.preventDefault();
-          const content = romanMatch[3].trim();
+          const indent = romanMatch[1];
+          const content = romanMatch[4].trim();
           const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x'];
-          const idx = romans.indexOf(romanMatch[1].toLowerCase());
+          const idx = romans.indexOf(romanMatch[2].toLowerCase());
           if (content === '') {
             const newVal = val.substring(0, lineStart) + val.substring(start);
             el.value = newVal;
             el.selectionStart = el.selectionEnd = lineStart;
           } else {
             const next = idx >= 0 && idx < romans.length - 1 ? romans[idx + 1] : romans[idx];
-            const insert = `\n${next}${romanMatch[2]} `;
+            const insert = `\n${indent}${next}${romanMatch[3]} `;
             el.value = val.substring(0, start) + insert + val.substring(start);
             el.selectionStart = el.selectionEnd = start + insert.length;
           }
@@ -4267,12 +4271,50 @@ function setupNoteCharCounters() {
 
       // ── Smart Space: convert - or * at line start to bullet instantly ────
       if (e.key === ' ') {
-        // Only trigger if cursor is right after - or * at line start
-        if (currentLine === '-' || currentLine === '*') {
+        // Match "- " or "* " with optional leading whitespace
+        const bulletTyped = currentLine.match(/^(\s*)([-*])$/);
+        if (bulletTyped) {
           e.preventDefault();
-          const newVal = val.substring(0, lineStart) + '• ' + val.substring(start);
+          const indent = bulletTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + '• ' + val.substring(start);
           el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + 2;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
+          updateCounter();
+          return;
+        }
+
+        // Match numbered list prefix (e.g. "1." or "1)") with optional leading whitespace
+        const numTyped = currentLine.match(/^(\s*)(\d+)([.)])$/);
+        if (numTyped) {
+          e.preventDefault();
+          const indent = numTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + numTyped[2] + numTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + numTyped[2].length + numTyped[3].length + 1;
+          updateCounter();
+          return;
+        }
+
+        // Match alphabetical list prefix (e.g. "a." or "a)") with optional leading whitespace
+        const alphaTyped = currentLine.match(/^(\s*)([a-zA-Z])([.)])$/);
+        if (alphaTyped) {
+          e.preventDefault();
+          const indent = alphaTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + alphaTyped[2] + alphaTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 3;
+          updateCounter();
+          return;
+        }
+
+        // Match Roman numeral list prefix (e.g. "i." or "i)") with optional leading whitespace
+        const romanTyped = currentLine.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])$/i);
+        if (romanTyped) {
+          e.preventDefault();
+          const indent = romanTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + romanTyped[2] + romanTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + romanTyped[2].length + 2;
           updateCounter();
           return;
         }
