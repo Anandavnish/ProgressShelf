@@ -7,7 +7,7 @@
   &nbsp;•&nbsp;
   <a href="https://github.com/Anandavnish/ProgressShelf">GitHub Repo</a>
   &nbsp;•&nbsp;
-  <img src="https://img.shields.io/badge/version-v3.0-38BDF8?style=flat-square" alt="v3.0"/>
+  <img src="https://img.shields.io/badge/version-v4.0-38BDF8?style=flat-square" alt="v4.0"/>
   &nbsp;•&nbsp;
   <img src="https://img.shields.io/badge/license-MIT-4ADE80?style=flat-square" alt="MIT"/>
 </p>
@@ -18,19 +18,16 @@
 
 Built with zero build tools. Runs instantly on any static host.
 
-
-
 ---
 
-## 🌟 What's New in v3.0
+## 🌟 What's New in v4.0
 
-- **Three Tracker Types** — Progress Goal, Task Checklist, and Quick Note cards on one dashboard.
-- **Global Search** — Instant live search across all tracker titles from the navbar.
-- **Smart Stats Banner** — Filterable summary bar: All, Active Deadlines, Overdue, Completed, and Flexible Goals.
-- **Inline Delete Confirmation** — Danger confirmation overlay rendered directly on the card (no modal required).
-- **Animated Deadline Border** — A draining SVG border ring around cards with active deadlines, colour-shifting from green to red as time runs out.
-- **Show More / Collapse** — Long checklists and notes collapse to a preview with an expandable "Show more" toggle.
-- **v2.0 Archived** — The previous stable release is preserved at `versions/v2.0/` and selectable from the version dropdown.
+- **Supabase Backend Migration** — Fully migrated authentication and database management from Firebase to **Supabase**. Secure data is fetched directly using Supabase client libraries under strict Row Level Security (RLS) policies.
+- **Dynamic Controls Dashboard** — Added a layout controls bar right below the stats banner, offering quick access to version selection, GitHub repository links, manual Service Worker refresh, and bulk edit actions.
+- **Bulk Deletion Manager** — Select multiple progress cards, checklists, or notes to delete them in one single batch. Repurposes the sort selection container dynamically to display the selected count and handle the bulk action.
+- **Terrace Updates Overlay** — Built a beautiful, glassmorphic Updates overlay screen ("Terrace") displaying the detailed release changelog from v1.0 to v4.0. Supports native-like mobile back gesture navigation using the HTML5 History API.
+- **Sequential Scrolling Headers** — Scrolling down auto-hides headers sequentially (Controls row ➔ Stats banner ➔ Mobile subbar) to maximize screen space on phones. Scrolling up reveals them in reverse order.
+- **Resilient Config Extraction** — Extracted private keys and API credentials into gitignored files (`supabase-config.js` and `firebase-config.js`) to secure the project and completely resolve GitHub Secret Scanning Alerts.
 
 ---
 
@@ -49,43 +46,20 @@ Built with zero build tools. Runs instantly on any static host.
 ### 3. Smart Deadlines & Overdue Live Counter ⏱
 - **Visual Deadlines**: Set a target date/time or a relative duration ("From now — HH hrs MM min").
 - **Dynamic Status Badges**: Live-updating countdown labels (`2 days 3 hrs left` or `Overdue by 45 mins`).
-- **Animated SVG Border**: Deadline border ring that drains clockwise and shifts colour from green → red as time runs out.
+- **Animated SVG Border**: Deadline border ring that drains clockwise and shifts color from green → red as time runs out.
 
 ### 4. Stats Banner & Filtering 📊
 - Always-visible summary strip displaying counts for: All Trackers, Active Deadlines, Overdue, Completed, and Flexible Goals (no deadline).
 - Click any stat button to instantly filter the dashboard to that category.
-- Active filter resets automatically if its count drops to zero.
 
 ### 5. Global Search 🔍
 - Live search bar in the navbar filters cards by title in real time.
 - A helper notification appears when matches exist in other filter categories, with a one-click "Clear filters to view" shortcut.
 
 ### 6. Flexible Authentication Modes 🔐
-- **Google Sign-In**: Cloud storage synced instantly across all devices via Firebase Auth and Firestore.
-- **Local Sandbox (Guest Mode)**: Full functionality without an account. Data persisted in `localStorage` / `sessionStorage`.
-- **Automatic Migration**: Starting as Guest and signing in later seamlessly migrates local trackers to the cloud.
-
-### 7. Version Archive Navigation
-- Version selector dropdown in the navbar gives instant access to:
-  - **v3.0 (Latest)** — Current root-level app.
-  - **v2.0 (Stable)** — Deadline & premium UI upgrade; archived at `versions/v2.0/`.
-  - **v1.0 (Basic)** — Original minimalist interface; archived at `versions/v1.0/`.
-
----
-
-## 🎨 Logo
-
-The ProgressShelf logo is a self-contained animated SVG (`logo.svg`) that is also embedded inline in `index.html` and `dashboard.html`. It features:
-- **Four colour-coded bar charts** (blue, orange, red, green) rising from a gradient shelf base.
-- **A blue `+` icon** — representing the "Add New Tracker" action.
-- **A red ⚠ badge** on the red bar — indicating overdue or warning state.
-- **A green ✓ badge** on the green bar — indicating completed state.
-- **CSS keyframe animations** (identical to the live site):
-  - `logoBarPulse` — bars scale vertically 1 → 0.4 → 1, staggered at 0 / 0.15 / 0.30 / 0.45 s delays.
-  - `logoPulseGlow` — the `+` icon fades and glows a cyan halo.
-  - `logoBadgePulse` — the badges scale 1 → 0.85 → 1 in sync with bar-3 and bar-4.
-
-The `logo.svg` file is fully self-contained (no external CSS or JS dependency) so it animates correctly when rendered by GitHub in the README.
+- **Google Sign-In**: Cloud storage synced instantly across all devices via Supabase Auth.
+- **Local Sandbox (Guest Mode)**: Full functionality without an account. Data is persisted securely in `localStorage` / `sessionStorage`.
+- **Automatic Migration**: Starting as Guest and signing in later seamlessly migrates local trackers to the cloud database.
 
 ---
 
@@ -94,11 +68,12 @@ The `logo.svg` file is fully self-contained (no external CSS or JS dependency) s
 | Layer | Technology |
 |---|---|
 | Frontend | Vanilla HTML5, CSS3, ES6 Modules |
-| Auth | Firebase Auth (Google Provider) |
-| Database | Cloud Firestore (real-time sync) |
+| Auth | Supabase Auth (Google Provider) |
+| Database | Supabase PostgreSQL (real-time sync, Row Level Security) |
+| Push Notifications | Firebase Cloud Messaging (FCM Client + Service Worker) |
 | Offline | `localStorage` / `sessionStorage` (Guest Mode) |
-| Hosting | GitHub Pages (zero-build static deploy) |
-| Styling | HSL-based dark theme, glassmorphism, CSS animations, flexbox/grid |
+| Hosting | GitHub Pages (zero-build static deploy with Actions) |
+| Styling | HSL-based dark theme, glassmorphism (`blur(12px)`), CSS keyframes |
 
 ---
 
@@ -112,12 +87,30 @@ The `logo.svg` file is fully self-contained (no external CSS or JS dependency) s
    cd ProgressShelf
    ```
 
-2. **Set up Firebase:**
-   - Copy `firebase-config.template.js` to `firebase-config.js`.
-   - Fill in your Firebase project credentials inside `firebase-config.js`.
-   - *(Optional)* Repeat for `versions/v2.0/firebase-config.template.js` and `versions/v1.0/firebase-config.template.js` to enable cloud sync in the archived versions too.
+2. **Set up Supabase:**
+   - Copy `supabase-config.example.js` (or create a new file named `supabase-config.js` in the root).
+   - Fill in your Supabase Project URL and Publishable Key:
+     ```javascript
+     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+     const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL'
+     const SUPABASE_PUBLISHABLE_KEY = 'YOUR_SUPABASE_PUBLISHABLE_KEY'
+     // ...
+     ```
+   - Execute the SQL statements inside [supabase/schema.sql](supabase/schema.sql) in your Supabase SQL Editor to set up the database tables (`progress_bars`, `fcm_tokens`) and configure the Row Level Security (RLS) policies.
 
-3. **Launch a local web server:**
+3. **Set up Firebase (for Push Notifications):**
+   - Copy `firebase-config.example.js` to `firebase-config.js` in the root.
+   - Enter your Firebase messaging credentials:
+     ```javascript
+     self.firebaseConfig = {
+       apiKey: "YOUR_FIREBASE_API_KEY",
+       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+       projectId: "YOUR_PROJECT_ID",
+       // ...
+     };
+     ```
+
+4. **Launch a local web server:**
 
    Using Python:
    ```bash
@@ -128,7 +121,7 @@ The `logo.svg` file is fully self-contained (no external CSS or JS dependency) s
    npx http-server -p 8000
    ```
 
-4. Open your browser at `http://localhost:8000`.
+5. Open your browser at `http://localhost:8000`.
 
 > **Note:** A local server is required because the app uses ES Modules (`type="module"`) which do not work from `file://` paths in most browsers.
 
@@ -138,48 +131,40 @@ The `logo.svg` file is fully self-contained (no external CSS or JS dependency) s
 
 ```text
 ProgressShelf/
-├── index.html                    # Main landing page (Google sign-in & Guest option)
-├── dashboard.html                # v3.0 Dashboard — all tracker types, stats bar, search
-├── app.js                        # Dashboard rendering, event logic, deadline animations
-├── auth.js                       # Auth routing, guard, guest session management
-├── db.js                         # Firestore / localStorage CRUD abstraction layer
-├── firebase-config.js            # Firebase app init & isConfigured flag (gitignored)
-├── firebase-config.template.js   # Public template for cloners
-├── index.css                     # Global design system — tokens, components, animations
-├── logo.svg                      # Animated standalone SVG logo (used in README)
-├── .nojekyll                     # Tells GitHub Pages to serve files as-is (no Jekyll)
-├── .gitignore                    # Excludes firebase-config.js from source control
-├── PROJECT_REPORT.md             # Architecture & development history deep-dive
-├── README.md                     # This file
-└── versions/
-    ├── v1.0/                     # v1.0 (Basic) — self-contained archive
-    │   ├── index.html
-    │   ├── dashboard.html
-    │   ├── app.js
-    │   ├── auth.js
-    │   ├── db.js
-    │   ├── firebase-config.js
-    │   ├── firebase-config.template.js
-    │   └── index.css
-    └── v2.0/                     # v2.0 (Stable) — deadlines & premium UI archive
-        ├── index.html
-        ├── dashboard.html
-        ├── app.js
-        ├── auth.js
-        ├── db.js
-        ├── firebase-config.js
-        ├── firebase-config.template.js
-        └── index.css
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml            # Automated CI/CD deployment to GitHub Pages (uses secrets)
+│       └── notify.yml            # Background FCM push notification triggers
+├── supabase/
+│   ├── schema.sql                # Supabase database schema (Row Level Security policies)
+│   └── functions/                # Serverless Edge Functions (e.g. for notifications)
+├── versions/
+│   ├── v1.0/                     # v1.0 (Basic) — self-contained archive (Firebase)
+│   ├── v2.0/                     # v2.0 (Stable) — deadlines & visual indicators (Firebase)
+│   └── v3.0/                     # v3.0 (Stats) — stats banner & multi-card formats (Firebase)
+├── index.html                    # Main landing page (Google OAuth & Guest option)
+├── dashboard.html                # v4.0 Dashboard — controls dashboard, bulk deletion, updates modal
+├── app.js                        # Main application logic — scrolling headers, rendering, resize handlers
+├── auth.js                       # Auth client routing & session handlers (Supabase client)
+├── db.js                         # Database CRUD abstraction layer (Supabase Client + localStorage)
+├── firebase-config.js            # Local Firebase FCM config credentials (gitignored)
+├── firebase-config.example.js    # Example Firebase FCM config template
+├── supabase-config.js            # Local Supabase DB client configuration (gitignored)
+├── index.css                     # Design system — styles, cascading filters, animations
+├── sw.js                         # Service Worker — caching, background fetch & FCM listeners
+├── manifest.json                 # PWA application manifest rules
+├── logo.svg                      # Animated rising-bar chart logo
+└── README.md                     # This file
 ```
 
 ---
 
 ## 🔒 Security Notes
 
-- `firebase-config.js` is listed in `.gitignore` and never committed — keeping your Firebase API keys private.
-- Firebase Security Rules restrict Firestore read/write access strictly to the authenticated document owner.
-- Guest mode data is fully isolated in the browser's `localStorage` — never sent to any server.
-- No ads, no analytics, no third-party tracking of any kind.
+- **Credentials Safety**: Both `supabase-config.js` and `firebase-config.js` are listed in `.gitignore` and never committed — keeping your API keys and project endpoints completely private.
+- **GitHub Pages Builds**: The live website uses GitHub Repository Secrets in the CI/CD workflow to securely generate configurations on the hosting server dynamically during deploy, ensuring the site functions without code leaks.
+- **Row Level Security (RLS)**: Database policies restrict Supabase read/write operations strictly to the authenticated document owner.
+- **Privacy First**: Guest mode data is fully isolated in the browser's local sandbox (`localStorage`) and is never sent to any server.
 
 ---
 
@@ -187,9 +172,10 @@ ProgressShelf/
 
 | Version | Status | Highlights |
 |---|---|---|
-| **v3.0** | ✅ Latest (root) | Checklist & Note tracker types, Stats banner, Global search, Inline delete, Animated deadline SVG border |
-| **v2.0** | 🗂 Stable (archived) | Deadlines, live overdue counter, glassmorphic UI overhaul |
-| **v1.0** | 🗂 Basic (archived) | Single-level progress bars, Guest mode, Firebase auth |
+| **v4.0** | ✅ Latest (root) | Supabase migration, controls dashboard row, bulk deletion manager, What's New (Terrace) screen, sequential scroll headers, glassmorphism alignments |
+| **v3.0** | 🗂 Archived | Checklist & Note tracker types, Stats banner, Global search, Inline delete, Animated deadline SVG border (Firebase) |
+| **v2.0** | 🗂 Archived | Deadlines, live overdue counter, glassmorphic UI overhaul (Firebase) |
+| **v1.0** | 🗂 Archived | Single-level progress bars, Guest mode, Firebase auth (Firebase) |
 
 ---
 
