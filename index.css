@@ -2916,11 +2916,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   height: 16px;
   width: 16px;
   left: 3px;
-  bottom: 3px;
+  top: 50%;
+  transform: translateY(-50%);
   background-color: white;
   transition: transform 0.2s ease;
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .toggle-switch input:checked+.toggle-slider {
@@ -2929,7 +2930,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .toggle-switch input:checked+.toggle-slider:before {
-  transform: translateX(20px);
+  transform: translateY(-50%) translateX(20px);
 }
 
 /* Collapsible Settings Content */
