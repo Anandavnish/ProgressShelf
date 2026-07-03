@@ -4877,17 +4877,21 @@ setupEditModeControls();
 
 // Scroll state variables at module scope so edit mode controls can reset them
 // Scroll state variables at module scope so edit mode controls can reset them
+let y_nav = 0;
 let y_subbar = 0;
 let y_stats = 0;
 let y_controls = 0;
 
 function resetHeaderScroll() {
+  y_nav = 0;
   y_subbar = 0;
   y_stats = 0;
   y_controls = 0;
+  const navbarEl = document.querySelector(".navbar");
   const subbarEl = document.querySelector(".mobile-subbar");
   const statsEl = document.getElementById("stats-banner");
   const controlsEl = document.querySelector(".dashboard-controls");
+  if (navbarEl) navbarEl.style.transform = "translateY(0px)";
   if (subbarEl) subbarEl.style.transform = "translateY(0px)";
   if (statsEl) statsEl.style.transform = "translateY(0px)";
   if (controlsEl) controlsEl.style.transform = "translateY(0px)";
@@ -4929,14 +4933,19 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
+    // Reveal mobile subbar at the absolute bottom of the page
+    const isAtBottom = (window.innerHeight + currentScrollY) >= (document.documentElement.scrollHeight - 5);
+    if (isAtBottom && H_subbar > 0) {
+      y_subbar = 0;
+    }
+
     if (editModeActive) {
+      y_nav = 0;
+      y_subbar = 0;
       y_stats = 0;
       y_controls = 0;
-      if (deltaY > 0 && H_subbar > 0) {
-        y_subbar = Math.min(H_subbar, y_subbar + deltaY);
-      }
     } else if (deltaY > 0) {
-      // Scrolling down (hide elements): Controls first -> then Stats banner -> then Mobile subbar
+      // Scrolling down (hide elements): Controls -> Stats banner -> Mobile subbar -> Main Nav
       let toDistribute = deltaY;
       
       if (y_controls < H_controls) {
@@ -4953,18 +4962,31 @@ function setupStaggeredHeaderScroll() {
         toDistribute -= take;
       }
       
-      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar) {
+      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar && !isAtBottom) {
         const space = H_subbar - y_subbar;
         const take = Math.min(space, toDistribute);
         y_subbar += take;
         toDistribute -= take;
       }
+
+      if (toDistribute > 0 && y_nav < H_nav) {
+        const space = H_nav - y_nav;
+        const take = Math.min(space, toDistribute);
+        y_nav += take;
+        toDistribute -= take;
+      }
     } else if (deltaY < 0) {
-      // Scrolling up (reveal elements): Stats banner first -> then Controls
-      // (Subbar remains hidden at H_subbar until we reach the very top of the page)
+      // Scrolling up (reveal elements): Main Nav -> Stats banner -> Dashboard Controls
+      // (Mobile subbar remains hidden at H_subbar until we reach the top/bottom boundary)
       let toDistribute = -deltaY;
       
-      if (y_stats > 0) {
+      if (y_nav > 0) {
+        const take = Math.min(y_nav, toDistribute);
+        y_nav -= take;
+        toDistribute -= take;
+      }
+      
+      if (toDistribute > 0 && y_stats > 0) {
         const take = Math.min(y_stats, toDistribute);
         y_stats -= take;
         toDistribute -= take;
@@ -4977,14 +4999,17 @@ function setupStaggeredHeaderScroll() {
       }
     }
 
+    if (navbarEl) {
+      navbarEl.style.transform = `translateY(-${y_nav}px)`;
+    }
     if (subbarEl) {
-      subbarEl.style.transform = `translateY(-${y_subbar}px)`;
+      subbarEl.style.transform = `translateY(-${y_nav + y_subbar}px)`;
     }
     if (statsEl) {
-      statsEl.style.transform = `translateY(-${y_subbar + y_stats}px)`;
+      statsEl.style.transform = `translateY(-${y_nav + y_subbar + y_stats}px)`;
     }
     if (controlsEl) {
-      controlsEl.style.transform = `translateY(-${y_subbar + y_stats + y_controls}px)`;
+      controlsEl.style.transform = `translateY(-${y_nav + y_subbar + y_stats + y_controls}px)`;
     }
 
     scrollTicking = false;
@@ -5009,12 +5034,14 @@ function setupStaggeredHeaderScroll() {
     if (editModeActive) {
       resetHeaderScroll();
     } else {
+      y_nav = Math.min(y_nav, H_nav);
       y_subbar = Math.min(y_subbar, H_subbar);
       y_stats = Math.min(y_stats, H_stats);
       y_controls = Math.min(y_controls, H_controls);
-      if (subbarEl) subbarEl.style.transform = `translateY(-${y_subbar}px)`;
-      if (statsEl) statsEl.style.transform = `translateY(-${y_subbar + y_stats}px)`;
-      if (controlsEl) controlsEl.style.transform = `translateY(-${y_subbar + y_stats + y_controls}px)`;
+      if (navbarEl) navbarEl.style.transform = `translateY(-${y_nav}px)`;
+      if (subbarEl) subbarEl.style.transform = `translateY(-${y_nav + y_subbar}px)`;
+      if (statsEl) statsEl.style.transform = `translateY(-${y_nav + y_subbar + y_stats}px)`;
+      if (controlsEl) controlsEl.style.transform = `translateY(-${y_nav + y_subbar + y_stats + y_controls}px)`;
     }
   }
 

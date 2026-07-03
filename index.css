@@ -372,6 +372,7 @@ body {
   background-color: rgba(13, 17, 23, 0.8);
   border-bottom: 1px solid var(--card-border);
   padding: 12px 24px;
+  will-change: transform;
 }
 
 .nav-container {
