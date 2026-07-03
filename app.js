@@ -815,13 +815,9 @@ function updateCardElement(card, bar) {
   const btnEdit = card.querySelector(".btn-card-edit");
   if (btnEdit) {
     const newBtnEdit = btnEdit.cloneNode(true);
-    if (barType === "checklist") {
-      newBtnEdit.style.display = "none";
-    }
     btnEdit.replaceWith(newBtnEdit);
     newBtnEdit.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (barType === "checklist") return;
       openEditModal(bar);
     });
   }
@@ -1233,12 +1229,8 @@ function createCardElement(bar) {
 
   const editBtn = card.querySelector('.btn-card-edit');
   if (editBtn) {
-    if (barType === "checklist") {
-      editBtn.style.display = "none";
-    }
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (barType === "checklist") return;
       openEditModal(card._barData);
     });
   }
