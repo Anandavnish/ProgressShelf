@@ -1804,20 +1804,34 @@ function syncRowHeights() {
 
             const maxAvailableHeight = cardHeight - usedHeight - 12;
 
+            // Get actual computed line-height of the note text
+            const style = window.getComputedStyle(textEl);
+            const fontSize = parseFloat(style.fontSize) || 14.7;
+            const lineHeightVal = style.lineHeight;
+            let lineHeight = fontSize * 1.38; // default fallback
+            if (lineHeightVal && lineHeightVal !== "normal") {
+              const parsed = parseFloat(lineHeightVal);
+              if (!isNaN(parsed) && parsed > 0) {
+                lineHeight = parsed;
+              }
+            }
+
             // If the note's natural scrollHeight fits within maxAvailableHeight,
             // we don't clamp it and don't show any show-more/show-less buttons.
             if (textEl.scrollHeight <= maxAvailableHeight + 6) { // 6px tolerance
-              textEl.style.maxHeight = "";
+              textEl.style.maxHeight = "none";
               textEl.style.webkitLineClamp = "unset";
               textEl.style.lineClamp = "unset";
               textEl.style.display = "block";
             } else {
-              // Clamp to exact available height and show "Show more"
-              const availableHeight = Math.max(96, maxAvailableHeight);
-              textEl.style.maxHeight = `${availableHeight}px`;
-              textEl.style.webkitLineClamp = "unset";
-              textEl.style.lineClamp = "unset";
-              textEl.style.display = "block";
+              // Clamp to the exact number of lines that fit within maxAvailableHeight
+              const linesCount = Math.max(4, Math.floor(maxAvailableHeight / lineHeight));
+              const allowedHeight = linesCount * lineHeight;
+
+              textEl.style.maxHeight = `${allowedHeight}px`;
+              textEl.style.webkitLineClamp = linesCount;
+              textEl.style.lineClamp = linesCount;
+              textEl.style.display = "-webkit-box";
 
               if (showMoreBtn) showMoreBtn.style.display = "inline-block";
             }
