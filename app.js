@@ -1641,6 +1641,13 @@ window.addEventListener("popstate", (e) => {
   const activeModal = document.querySelector(".modal-overlay.active");
   if (activeModal) {
     closeModal(activeModal, true);
+    return;
+  }
+
+  // Blocker: If they popped past the base state (meaning back was pressed on the home trackers screen),
+  // block the navigation from going back to the external Google Auth redirect URLs by pushing the base state back.
+  if (!e.state || !e.state.base) {
+    window.history.pushState({ base: true }, "");
   }
 });
 
@@ -3944,6 +3951,11 @@ initAuthProtection(async (user) => {
 
   // Show application content, hide splash screen
   appContent.classList.remove("hidden");
+
+  // Push base state on load to intercept back button from navigating back to external OAuth page
+  if (window.history && window.history.pushState) {
+    window.history.pushState({ base: true }, "");
+  }
 
   // Subscribe to progress bars collection
   let firstLoad = true;
