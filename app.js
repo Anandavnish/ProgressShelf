@@ -1821,7 +1821,7 @@ function syncRowHeights() {
             }
           }
 
-          if (textEl.scrollHeight <= 96 || textEl.scrollHeight <= maxAvailableHeight + 6) {
+          if (textEl.scrollHeight <= 96 || (!isExpanded && textEl.scrollHeight <= maxAvailableHeight + 6)) {
             // Short note: force collapse and clean up state
             card.classList.remove("expanded");
             expandedCardIds.delete(bar.id);
