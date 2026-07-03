@@ -200,6 +200,7 @@ let currentFilter = "all";
 let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
 let searchClosedViaPopState = false;
+let closedViaPopState = false;
 let isSearchActiveHistoryPushed = false;
 let deferredPrompt = null;
 let isPopStateExit = false;
