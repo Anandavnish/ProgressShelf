@@ -3093,6 +3093,7 @@ formCreate.addEventListener("submit", async (e) => {
     });
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
+    console.error("Error creating progress bar:", error);
     showToast("Failed to create progress bar. Try again later.", "error");
   }
 });
@@ -3289,6 +3290,7 @@ formEdit.addEventListener("submit", async (e) => {
     });
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
+    console.error("Error editing progress bar:", error);
     showToast("Failed to edit progress bar.", "error");
   }
 });
@@ -3326,6 +3328,7 @@ formUpdate.addEventListener("submit", async (e) => {
       await updateBarProgress(isGuestMode() ? null : currentUser.uid, barId, currentSmallest, completed);
       showToast(`Progress for "${selectedBar.title}" updated.`, "success");
     } catch (error) {
+      console.error("Error updating progress:", error);
       showToast("Failed to update progress.", "error");
     }
   } else if (barType === "checklist") {
@@ -3346,6 +3349,7 @@ formUpdate.addEventListener("submit", async (e) => {
       });
       showToast(`Checklist progress for "${selectedBar.title}" updated.`, "success");
     } catch (error) {
+      console.error("Error updating checklist progress:", error);
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
@@ -3366,6 +3370,7 @@ formUpdate.addEventListener("submit", async (e) => {
       });
       showToast(`Note "${selectedBar.title}" updated.`, "success");
     } catch (error) {
+      console.error("Error updating note content:", error);
       showToast("Failed to update note content.", "error");
     }
   }
