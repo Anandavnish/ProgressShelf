@@ -2185,6 +2185,10 @@ if (btnCreateAddItem && createChecklistItemInput) {
 
 function openCreateModal() {
   formCreate.reset();
+  const dateInput = document.getElementById('deadline-date');
+  const timeInput = document.getElementById('deadline-time');
+  if (dateInput) dateInput.type = 'text';
+  if (timeInput) timeInput.type = 'text';
   document.getElementById("create-type-goal").checked = true;
   createChecklistItems = [];
   renderCreateChecklist();
@@ -2816,8 +2820,16 @@ function openEditModal(bar) {
   document.getElementById('edit-deadline-mins').value = "";
   const editDeadlineClear = document.getElementById('edit-deadline-clear');
   if (editDeadlineClear) editDeadlineClear.checked = false;
-  document.getElementById('edit-deadline-date').value = "";
-  document.getElementById('edit-deadline-time').value = "";
+  const editDateInput = document.getElementById('edit-deadline-date');
+  const editTimeInput = document.getElementById('edit-deadline-time');
+  if (editDateInput) {
+    editDateInput.type = 'text';
+    editDateInput.value = "";
+  }
+  if (editTimeInput) {
+    editTimeInput.type = 'text';
+    editTimeInput.value = "";
+  }
 
   // Pre-fill deadline if bar has one
   const deadlineMs = getDeadlineMs(bar);
@@ -2832,8 +2844,15 @@ function openEditModal(bar) {
 
       const dateStr = `${yyyy}-${mm}-${dd}`;
       const dateInput = document.getElementById('edit-deadline-date');
-      dateInput.value = dateStr;
-      document.getElementById('edit-deadline-time').value = `${hrsStr}:${minsStr}`;
+      const timeInput = document.getElementById('edit-deadline-time');
+      if (dateInput) {
+        dateInput.type = 'date';
+        dateInput.value = dateStr;
+      }
+      if (timeInput) {
+        timeInput.type = 'time';
+        timeInput.value = `${hrsStr}:${minsStr}`;
+      }
 
       // Set min date to the pre-filled past date to avoid browser validation blocking
       const today = new Date();
