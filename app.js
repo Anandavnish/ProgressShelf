@@ -5103,14 +5103,14 @@ const setupRefreshListeners = () => {
         await Promise.all(cacheNames.map(name => caches.delete(name)));
       }
 
-      // 3. Trigger Service Worker update check
+      // 3. Unregister Service Workers to guarantee clean update on next load
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map(async (reg) => {
           try {
-            await reg.update();
+            await reg.unregister();
           } catch (e) {
-            console.warn("Service worker registration update ignored:", e);
+            console.warn("Service worker unregistration ignored:", e);
           }
         }));
       }
@@ -5118,14 +5118,14 @@ const setupRefreshListeners = () => {
       dismissToast(toast);
       showToast("App refreshed successfully! Reloading...", "success");
       setTimeout(() => {
-        window.location.reload();
+        window.location.href = window.location.pathname + '?t=' + Date.now();
       }, 1000);
     } catch (error) {
       console.error("Manual refresh failed:", error);
       dismissToast(toast);
       showToast("Refresh failed. Reloading anyway...", "error");
       setTimeout(() => {
-        window.location.reload();
+        window.location.href = window.location.pathname + '?t=' + Date.now();
       }, 1500);
     }
   };
