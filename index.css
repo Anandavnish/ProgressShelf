@@ -449,6 +449,27 @@ body {
   transform: scale(0.9);
 }
 
+.nav-download-btn {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color var(--transition-speed) ease, transform var(--transition-speed) ease;
+}
+
+.nav-download-btn:hover {
+  color: var(--text-primary);
+}
+
+.nav-download-btn:active {
+  transform: scale(0.9);
+}
+
 .nav-github-link {
   color: var(--text-muted);
   display: flex;
@@ -2380,6 +2401,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 
   /* Style toolbar items when dynamically moved to the mobile subbar */
+  .mobile-subbar .nav-download-btn,
   .mobile-subbar .nav-refresh-btn,
   .mobile-subbar .nav-github-link,
   .mobile-subbar .version-selector {
@@ -2393,7 +2415,8 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 
   .mobile-subbar .nav-github-link svg,
-  .mobile-subbar .nav-refresh-btn svg {
+  .mobile-subbar .nav-refresh-btn svg,
+  .mobile-subbar .nav-download-btn svg {
     width: 18px !important;
     height: 18px !important;
   }

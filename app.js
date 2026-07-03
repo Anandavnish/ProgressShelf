@@ -201,6 +201,7 @@ let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
 let searchClosedViaPopState = false;
 let isSearchActiveHistoryPushed = false;
+let deferredPrompt = null;
 let lastInteractionCardId = null;
 
 function startSubscription(uid, onUpdate, onError) {
@@ -3554,6 +3555,7 @@ function adjustSearchLayout() {
   if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar || !subbarEl || !subbarContainer) return;
 
   const btnRefresh = document.getElementById("btn-refresh");
+  const btnDownload = document.getElementById("btn-download-apk");
   const githubLink = document.querySelector(".nav-github-link");
   const versionSelector = document.querySelector(".version-selector");
 
@@ -3572,6 +3574,7 @@ function adjustSearchLayout() {
   if (isMobileSize) {
     if (!isCurrentlyInMobileDOM) {
       // Mobile layout: move elements to mobile subbar
+      if (btnDownload) subbarContainer.appendChild(btnDownload);
       if (btnRefresh) subbarContainer.appendChild(btnRefresh);
       if (githubLink) subbarContainer.appendChild(githubLink);
       if (versionSelector) subbarContainer.appendChild(versionSelector);
@@ -3587,10 +3590,12 @@ function adjustSearchLayout() {
     if (isCurrentlyInMobileDOM) {
       // Desktop layout: move elements back to navbar (before profile badge)
       if (profileBadge) {
+        if (btnDownload) toolbar.insertBefore(btnDownload, profileBadge);
         if (btnRefresh) toolbar.insertBefore(btnRefresh, profileBadge);
         if (githubLink) toolbar.insertBefore(githubLink, profileBadge);
         if (versionSelector) toolbar.insertBefore(versionSelector, profileBadge);
       } else {
+        if (btnDownload) toolbar.appendChild(btnDownload);
         if (btnRefresh) toolbar.appendChild(btnRefresh);
         if (githubLink) toolbar.appendChild(githubLink);
         if (versionSelector) toolbar.appendChild(versionSelector);
@@ -3641,6 +3646,8 @@ function deactivateSearch(isPopState = false) {
     searchContainer.classList.remove("expanded");
   }
 
+  currentFilter = "all"; // Reset category to All to return to full trackers home dashboard
+
   if (typeof adjustSearchLayout === "function") {
     adjustSearchLayout();
   }
@@ -3672,6 +3679,7 @@ const setupGlobalSearchListener = () => {
 
   if (searchInput) {
     searchInput.addEventListener("input", () => {
+      activateSearch(); // Push history state when user starts typing
       toggleClearBtn();
       adjustSearchLayout();
       renderDashboard(currentBars);
@@ -3696,9 +3704,11 @@ const setupGlobalSearchListener = () => {
           e.stopPropagation();
           searchContainer.classList.add("expanded");
           searchInput.focus();
+          activateSearch(); // Push history state when overlay expands
         }
       } else {
         searchInput.focus();
+        activateSearch(); // Push history state when pill mode is focused
       }
     });
   }
@@ -3956,6 +3966,8 @@ initAuthProtection(async (user) => {
   if (window.history && window.history.pushState) {
     window.history.pushState({ base: true }, "");
   }
+
+  setupDownloadApk();
 
   // Subscribe to progress bars collection
   let firstLoad = true;
@@ -5292,3 +5304,63 @@ const setupTerracePage = () => {
   }
 };
 setupTerracePage();
+
+// Setup PWA WebAPK download logic
+const setupDownloadApk = () => {
+  const btnDownload = document.getElementById("btn-download-apk");
+  if (!btnDownload) return;
+
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (isPWA) {
+    btnDownload.style.display = "none";
+  } else {
+    btnDownload.style.display = "inline-flex";
+  }
+
+  btnDownload.addEventListener("click", async (e) => {
+    e.stopPropagation();
+
+    // 1. Attempt standard PWA WebAPK installation prompt if available
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          deferredPrompt = null;
+          btnDownload.style.display = "none";
+          showToast("Starting Web APK installation...", "success");
+          return;
+        }
+      } catch (err) {
+        console.error("PWA prompt error:", err);
+      }
+    }
+
+    // 2. Fallback / Direct Action: Trigger ProgressShelf.apk package download
+    try {
+      const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ProgressShelf.apk";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      
+      showToast("Downloading ProgressShelf.apk...", "success");
+    } catch (err) {
+      showToast("Failed to start download.", "error");
+    }
+  });
+};
+
+// Global PWA install listener
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (!isPWA) {
+    const btnDownload = document.getElementById("btn-download-apk");
+    if (btnDownload) btnDownload.style.display = "inline-flex";
+  }
+});
