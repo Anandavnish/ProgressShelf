@@ -3057,8 +3057,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* End Alert Row */
 .end-alert-row {
   margin-top: 5px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   padding-left: 12px;
+}
+
+.notify-divider {
+  border: none;
+  border-top: 1px solid #30363D;
+  margin: 4px 0 14px 0;
 }
 
 .end-alert-label {
