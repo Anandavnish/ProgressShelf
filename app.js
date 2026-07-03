@@ -1711,6 +1711,7 @@ function syncRowHeights() {
         textEl.style.maxHeight = "";
         textEl.style.webkitLineClamp = "";
         textEl.style.lineClamp = "";
+        textEl.style.display = "";
       }
     } else if (barType === "checklist") {
       const container = card.querySelector(".card-checklist-container");
@@ -1794,6 +1795,7 @@ function syncRowHeights() {
             textEl.style.maxHeight = `${availableHeight}px`;
             textEl.style.webkitLineClamp = "unset";
             textEl.style.lineClamp = "unset";
+            textEl.style.display = "block";
 
             const isOverflowing = textEl.scrollHeight > availableHeight + 1;
             if (isOverflowing) {
@@ -1871,12 +1873,21 @@ function syncRowHeights() {
 
 window.addEventListener("resize", syncRowHeights);
 
-// Close active modals on Escape key press
+// Close active modals and dropdowns on Escape key press
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     document.querySelectorAll(".modal-overlay.active").forEach((modal) => {
       closeModal(modal);
     });
+
+    const profileDropdown = document.getElementById("profile-dropdown");
+    if (profileDropdown && profileDropdown.classList.contains("active")) {
+      profileDropdown.classList.remove("active");
+      if (history.state && history.state.profileDropdown) {
+        profileClosedViaPopState = true;
+        history.back();
+      }
+    }
   }
 });
 
@@ -3603,16 +3614,36 @@ btnProfileBadge?.addEventListener("click", (e) => {
   }
 });
 
-// Close profile dropdown when clicking outside
+// Close profile dropdown and collapse cards when clicking outside (using capture phase to block click side effects)
 window.addEventListener("click", (e) => {
-  if (profileDropdown && profileDropdown.classList.contains("active") && !profileDropdown.contains(e.target) && (!btnProfileBadge || !btnProfileBadge.contains(e.target))) {
-    profileDropdown.classList.remove("active");
-    if (history.state && history.state.profileDropdown) {
-      profileClosedViaPopState = true;
-      history.back();
+  const profileDropdown = document.getElementById("profile-dropdown");
+  const isProfileActive = profileDropdown && profileDropdown.classList.contains("active");
+  const hasExpandedCard = expandedCardIds.size > 0;
+
+  if (isProfileActive || hasExpandedCard) {
+    const btnProfileBadge = document.getElementById("btn-profile-badge");
+    const clickedInsideProfile = (profileDropdown && profileDropdown.contains(e.target)) || 
+                                 (btnProfileBadge && btnProfileBadge.contains(e.target));
+                                 
+    const clickedInsideExpandedCard = e.target.closest(".card-progress.expanded");
+
+    if (isProfileActive && !clickedInsideProfile) {
+      e.stopPropagation();
+      e.preventDefault();
+      profileDropdown.classList.remove("active");
+      if (history.state && history.state.profileDropdown) {
+        profileClosedViaPopState = true;
+        history.back();
+      }
+    }
+
+    if (hasExpandedCard && !clickedInsideExpandedCard) {
+      e.stopPropagation();
+      e.preventDefault();
+      document.querySelectorAll(".card-progress.expanded").forEach(collapseCard);
     }
   }
-});
+}, true); // useCapture = true is crucial!
 
 btnLogout.addEventListener("click", async () => {
   try {
