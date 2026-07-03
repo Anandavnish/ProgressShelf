@@ -3702,6 +3702,11 @@ const setupGlobalSearchListener = () => {
     searchInput.addEventListener("focus", () => {
       activateSearch();
     });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        searchInput.blur(); // Collapse virtual keyboard on mobile / enter on desktop
+      }
+    });
   }
 
   if (clearBtn && searchInput) {
@@ -3720,10 +3725,16 @@ const setupGlobalSearchListener = () => {
           searchContainer.classList.add("expanded");
           searchInput.focus();
           activateSearch(); // Push history state when overlay expands
+        } else {
+          searchInput.blur(); // Blur if already expanded to dismiss keyboard
         }
       } else {
-        searchInput.focus();
-        activateSearch(); // Push history state when pill mode is focused
+        if (document.activeElement === searchInput) {
+          searchInput.blur(); // Blur if already focused in desktop pill mode to dismiss focus
+        } else {
+          searchInput.focus();
+          activateSearch(); // Push history state when pill mode is focused
+        }
       }
     });
   }
