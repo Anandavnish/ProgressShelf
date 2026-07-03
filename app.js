@@ -1695,180 +1695,193 @@ function collapseCard(card) {
   syncRowHeights();
 }
 
+let syncRowHeightsTimeout = null;
+
 function syncRowHeights() {
-  const cards = Array.from(document.querySelectorAll(".card-progress"));
-  if (cards.length === 0) return;
+  if (syncRowHeightsTimeout) {
+    clearTimeout(syncRowHeightsTimeout);
+  }
 
-  // 1. Reset all card content styles so we can measure their natural layouts
-  cards.forEach(card => {
-    const bar = card._barData;
-    if (!bar) return;
-    const barType = bar.type || "goal";
+  const runSync = () => {
+    const cards = Array.from(document.querySelectorAll(".card-progress"));
+    if (cards.length === 0) return;
 
-    if (barType === "note") {
-      const textEl = card.querySelector(".card-note-text");
-      if (textEl) {
-        textEl.style.maxHeight = "";
-        textEl.style.webkitLineClamp = "";
-        textEl.style.lineClamp = "";
-        textEl.style.display = "";
-      }
-    } else if (barType === "checklist") {
-      const container = card.querySelector(".card-checklist-container");
-      if (container) {
-        container.style.maxHeight = "";
-      }
-      const isExpanded = card.classList.contains("expanded");
-      card.querySelectorAll(".card-checklist-item").forEach((item, index) => {
-        if (index >= 3) {
-          item.style.display = isExpanded ? "flex" : "none";
-        } else {
-          item.style.display = "flex";
-        }
-      });
-    }
-
-    const showMoreBtn = card.querySelector(".show-more-indicator");
-    const showLessBtn = card.querySelector(".show-less-indicator");
-    if (showMoreBtn) {
-      showMoreBtn.style.display = "none";
-      if (barType === "checklist") {
-        const totalItems = bar.items ? bar.items.length : 0;
-        showMoreBtn.textContent = `Show more (+${totalItems - 3})`;
-      } else {
-        showMoreBtn.textContent = "Show more";
-      }
-    }
-    if (showLessBtn) {
-      showLessBtn.style.display = "none";
-    }
-  });
-
-  // Force layout reflow
-  document.body.offsetHeight;
-
-  // 2. Group cards by offsetTop to identify rows
-  const rows = new Map();
-  cards.forEach(card => {
-    const top = card.offsetTop;
-    if (!rows.has(top)) {
-      rows.set(top, []);
-    }
-    rows.get(top).push(card);
-  });
-
-  // 3. Process each row to adapt heights and indicators
-  rows.forEach((rowCards) => {
-    const hasExpanded = rowCards.some(c => c.classList.contains("expanded"));
-
-    rowCards.forEach(card => {
+    // 1. Reset all card content styles so we can measure their natural layouts
+    cards.forEach(card => {
       const bar = card._barData;
       if (!bar) return;
       const barType = bar.type || "goal";
-      const isExpanded = card.classList.contains("expanded");
-
-      const showMoreBtn = card.querySelector(".show-more-indicator");
-      const showLessBtn = card.querySelector(".show-less-indicator");
 
       if (barType === "note") {
         const textEl = card.querySelector(".card-note-text");
-        if (!textEl) return;
-
-        if (isExpanded) {
-          if (showLessBtn) showLessBtn.style.display = "inline-block";
-        } else {
-          if (hasExpanded) {
-            // Stretched by row's expanded card
-            const cardHeight = card.offsetHeight;
-            let usedHeight = 48; // padding
-
-            const titleEl = card.querySelector(".card-title");
-            if (titleEl) usedHeight += titleEl.offsetHeight + 8;
-
-            const divider = card.querySelector(".card-divider");
-            if (divider) usedHeight += divider.offsetHeight + 10;
-
-            const labelEl = card.querySelector(".card-deadline-label");
-            if (labelEl) usedHeight += labelEl.offsetHeight + 10;
-
-            const availableHeight = Math.max(96, cardHeight - usedHeight - 12);
-            textEl.style.maxHeight = `${availableHeight}px`;
-            textEl.style.webkitLineClamp = "unset";
-            textEl.style.lineClamp = "unset";
-            textEl.style.display = "block";
-
-            const isOverflowing = textEl.scrollHeight > availableHeight + 1;
-            if (isOverflowing) {
-              if (showMoreBtn) showMoreBtn.style.display = "inline-block";
-            }
-          } else {
-            // Normal clamped state
-            const isOverflowing = textEl.scrollHeight > 96;
-            if (isOverflowing) {
-              if (showMoreBtn) showMoreBtn.style.display = "inline-block";
-            }
-          }
+        if (textEl) {
+          textEl.style.maxHeight = "";
+          textEl.style.webkitLineClamp = "";
+          textEl.style.lineClamp = "";
+          textEl.style.display = "";
         }
       } else if (barType === "checklist") {
         const container = card.querySelector(".card-checklist-container");
-        if (!container) return;
-        const totalItems = bar.items ? bar.items.length : 0;
+        if (container) {
+          container.style.maxHeight = "";
+        }
+        const isExpanded = card.classList.contains("expanded");
+        card.querySelectorAll(".card-checklist-item").forEach((item, index) => {
+          if (index >= 3) {
+            item.style.display = isExpanded ? "flex" : "none";
+          } else {
+            item.style.display = "flex";
+          }
+        });
+      }
 
-        if (isExpanded) {
-          if (showLessBtn) showLessBtn.style.display = "inline-block";
+      const showMoreBtn = card.querySelector(".show-more-indicator");
+      const showLessBtn = card.querySelector(".show-less-indicator");
+      if (showMoreBtn) {
+        showMoreBtn.style.display = "none";
+        if (barType === "checklist") {
+          const totalItems = bar.items ? bar.items.length : 0;
+          showMoreBtn.textContent = `Show more (+${totalItems - 3})`;
         } else {
-          if (hasExpanded) {
-            // Stretched checklist row: display all items to occupy available height
-            card.querySelectorAll(".card-checklist-item").forEach(item => {
-              item.style.display = "flex";
-            });
+          showMoreBtn.textContent = "Show more";
+        }
+      }
+      if (showLessBtn) {
+        showLessBtn.style.display = "none";
+      }
+    });
 
-            const cardHeight = card.offsetHeight;
-            let usedHeight = 48; // padding
+    // Force layout reflow
+    document.body.offsetHeight;
 
-            const titleEl = card.querySelector(".card-title");
-            if (titleEl) usedHeight += titleEl.offsetHeight + 8;
+    // 2. Group cards by offsetTop to identify rows
+    const rows = new Map();
+    cards.forEach(card => {
+      const top = card.offsetTop;
+      if (!rows.has(top)) {
+        rows.set(top, []);
+      }
+      rows.get(top).push(card);
+    });
 
-            const progressWrapper = card.querySelector(".checklist-progress-wrapper");
-            if (progressWrapper) usedHeight += progressWrapper.offsetHeight + 14;
+    // 3. Process each row to adapt heights and indicators
+    rows.forEach((rowCards) => {
+      const hasExpanded = rowCards.some(c => c.classList.contains("expanded"));
 
-            const divider = card.querySelector(".card-divider");
-            if (divider) usedHeight += divider.offsetHeight + 10;
+      rowCards.forEach(card => {
+        const bar = card._barData;
+        if (!bar) return;
+        const barType = bar.type || "goal";
+        const isExpanded = card.classList.contains("expanded");
 
-            const labelEl = card.querySelector(".card-deadline-label");
-            if (labelEl) usedHeight += labelEl.offsetHeight + 10;
+        const showMoreBtn = card.querySelector(".show-more-indicator");
+        const showLessBtn = card.querySelector(".show-less-indicator");
 
-            const availableHeight = Math.max(120, cardHeight - usedHeight - 12);
-            container.style.maxHeight = `${availableHeight}px`;
+        if (barType === "note") {
+          const textEl = card.querySelector(".card-note-text");
+          if (!textEl) return;
 
-            // Calculate visible count
-            let visibleCount = 0;
-            const items = Array.from(card.querySelectorAll(".card-checklist-item"));
-            items.forEach(item => {
-              if ((item.offsetTop + item.offsetHeight) <= (container.offsetTop + availableHeight + 2)) {
-                visibleCount++;
+          if (isExpanded) {
+            if (showLessBtn) showLessBtn.style.display = "inline-block";
+          } else {
+            if (hasExpanded) {
+              // Stretched by row's expanded card
+              const cardHeight = card.offsetHeight;
+              let usedHeight = 48; // padding
+
+              const titleEl = card.querySelector(".card-title");
+              if (titleEl) usedHeight += titleEl.offsetHeight + 8;
+
+              const divider = card.querySelector(".card-divider");
+              if (divider) usedHeight += divider.offsetHeight + 10;
+
+              const labelEl = card.querySelector(".card-deadline-label");
+              if (labelEl) usedHeight += labelEl.offsetHeight + 10;
+
+              const availableHeight = Math.max(96, cardHeight - usedHeight - 12);
+              textEl.style.maxHeight = `${availableHeight}px`;
+              textEl.style.webkitLineClamp = "unset";
+              textEl.style.lineClamp = "unset";
+              textEl.style.display = "block";
+
+              const isOverflowing = textEl.scrollHeight > textEl.clientHeight + 2;
+              if (isOverflowing) {
+                if (showMoreBtn) showMoreBtn.style.display = "inline-block";
               }
-            });
-            const hiddenCount = totalItems - visibleCount;
-            if (hiddenCount > 0) {
-              if (showMoreBtn) {
-                showMoreBtn.textContent = `Show more (+${hiddenCount})`;
-                showMoreBtn.style.display = "inline-block";
+            } else {
+              // Normal clamped state
+              const isOverflowing = textEl.scrollHeight > textEl.clientHeight + 2;
+              if (isOverflowing) {
+                if (showMoreBtn) showMoreBtn.style.display = "inline-block";
               }
             }
+          }
+        } else if (barType === "checklist") {
+          const container = card.querySelector(".card-checklist-container");
+          if (!container) return;
+          const totalItems = bar.items ? bar.items.length : 0;
+
+          if (isExpanded) {
+            if (showLessBtn) showLessBtn.style.display = "inline-block";
           } else {
-            // Normal collapsed checklist
-            if (totalItems > 3) {
-              if (showMoreBtn) {
-                showMoreBtn.textContent = `Show more (+${totalItems - 3})`;
-                showMoreBtn.style.display = "inline-block";
+            if (hasExpanded) {
+              // Stretched checklist row: display all items to occupy available height
+              card.querySelectorAll(".card-checklist-item").forEach(item => {
+                item.style.display = "flex";
+              });
+
+              const cardHeight = card.offsetHeight;
+              let usedHeight = 48; // padding
+
+              const titleEl = card.querySelector(".card-title");
+              if (titleEl) usedHeight += titleEl.offsetHeight + 8;
+
+              const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+              if (progressWrapper) usedHeight += progressWrapper.offsetHeight + 14;
+
+              const divider = card.querySelector(".card-divider");
+              if (divider) usedHeight += divider.offsetHeight + 10;
+
+              const labelEl = card.querySelector(".card-deadline-label");
+              if (labelEl) usedHeight += labelEl.offsetHeight + 10;
+
+              const availableHeight = Math.max(120, cardHeight - usedHeight - 12);
+              container.style.maxHeight = `${availableHeight}px`;
+
+              // Calculate visible count
+              const containerRect = container.getBoundingClientRect();
+              const containerBottom = containerRect.bottom;
+              const items = Array.from(card.querySelectorAll(".card-checklist-item"));
+              const visibleCount = items.filter(item => {
+                if (item.style.display === "none") return false;
+                const itemRect = item.getBoundingClientRect();
+                return itemRect.bottom <= containerBottom + 2;
+              }).length;
+
+              const hiddenCount = totalItems - visibleCount;
+              if (hiddenCount > 0) {
+                if (showMoreBtn) {
+                  showMoreBtn.textContent = `Show more (+${hiddenCount})`;
+                  showMoreBtn.style.display = "inline-block";
+                }
+              }
+            } else {
+              // Normal collapsed checklist
+              if (totalItems > 3) {
+                if (showMoreBtn) {
+                  showMoreBtn.textContent = `Show more (+${totalItems - 3})`;
+                  showMoreBtn.style.display = "inline-block";
+                }
               }
             }
           }
         }
-      }
+      });
     });
-  });
+  };
+
+  runSync();
+  syncRowHeightsTimeout = setTimeout(runSync, 360);
 }
 
 window.addEventListener("resize", syncRowHeights);
@@ -4918,7 +4931,13 @@ const setupRefreshListeners = () => {
       // 3. Trigger Service Worker update check
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map(reg => reg.update()));
+        await Promise.all(registrations.map(async (reg) => {
+          try {
+            await reg.update();
+          } catch (e) {
+            console.warn("Service worker registration update ignored:", e);
+          }
+        }));
       }
 
       dismissToast(toast);
