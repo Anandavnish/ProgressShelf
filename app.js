@@ -4494,7 +4494,64 @@ function setupNoteCharCounters() {
       if (counter) counter.textContent = `${el.value.length} / 1600`;
     }
 
-    el.addEventListener('input', updateCounter);
+    el.addEventListener('input', (e) => {
+      updateCounter();
+
+      const start = el.selectionStart;
+      const val = el.value;
+      const beforeCursor = val.substring(0, start);
+      const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+      const currentLine = beforeCursor.substring(lineStart);
+
+      // ── Smart Space: convert - or * at line start to bullet instantly on mobile/desktop ────
+      if (currentLine.endsWith(' ')) {
+        const lineWithoutTrailingSpace = currentLine.slice(0, -1);
+
+        // Match "- " or "* " with optional leading whitespace
+        const bulletTyped = lineWithoutTrailingSpace.match(/^(\s*)([-*])$/);
+        if (bulletTyped) {
+          const indent = bulletTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + '● ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
+          updateCounter();
+          return;
+        }
+
+        // Match numbered list prefix (e.g. "1." or "1)") with optional leading whitespace
+        const numTyped = lineWithoutTrailingSpace.match(/^(\s*)(\d+)([.)])$/);
+        if (numTyped) {
+          const indent = numTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + numTyped[2] + numTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + numTyped[2].length + numTyped[3].length + 1;
+          updateCounter();
+          return;
+        }
+
+        // Match alphabetical list prefix (e.g. "a." or "a)") with optional leading whitespace
+        const alphaTyped = lineWithoutTrailingSpace.match(/^(\s*)([a-zA-Z])([.)])$/);
+        if (alphaTyped) {
+          const indent = alphaTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + alphaTyped[2] + alphaTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 3;
+          updateCounter();
+          return;
+        }
+
+        // Match Roman numeral list prefix (e.g. "i." or "i)") with optional leading whitespace
+        const romanTyped = lineWithoutTrailingSpace.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])$/i);
+        if (romanTyped) {
+          const indent = romanTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + romanTyped[2] + romanTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + romanTyped[2].length + 2;
+          updateCounter();
+          return;
+        }
+      }
+    });
 
     el.addEventListener('keydown', (e) => {
       const start = el.selectionStart;
@@ -4600,57 +4657,6 @@ function setupNoteCharCounters() {
             el.value = val.substring(0, start) + insert + val.substring(start);
             el.selectionStart = el.selectionEnd = start + insert.length;
           }
-          updateCounter();
-          return;
-        }
-      }
-
-      // ── Smart Space: convert - or * at line start to bullet instantly ────
-      if (e.key === ' ') {
-        // Match "- " or "* " with optional leading whitespace
-        const bulletTyped = currentLine.match(/^(\s*)([-*])$/);
-        if (bulletTyped) {
-          e.preventDefault();
-          const indent = bulletTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + '● ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
-          updateCounter();
-          return;
-        }
-
-        // Match numbered list prefix (e.g. "1." or "1)") with optional leading whitespace
-        const numTyped = currentLine.match(/^(\s*)(\d+)([.)])$/);
-        if (numTyped) {
-          e.preventDefault();
-          const indent = numTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + numTyped[2] + numTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + numTyped[2].length + numTyped[3].length + 1;
-          updateCounter();
-          return;
-        }
-
-        // Match alphabetical list prefix (e.g. "a." or "a)") with optional leading whitespace
-        const alphaTyped = currentLine.match(/^(\s*)([a-zA-Z])([.)])$/);
-        if (alphaTyped) {
-          e.preventDefault();
-          const indent = alphaTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + alphaTyped[2] + alphaTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + 3;
-          updateCounter();
-          return;
-        }
-
-        // Match Roman numeral list prefix (e.g. "i." or "i)") with optional leading whitespace
-        const romanTyped = currentLine.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])$/i);
-        if (romanTyped) {
-          e.preventDefault();
-          const indent = romanTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + romanTyped[2] + romanTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + romanTyped[2].length + 2;
           updateCounter();
           return;
         }
