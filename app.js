@@ -202,6 +202,7 @@ const expandedCardIds = new Set();
 let searchClosedViaPopState = false;
 let isSearchActiveHistoryPushed = false;
 let deferredPrompt = null;
+let isPopStateExit = false;
 let lastInteractionCardId = null;
 
 function startSubscription(uid, onUpdate, onError) {
@@ -1593,7 +1594,7 @@ function closeModal(modal, isPopState = false) {
   }
 }
 
-// Intercept system back button / gestures to close active modals or search overlays
+// Intercept system back button / gestures to close active modals, menus, or search overlays
 window.addEventListener("popstate", (e) => {
   if (closedViaPopState) {
     closedViaPopState = false;
@@ -1608,19 +1609,32 @@ window.addEventListener("popstate", (e) => {
     return;
   }
 
-  // Close profile dropdown if active
+  // 1. Close profile dropdown if active
   if (profileDropdown && profileDropdown.classList.contains("active")) {
     profileDropdown.classList.remove("active");
+  }
+
+  // 2. Close Terrace page if active
+  if (typeof isTerraceOpen !== "undefined" && isTerraceOpen) {
+    closeTerracePage(true);
     return;
   }
 
-  // Close active search gesture if history was pushed
+  // 3. Exit edit/delete mode if active
+  if (typeof editModeActive !== "undefined" && editModeActive) {
+    isPopStateExit = true;
+    exitEditMode();
+    isPopStateExit = false;
+    return;
+  }
+
+  // 4. Close active search gesture if history was pushed
   if (isSearchActiveHistoryPushed) {
     deactivateSearch(true);
     return;
   }
 
-  // Close mobile search overlay if active (fallback)
+  // 5. Close mobile search overlay if active (fallback)
   const searchContainer = document.querySelector(".nav-search-container");
   if (searchContainer && searchContainer.classList.contains("expanded")) {
     searchContainer.classList.remove("expanded");
@@ -1633,19 +1647,20 @@ window.addEventListener("popstate", (e) => {
     if (typeof adjustSearchLayout === "function") {
       adjustSearchLayout();
     }
+    currentFilter = "all";
     renderDashboard(currentBars);
     isSearchActiveHistoryPushed = false;
     return;
   }
 
-  // Close any open modals
+  // 6. Close any open modals
   const activeModal = document.querySelector(".modal-overlay.active");
   if (activeModal) {
     closeModal(activeModal, true);
     return;
   }
 
-  // Blocker: If they popped past the base state (meaning back was pressed on the home trackers screen),
+  // 7. Blocker: If they popped past the base state (meaning back was pressed on the home trackers screen),
   // block the navigation from going back to the external Google Auth redirect URLs by pushing the base state back.
   if (!e.state || !e.state.base) {
     window.history.pushState({ base: true }, "");
@@ -4741,18 +4756,6 @@ function setupAPKButton() {
   }
 }
 
-let isPopStateExit = false;
-
-window.addEventListener("popstate", (event) => {
-  if (isTerraceOpen) {
-    closeTerracePage(true);
-  } else if (editModeActive) {
-    isPopStateExit = true;
-    exitEditMode();
-    isPopStateExit = false;
-  }
-});
-
 // Setup Edit Mode and Batch Delete interactions
 function setupEditModeControls() {
   const btnToggle = document.getElementById("btn-toggle-edit");
@@ -5306,11 +5309,18 @@ const setupTerracePage = () => {
 setupTerracePage();
 
 // Setup PWA WebAPK download logic
+const checkIsPWA = () => {
+  return window.matchMedia('(display-mode: standalone)').matches || 
+         window.matchMedia('(display-mode: minimal-ui)').matches || 
+         window.matchMedia('(display-mode: fullscreen)').matches || 
+         window.navigator.standalone === true;
+};
+
 const setupDownloadApk = () => {
   const btnDownload = document.getElementById("btn-download-apk");
   if (!btnDownload) return;
 
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isPWA = checkIsPWA();
   if (isPWA) {
     btnDownload.style.display = "none";
   } else {
@@ -5319,6 +5329,11 @@ const setupDownloadApk = () => {
 
   btnDownload.addEventListener("click", async (e) => {
     e.stopPropagation();
+
+    // Check device types
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     // 1. Attempt standard PWA WebAPK installation prompt if available
     if (deferredPrompt) {
@@ -5336,7 +5351,19 @@ const setupDownloadApk = () => {
       }
     }
 
-    // 2. Fallback / Direct Action: Trigger ProgressShelf.apk package download
+    // 2. If mobile device, show instructions instead of downloading mock .apk
+    if (isMobile) {
+      if (isIOS) {
+        showToast("To install ProgressShelf on iOS, tap the Share button and select 'Add to Home Screen'.", "info");
+      } else if (isAndroid) {
+        showToast("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.", "info");
+      } else {
+        showToast("To install, open browser settings menu and select 'Add to Home Screen'.", "info");
+      }
+      return;
+    }
+
+    // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
     try {
       const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
       const link = document.createElement("a");
@@ -5358,9 +5385,16 @@ const setupDownloadApk = () => {
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isPWA = checkIsPWA();
   if (!isPWA) {
     const btnDownload = document.getElementById("btn-download-apk");
     if (btnDownload) btnDownload.style.display = "inline-flex";
   }
+});
+
+// Hide download button when app is installed successfully
+window.addEventListener('appinstalled', () => {
+  const btnDownload = document.getElementById("btn-download-apk");
+  if (btnDownload) btnDownload.style.display = "none";
+  showToast("ProgressShelf installed successfully!", "success");
 });

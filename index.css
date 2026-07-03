@@ -2294,6 +2294,16 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   /* Muted placeholder color */
 }
 
+/* Hide WebKit and standard native clear search buttons */
+.nav-search-input::-webkit-search-decoration,
+.nav-search-input::-webkit-search-cancel-button,
+.nav-search-input::-webkit-search-results-button,
+.nav-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 /* --- Mobile Expanded State Overlaying Entire Navbar --- */
 .nav-search-container.expanded {
   position: absolute;
