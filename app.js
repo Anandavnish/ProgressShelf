@@ -815,9 +815,13 @@ function updateCardElement(card, bar) {
   const btnEdit = card.querySelector(".btn-card-edit");
   if (btnEdit) {
     const newBtnEdit = btnEdit.cloneNode(true);
+    if (barType === "checklist") {
+      newBtnEdit.style.display = "none";
+    }
     btnEdit.replaceWith(newBtnEdit);
     newBtnEdit.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (barType === "checklist") return;
       openEditModal(bar);
     });
   }
@@ -1227,10 +1231,17 @@ function createCardElement(bar) {
       .catch(() => showToast("Failed to delete progress bar.", "error"));
   });
 
-  card.querySelector('.btn-card-edit').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openEditModal(card._barData);
-  });
+  const editBtn = card.querySelector('.btn-card-edit');
+  if (editBtn) {
+    if (barType === "checklist") {
+      editBtn.style.display = "none";
+    }
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (barType === "checklist") return;
+      openEditModal(card._barData);
+    });
+  }
 
   // Checkbox toggling on the dashboard card itself
   if (barType === "checklist") {
@@ -1344,7 +1355,13 @@ function createCardElement(bar) {
       }
     }
 
-    if (barType === "checklist" || barType === "note") {
+    if (barType === "checklist") {
+      if (isTruncatable && !card.classList.contains("expanded")) {
+        card.classList.add("expanded");
+        expandedCardIds.add(currentBar.id);
+        syncRowHeights();
+      }
+    } else if (barType === "note") {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
         expandedCardIds.add(currentBar.id);
