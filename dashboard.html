@@ -485,8 +485,8 @@
               <div class="deadline-absolute">
                 <span class="deadline-way-label">Specific date &amp; time</span>
                 <div class="deadline-absolute-inputs">
-                  <input type="text" class="form-input form-input-date" id="deadline-date" placeholder="Select date" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'">
-                  <input type="text" class="form-input form-input-time" id="deadline-time" placeholder="Select time" onfocus="(this.type='time')" onblur="if(!this.value) this.type='text'">
+                  <input type="text" class="form-input form-input-date" id="deadline-date" placeholder="Select date" onfocus="this.type='date'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value) this.type='text'">
+                  <input type="text" class="form-input form-input-time" id="deadline-time" placeholder="Select time" onfocus="this.type='time'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value) this.type='text'">
                 </div>
               </div>
               <!-- Section divider -->
@@ -665,8 +665,8 @@
               <div class="deadline-absolute">
                 <span class="deadline-way-label">Specific date &amp; time</span>
                 <div class="deadline-absolute-inputs">
-                  <input type="text" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'">
-                  <input type="text" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" onfocus="(this.type='time')" onblur="if(!this.value) this.type='text'">
+                  <input type="text" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" onfocus="this.type='date'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value) this.type='text'">
+                  <input type="text" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" onfocus="this.type='time'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value) this.type='text'">
                 </div>
               </div>
               <!-- Section divider -->
@@ -859,6 +859,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=4.5"></script>
+  <script type="module" src="app.js?v=4.6"></script>
 </body>
 </html>
