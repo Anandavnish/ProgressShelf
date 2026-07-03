@@ -199,8 +199,8 @@ let authInitialized = false;
 let currentFilter = "all";
 let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
-let closedViaPopState = false;
 let searchClosedViaPopState = false;
+let isSearchActiveHistoryPushed = false;
 let lastInteractionCardId = null;
 
 function startSubscription(uid, onUpdate, onError) {
@@ -1613,7 +1613,13 @@ window.addEventListener("popstate", (e) => {
     return;
   }
 
-  // Close mobile search overlay if active
+  // Close active search gesture if history was pushed
+  if (isSearchActiveHistoryPushed) {
+    deactivateSearch(true);
+    return;
+  }
+
+  // Close mobile search overlay if active (fallback)
   const searchContainer = document.querySelector(".nav-search-container");
   if (searchContainer && searchContainer.classList.contains("expanded")) {
     searchContainer.classList.remove("expanded");
@@ -1627,6 +1633,7 @@ window.addEventListener("popstate", (e) => {
       adjustSearchLayout();
     }
     renderDashboard(currentBars);
+    isSearchActiveHistoryPushed = false;
     return;
   }
 
@@ -3456,20 +3463,18 @@ const setupStatsFilterListeners = () => {
       if (filter) {
         if (currentFilter === filter) {
           // Double-clicking active filter clears and closes search
-          const searchInput = document.getElementById("global-search");
-          if (searchInput && searchInput.value) {
-            searchInput.value = "";
-            const clearBtn = document.getElementById("btn-clear-search");
-            if (clearBtn) clearBtn.classList.add("hidden");
-
-            // Collapse search overlay if expanded
+          if (isSearchActiveHistoryPushed) {
+            deactivateSearch(false);
+          } else {
+            const searchInput = document.getElementById("global-search");
+            if (searchInput && searchInput.value) {
+              searchInput.value = "";
+              const clearBtn = document.getElementById("btn-clear-search");
+              if (clearBtn) clearBtn.classList.add("hidden");
+            }
             const searchContainer = document.querySelector(".nav-search-container");
             if (searchContainer) {
-              if (searchContainer.classList.contains("expanded")) {
-                searchContainer.classList.remove("expanded");
-                searchClosedViaPopState = true;
-                history.back();
-              }
+              searchContainer.classList.remove("expanded");
               adjustSearchLayout();
             }
           }
@@ -3606,6 +3611,43 @@ function adjustSearchLayout() {
   }
 }
 
+function activateSearch() {
+  if (!isSearchActiveHistoryPushed) {
+    isSearchActiveHistoryPushed = true;
+    history.pushState({ searchActive: true }, "");
+  }
+}
+
+function deactivateSearch(isPopState = false) {
+  const searchInput = document.getElementById("global-search");
+  const searchContainer = document.querySelector(".nav-search-container");
+  const clearBtn = document.getElementById("btn-clear-search");
+
+  if (searchInput) {
+    searchInput.value = "";
+    searchInput.blur();
+  }
+  if (clearBtn) {
+    clearBtn.classList.add("hidden");
+  }
+  if (searchContainer) {
+    searchContainer.classList.remove("expanded");
+  }
+
+  if (typeof adjustSearchLayout === "function") {
+    adjustSearchLayout();
+  }
+  renderDashboard(currentBars);
+
+  if (isSearchActiveHistoryPushed) {
+    isSearchActiveHistoryPushed = false;
+    if (!isPopState) {
+      searchClosedViaPopState = true;
+      history.back();
+    }
+  }
+}
+
 // Setup global search input listener
 const setupGlobalSearchListener = () => {
   const searchInput = document.getElementById("global-search");
@@ -3627,22 +3669,15 @@ const setupGlobalSearchListener = () => {
       adjustSearchLayout();
       renderDashboard(currentBars);
     });
+    searchInput.addEventListener("focus", () => {
+      activateSearch();
+    });
   }
 
   if (clearBtn && searchInput) {
     clearBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      searchInput.value = "";
-      toggleClearBtn();
-      adjustSearchLayout();
-      renderDashboard(currentBars);
-
-      // If expanded on mobile, collapse search and pop history state
-      if (searchContainer && searchContainer.classList.contains("expanded")) {
-        searchContainer.classList.remove("expanded");
-        searchClosedViaPopState = true;
-        history.back();
-      }
+      deactivateSearch(false);
     });
   }
 
@@ -3654,8 +3689,6 @@ const setupGlobalSearchListener = () => {
           e.stopPropagation();
           searchContainer.classList.add("expanded");
           searchInput.focus();
-          // Push state to browser history stack to intercept back button
-          history.pushState({ searchExpanded: true }, "");
         }
       } else {
         searchInput.focus();
