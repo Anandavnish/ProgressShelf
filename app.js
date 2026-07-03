@@ -1344,13 +1344,7 @@ function createCardElement(bar) {
       }
     }
 
-    if (barType === "checklist") {
-      if (isTruncatable && !card.classList.contains("expanded")) {
-        card.classList.add("expanded");
-        expandedCardIds.add(currentBar.id);
-        syncRowHeights();
-      }
-    } else if (barType === "note") {
+    if (barType === "checklist" || barType === "note") {
       if (isTruncatable && !card.classList.contains("expanded")) {
         card.classList.add("expanded");
         expandedCardIds.add(currentBar.id);
@@ -1358,6 +1352,8 @@ function createCardElement(bar) {
       } else {
         openUpdateModal(currentBar);
       }
+    } else if (barType === "goal") {
+      openUpdateModal(currentBar);
     }
   });
 
@@ -1642,6 +1638,8 @@ document.querySelectorAll("[data-close]").forEach((btn) => {
 });
 
 window.addEventListener("click", (e) => {
+  const clickedInsideModal = e.target.closest(".modal-overlay");
+
   if (e.target.classList.contains("modal-overlay")) {
     closeModal(e.target);
   }
@@ -1650,14 +1648,16 @@ window.addEventListener("click", (e) => {
   const clickedCard = e.target.closest('.card-progress');
   const clickedBarId = clickedCard ? clickedCard.getAttribute('data-bar-id') : null;
 
-  document.querySelectorAll(".card-progress.expanded").forEach(card => {
-    const cardBarId = card.getAttribute('data-bar-id');
-    // If the click was inside this card (even if the card was replaced and is now detached),
-    // we match by data-bar-id to avoid collapsing it.
-    if (cardBarId !== clickedBarId && !card.contains(e.target)) {
-      collapseCard(card);
-    }
-  });
+  if (!clickedInsideModal) {
+    document.querySelectorAll(".card-progress.expanded").forEach(card => {
+      const cardBarId = card.getAttribute('data-bar-id');
+      // If the click was inside this card (even if the card was replaced and is now detached),
+      // we match by data-bar-id to avoid collapsing it.
+      if (cardBarId !== clickedBarId && !card.contains(e.target)) {
+        collapseCard(card);
+      }
+    });
+  }
 });
 
 // Track card interaction origin to prevent collapse during scroll/swipe
@@ -1678,6 +1678,7 @@ window.addEventListener("wheel", (e) => {
 
 // Close expanded checklist cards on scroll only if scroll originated outside the card
 window.addEventListener("scroll", () => {
+  if (document.querySelector(".modal-overlay.active")) return;
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
     const cardBarId = card.getAttribute('data-bar-id');
     if (cardBarId !== lastInteractionCardId) {
@@ -3687,6 +3688,10 @@ window.addEventListener("click", (e) => {
     }
 
     if (hasExpandedCard && !clickedInsideExpandedCard) {
+      // Do not collapse expanded cards if the click is on or inside an active modal overlay (e.g. update modal)
+      if (e.target.closest(".modal-overlay")) {
+        return;
+      }
       e.stopPropagation();
       e.preventDefault();
       document.querySelectorAll(".card-progress.expanded").forEach(collapseCard);
