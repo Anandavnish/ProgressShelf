@@ -183,3 +183,42 @@ When adding features or upgrading ProgressShelf, use this guide to locate target
 1. **File:** `.github/workflows/notify.yml` -> Delete this file.
 2. **Server:** Host `functions/notifier.js` as an endpoint (e.g., Vercel Serverless Function, Google Cloud Function, or Node.js server route) protected by an Authorization header token.
 3. **Cron Hook:** Register the endpoint at [cron-job.org](https://cron-job.org) or set up a Google Cloud Scheduler trigger to call your API endpoint exactly every 5 minutes.
+
+---
+
+## 7. Card Layout, Dimensions, and Click Architectures
+
+### A. Core Card Geometry & Stretch Logic
+1. **Dimensions**: Standard cards (`.card-progress`) are styled with `min-height: 180px` and `height: auto`.
+2. **CSS Grid Alignment**: Cards are laid out inside a grid wrapper (`.cards-grid`) with `display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));`. By nature of CSS Grid, all cards residing in the same row auto-stretch to perfectly match the height of the tallest card in that row.
+3. **Internal Spacing**: Height allocation inside the card is calculated dynamically as:
+   $$\text{maxAvailableHeight} = \text{cardHeight} - \text{usedHeight} - 12\text{px}$$
+   Where $\text{usedHeight}$ is the sum of vertical paddings ($48\text{px}$), the card title container height ($38\text{px}\text{ to }58\text{px}$), margins, progress wraps, divider rules, and deadline warning badges.
+
+### B. note Card - Show More & Click Rules
+1. **Truncation Calculation**: A note card is considered "short" (does not require a Show More button) if its natural content size `textEl.scrollHeight` fits within either:
+   - The absolute standard limit ($96\text{px}$, or about 4 lines of text).
+   - The row's current stretched space (`maxAvailableHeight + 6px` tolerance).
+2. **Dynamic UI Rendering**:
+   - **Short notes:** Forced to collapse automatically (removes `.expanded` classes and deletes the entry from `expandedCardIds`), displaying fully (`max-height: none`) and hiding both Show More/Less buttons.
+   - **Genuinely truncated notes:** Clamped using CSS line-clamps. If collapsed, shows "Show more". If expanded, shows "Collapse".
+3. **Card Click Handling**:
+   - **1st Click on Short Note:** Instantly opens the **Update Progress Modal**.
+   - **1st Click on Long Note:** Triggers expand/collapse mechanism to fully reveal text.
+   - **2nd Click on Long Note:** Since the card is already expanded, clicking it opens the **Update Progress Modal**.
+
+### C. checklist Card - Show More & Click Rules
+1. **Truncation Calculation**: A checklist is short if the total list item count is $\le 3$.
+2. **Dynamic UI Rendering**:
+   - **Short checklists:** Forced to collapse automatically, rendering all items fully without any Show More/Less button display.
+   - **Long checklists:** Displays at least 3 items, showing a "Show more (+count)" button indicating hidden checklist elements.
+3. **Card Click & Checkbox Interactions**:
+   - **Edit Modal Disabled:** The edit button is hidden (`display: none`) and click events are completely blocked for checklist cards. Users update checklist items directly on the dashboard card.
+   - **Short Checklists:** Checkboxes are instantly responsive; clicking a checkbox toggles its state and writes directly to the database.
+   - **Long Checklists:**
+     - **1st Click:** Expands the card to reveal the hidden items.
+     - **Subsequent Clicks:** Direct interaction with checkboxes updates checked/unchecked states and saves database changes immediately.
+
+### D. goal Card (Deadline Tracker) - Click Rules
+1. **Geometry**: Deadline tracker cards have a simple visual composition (title, percentage circle/bar, deadline countdown timer) with no content to truncate, expand, or collapse.
+2. **Click Handling**: The very first click on the card instantly triggers the **Update Progress Modal** to modify raw numeric goals, levels, or conversion values.
