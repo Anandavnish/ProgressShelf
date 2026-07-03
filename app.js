@@ -1706,6 +1706,14 @@ function syncRowHeights() {
     const cards = Array.from(document.querySelectorAll(".card-progress"));
     if (cards.length === 0) return;
 
+    // Disable transitions temporarily to get instant layout measurements
+    cards.forEach(card => {
+      const textEl = card.querySelector(".card-note-text");
+      if (textEl) textEl.style.transition = "none";
+      const container = card.querySelector(".card-checklist-container");
+      if (container) container.style.transition = "none";
+    });
+
     // 1. Reset all card content styles so we can measure their natural layouts
     cards.forEach(card => {
       const bar = card._barData;
@@ -1766,8 +1774,6 @@ function syncRowHeights() {
 
     // 3. Process each row to adapt heights and indicators
     rows.forEach((rowCards) => {
-      const hasExpanded = rowCards.some(c => c.classList.contains("expanded"));
-
       rowCards.forEach(card => {
         const bar = card._barData;
         if (!bar) return;
@@ -1784,36 +1790,36 @@ function syncRowHeights() {
           if (isExpanded) {
             if (showLessBtn) showLessBtn.style.display = "inline-block";
           } else {
-            if (hasExpanded) {
-              // Stretched by row's expanded card
-              const cardHeight = card.offsetHeight;
-              let usedHeight = 48; // padding
+            const cardHeight = card.offsetHeight;
+            let usedHeight = 48; // padding
 
-              const titleEl = card.querySelector(".card-title");
-              if (titleEl) usedHeight += titleEl.offsetHeight + 8;
+            const titleEl = card.querySelector(".card-title");
+            if (titleEl) usedHeight += titleEl.offsetHeight + 8;
 
-              const divider = card.querySelector(".card-divider");
-              if (divider) usedHeight += divider.offsetHeight + 10;
+            const divider = card.querySelector(".card-divider");
+            if (divider) usedHeight += divider.offsetHeight + 10;
 
-              const labelEl = card.querySelector(".card-deadline-label");
-              if (labelEl) usedHeight += labelEl.offsetHeight + 10;
+            const labelEl = card.querySelector(".card-deadline-label");
+            if (labelEl) usedHeight += labelEl.offsetHeight + 10;
 
-              const availableHeight = Math.max(96, cardHeight - usedHeight - 12);
+            const maxAvailableHeight = cardHeight - usedHeight - 12;
+
+            // If the note's natural scrollHeight fits within maxAvailableHeight,
+            // we don't clamp it and don't show any show-more/show-less buttons.
+            if (textEl.scrollHeight <= maxAvailableHeight + 6) { // 6px tolerance
+              textEl.style.maxHeight = "";
+              textEl.style.webkitLineClamp = "unset";
+              textEl.style.lineClamp = "unset";
+              textEl.style.display = "block";
+            } else {
+              // Clamp to exact available height and show "Show more"
+              const availableHeight = Math.max(96, maxAvailableHeight);
               textEl.style.maxHeight = `${availableHeight}px`;
               textEl.style.webkitLineClamp = "unset";
               textEl.style.lineClamp = "unset";
               textEl.style.display = "block";
 
-              const isOverflowing = textEl.scrollHeight > textEl.clientHeight + 2;
-              if (isOverflowing) {
-                if (showMoreBtn) showMoreBtn.style.display = "inline-block";
-              }
-            } else {
-              // Normal clamped state
-              const isOverflowing = textEl.scrollHeight > textEl.clientHeight + 2;
-              if (isOverflowing) {
-                if (showMoreBtn) showMoreBtn.style.display = "inline-block";
-              }
+              if (showMoreBtn) showMoreBtn.style.display = "inline-block";
             }
           }
         } else if (barType === "checklist") {
@@ -1824,59 +1830,75 @@ function syncRowHeights() {
           if (isExpanded) {
             if (showLessBtn) showLessBtn.style.display = "inline-block";
           } else {
-            if (hasExpanded) {
-              // Stretched checklist row: display all items to occupy available height
-              card.querySelectorAll(".card-checklist-item").forEach(item => {
-                item.style.display = "flex";
-              });
+            // First, make all items display: flex so we can measure their offsets and heights
+            const items = Array.from(card.querySelectorAll(".card-checklist-item"));
+            items.forEach(item => {
+              item.style.display = "flex";
+            });
 
-              const cardHeight = card.offsetHeight;
-              let usedHeight = 48; // padding
+            const cardHeight = card.offsetHeight;
+            let usedHeight = 48; // padding
 
-              const titleEl = card.querySelector(".card-title");
-              if (titleEl) usedHeight += titleEl.offsetHeight + 8;
+            const titleEl = card.querySelector(".card-title");
+            if (titleEl) usedHeight += titleEl.offsetHeight + 8;
 
-              const progressWrapper = card.querySelector(".checklist-progress-wrapper");
-              if (progressWrapper) usedHeight += progressWrapper.offsetHeight + 14;
+            const progressWrapper = card.querySelector(".checklist-progress-wrapper");
+            if (progressWrapper) usedHeight += progressWrapper.offsetHeight + 14;
 
-              const divider = card.querySelector(".card-divider");
-              if (divider) usedHeight += divider.offsetHeight + 10;
+            const divider = card.querySelector(".card-divider");
+            if (divider) usedHeight += divider.offsetHeight + 10;
 
-              const labelEl = card.querySelector(".card-deadline-label");
-              if (labelEl) usedHeight += labelEl.offsetHeight + 10;
+            const labelEl = card.querySelector(".card-deadline-label");
+            if (labelEl) usedHeight += labelEl.offsetHeight + 10;
 
-              const availableHeight = Math.max(120, cardHeight - usedHeight - 12);
-              container.style.maxHeight = `${availableHeight}px`;
+            const maxAvailableHeight = cardHeight - usedHeight - 12;
 
-              // Calculate visible count
-              const containerRect = container.getBoundingClientRect();
-              const containerBottom = containerRect.bottom;
-              const items = Array.from(card.querySelectorAll(".card-checklist-item"));
-              const visibleCount = items.filter(item => {
-                if (item.style.display === "none") return false;
-                const itemRect = item.getBoundingClientRect();
-                return itemRect.bottom <= containerBottom + 2;
-              }).length;
+            // Measure how many items fit in maxAvailableHeight
+            let accumulatedHeight = 0;
+            let visibleCount = 0;
 
-              const hiddenCount = totalItems - visibleCount;
-              if (hiddenCount > 0) {
-                if (showMoreBtn) {
-                  showMoreBtn.textContent = `Show more (+${hiddenCount})`;
-                  showMoreBtn.style.display = "inline-block";
-                }
+            items.forEach((item, index) => {
+              const itemHeight = item.offsetHeight;
+              const itemSpacing = index === 0 ? itemHeight : itemHeight + 8;
+
+              // We must always show at least 3 items, or as many as fit within maxAvailableHeight (with 6px tolerance)
+              if (index < 3 || (accumulatedHeight + itemSpacing <= maxAvailableHeight + 6)) {
+                accumulatedHeight += itemSpacing;
+                visibleCount++;
               }
-            } else {
-              // Normal collapsed checklist
-              if (totalItems > 3) {
-                if (showMoreBtn) {
-                  showMoreBtn.textContent = `Show more (+${totalItems - 3})`;
-                  showMoreBtn.style.display = "inline-block";
-                }
+            });
+
+            // Set final display state based on which items fit
+            items.forEach((item, index) => {
+              if (index < visibleCount) {
+                item.style.display = "flex";
+              } else {
+                item.style.display = "none";
+              }
+            });
+
+            // Set container height to perfectly match the accumulated height of visible items
+            container.style.maxHeight = `${accumulatedHeight}px`;
+
+            const hiddenCount = totalItems - visibleCount;
+            if (hiddenCount > 0) {
+              if (showMoreBtn) {
+                showMoreBtn.textContent = `Show more (+${hiddenCount})`;
+                showMoreBtn.style.display = "inline-block";
               }
             }
           }
         }
       });
+    });
+
+    // Force layout reflow and restore transitions
+    document.body.offsetHeight;
+    cards.forEach(card => {
+      const textEl = card.querySelector(".card-note-text");
+      if (textEl) textEl.style.transition = "";
+      const container = card.querySelector(".card-checklist-container");
+      if (container) container.style.transition = "";
     });
   };
 
