@@ -1943,13 +1943,15 @@ function syncRowHeights() {
       });
     });
 
-    // Force layout reflow and restore transitions
+    // Force layout reflow and restore transitions in the next animation frame
     document.body.offsetHeight;
-    cards.forEach(card => {
-      const textEl = card.querySelector(".card-note-text");
-      if (textEl) textEl.style.transition = "";
-      const container = card.querySelector(".card-checklist-container");
-      if (container) container.style.transition = "";
+    requestAnimationFrame(() => {
+      cards.forEach(card => {
+        const textEl = card.querySelector(".card-note-text");
+        if (textEl) textEl.style.transition = "";
+        const container = card.querySelector(".card-checklist-container");
+        if (container) container.style.transition = "";
+      });
     });
   };
 
