@@ -1834,9 +1834,9 @@ function syncRowHeights() {
               }
             }
 
-            // If the note's natural scrollHeight fits within maxAvailableHeight,
+            // If the note's natural scrollHeight fits within the standard limit (96px),
             // we don't clamp it and don't show any show-more/show-less buttons.
-            if (textEl.scrollHeight <= maxAvailableHeight + 6) { // 6px tolerance
+            if (textEl.scrollHeight <= 96) {
               textEl.style.maxHeight = "none";
               textEl.style.webkitLineClamp = "unset";
               textEl.style.lineClamp = "unset";
