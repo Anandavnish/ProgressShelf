@@ -57,7 +57,9 @@ document.addEventListener('keydown', (e) => {
   if (e.target && e.target.classList.contains('form-input-single-line')) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      e.target.blur();
+      if (!e.target.classList.contains('add-item-input')) {
+        e.target.blur();
+      }
     }
   }
 });
@@ -2179,7 +2181,7 @@ function renderCreateChecklist() {
     const li = document.createElement("li");
     li.className = "checklist-builder-item";
     li.innerHTML = `
-      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <textarea class="form-input form-input-single-line item-text-input" rows="1" data-index="${index}">${escapeHtml(item.text)}</textarea>
       <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
           <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
@@ -2741,7 +2743,7 @@ function renderEditChecklist() {
     const li = document.createElement("li");
     li.className = "checklist-builder-item";
     li.innerHTML = `
-      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
+      <textarea class="form-input form-input-single-line item-text-input" rows="1" data-index="${index}">${escapeHtml(item.text)}</textarea>
       <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
           <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
