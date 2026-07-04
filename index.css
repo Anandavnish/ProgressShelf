@@ -556,13 +556,12 @@ body {
   border-color: var(--accent);
 }
 
-/* Floating Dropdown Card */
 .profile-dropdown {
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
   width: 220px;
-  background: rgba(13, 17, 23, 0.8);
+  background: rgba(13, 17, 23, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--card-border);
@@ -578,7 +577,7 @@ body {
 
 .profile-dropdown.active {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: none;
   pointer-events: auto;
 }
 
