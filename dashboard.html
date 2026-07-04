@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=4.2">
+  <link rel="stylesheet" href="index.css?v=4.3">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -468,9 +468,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" step="any" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH" autocomplete="one-time-code">
+                  <textarea class="form-input form-input-single-line deadline-hrs" id="deadline-hrs" placeholder="HH" inputmode="decimal" rows="1"></textarea>
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" step="any" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM" autocomplete="one-time-code">
+                  <textarea class="form-input form-input-single-line deadline-min" id="deadline-mins" placeholder="MM" inputmode="decimal" rows="1"></textarea>
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -520,9 +520,9 @@
                     <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-hrs" placeholder="0" inputmode="decimal" rows="1"></textarea>
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-mins" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-mins" placeholder="0" inputmode="decimal" rows="1"></textarea>
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -537,7 +537,7 @@
                     <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-percent" placeholder="0" inputmode="numeric" rows="1"></textarea>
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                     </div>
@@ -649,9 +649,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" step="any" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH" autocomplete="one-time-code">
+                  <textarea class="form-input form-input-single-line deadline-hrs" id="edit-deadline-hrs" placeholder="HH" inputmode="decimal" rows="1"></textarea>
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" step="any" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM" autocomplete="one-time-code">
+                  <textarea class="form-input form-input-single-line deadline-min" id="edit-deadline-mins" placeholder="MM" inputmode="decimal" rows="1"></textarea>
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -700,9 +700,9 @@
                     <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-hrs" placeholder="0" inputmode="decimal" rows="1"></textarea>
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-mins" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-mins" placeholder="0" inputmode="decimal" rows="1"></textarea>
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -717,7 +717,7 @@
                     <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0" autocomplete="one-time-code">
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-percent" placeholder="0" inputmode="numeric" rows="1"></textarea>
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                     </div>
@@ -861,6 +861,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=4.9"></script>
+  <script type="module" src="app.js?v=5.0"></script>
 </body>
 </html>
