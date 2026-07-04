@@ -480,9 +480,20 @@ function parseMarkdown(text) {
     }
     
     // Normal line
-    if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-    if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-    htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
+    if (inList === 'ul' || inList === 'ol') {
+      const lastItemIdx = htmlLines.length - 1;
+      if (lastItemIdx >= 0 && htmlLines[lastItemIdx].endsWith("</li>")) {
+        const popped = htmlLines[lastItemIdx];
+        const stripped = popped.substring(0, popped.length - 5); // remove "</li>"
+        htmlLines[lastItemIdx] = stripped + "<br>" + parsedLine + "</li>";
+      } else {
+        htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
+      }
+    } else {
+      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+      htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
+    }
   }
   
   // Clean up unclosed tags
