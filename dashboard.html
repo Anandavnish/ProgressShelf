@@ -10,6 +10,16 @@
   <link rel="stylesheet" href="index.css?v=5.2">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
+  <script>
+    (function() {
+      const theme = localStorage.getItem("ps_theme_preference") || "system";
+      let activeTheme = theme;
+      if (theme === "system") {
+        activeTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", activeTheme);
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="logo.svg">
@@ -102,6 +112,13 @@
         </button>
       </div>
       <div class="nav-toolbar">
+        <!-- Theme Toggle -->
+        <button id="btn-theme-toggle" class="nav-theme-btn" title="Change Theme">
+          <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20a10 10 0 0 0 0-20z" fill="currentColor"/>
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        </button>
         <!-- Download Button -->
         <button id="btn-download-apk" class="nav-download-btn" title="Download Web APK" style="display: none;">
           <svg class="download-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -821,10 +838,42 @@
     <div id="terrace-content" class="terrace-content"></div>
   </div>
 
+  <!-- Theme Dropdown Menu -->
+  <div id="theme-dropdown" class="theme-dropdown">
+    <button class="theme-dropdown-item active" data-theme="system">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+        <line x1="8" y1="21" x2="16" y2="21"></line>
+        <line x1="12" y1="17" x2="12" y2="21"></line>
+      </svg>
+      System Default
+    </button>
+    <button class="theme-dropdown-item" data-theme="light">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      Light Mode
+    </button>
+    <button class="theme-dropdown-item" data-theme="dark">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      Dark Mode
+    </button>
+  </div>
+
   <div id="profile-dropdown" class="profile-dropdown">
     <div class="dropdown-header">
-      <p id="user-name" class="dropdown-user-name" style="color: #FFF; font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;">Loading...</p>
-      <p id="user-status" class="dropdown-user-status" style="color: #8b949e; font-size: 0.75rem;">Online Mode</p>
+      <p id="user-name" class="dropdown-user-name" style="font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;">Loading...</p>
+      <p id="user-status" class="dropdown-user-status" style="font-size: 0.75rem;">Online Mode</p>
     </div>
     <div class="dropdown-divider"></div>
     <button id="btn-terrace" class="dropdown-item btn-terrace">

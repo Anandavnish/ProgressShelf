@@ -1,5 +1,5 @@
 import { isConfigured } from "./supabase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort } from "./auth.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserPreferredTheme } from "./auth.js";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars } from "./db.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
@@ -1716,6 +1716,8 @@ function closeModal(modal, isPopState = false) {
 }
 
 // Intercept system back button / gestures to close active modals, menus, or search overlays
+let themeClosedViaPopState = false;
+
 window.addEventListener("popstate", (e) => {
   if (closedViaPopState) {
     closedViaPopState = false;
@@ -1727,6 +1729,10 @@ window.addEventListener("popstate", (e) => {
   }
   if (profileClosedViaPopState) {
     profileClosedViaPopState = false;
+    return;
+  }
+  if (themeClosedViaPopState) {
+    themeClosedViaPopState = false;
     return;
   }
 
@@ -1861,6 +1867,16 @@ window.addEventListener("scroll", () => {
     profileDropdown.classList.remove("active");
     if (history.state && history.state.profileDropdown) {
       profileClosedViaPopState = true;
+      history.back();
+    }
+  }
+
+  // Close theme dropdown on scroll if active
+  const themeDropdown = document.getElementById("theme-dropdown");
+  if (themeDropdown && themeDropdown.classList.contains("active")) {
+    themeDropdown.classList.remove("active");
+    if (history.state && history.state.themeDropdown) {
+      themeClosedViaPopState = true;
       history.back();
     }
   }
@@ -3922,6 +3938,128 @@ const setupGlobalSearchListener = () => {
 };
 setupGlobalSearchListener();
 
+// Theme Preferences Handling
+let systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+
+function handleSystemThemeChange(e) {
+  if (localStorage.getItem("ps_theme_preference") === "system") {
+    document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+  }
+}
+
+/**
+ * Applies the selected theme and optionally syncs it to localStorage/database.
+ */
+function applyTheme(theme, sync = true) {
+  // Save locally
+  localStorage.setItem("ps_theme_preference", theme);
+
+  // Apply to document
+  let activeTheme = theme;
+  if (theme === "system") {
+    activeTheme = systemThemeMedia.matches ? "dark" : "light";
+    // Listen to changes
+    systemThemeMedia.removeEventListener("change", handleSystemThemeChange);
+    systemThemeMedia.addEventListener("change", handleSystemThemeChange);
+  } else {
+    // Stop listening to changes
+    systemThemeMedia.removeEventListener("change", handleSystemThemeChange);
+  }
+  document.documentElement.setAttribute("data-theme", activeTheme);
+
+  // Update toggle button icon
+  const btnThemeToggle = document.getElementById("btn-theme-toggle");
+  if (btnThemeToggle) {
+    if (theme === "system") {
+      btnThemeToggle.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20a10 10 0 0 0 0-20z" fill="currentColor"/>
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+      `;
+      btnThemeToggle.title = "Theme: System Default";
+    } else if (theme === "light") {
+      btnThemeToggle.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      `;
+      btnThemeToggle.title = "Theme: Light Mode";
+    } else if (theme === "dark") {
+      btnThemeToggle.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      `;
+      btnThemeToggle.title = "Theme: Dark Mode";
+    }
+  }
+
+  // Update active class in dropdown items
+  document.querySelectorAll(".theme-dropdown-item").forEach(btn => {
+    if (btn.getAttribute("data-theme") === theme) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+
+  // Sync to database if requested
+  if (sync && currentUser && currentUser.uid && !isGuestMode()) {
+    updateUserPreferredTheme(theme);
+  }
+}
+
+function setupThemeDropdown() {
+  const btnThemeToggle = document.getElementById("btn-theme-toggle");
+  const themeDropdown = document.getElementById("theme-dropdown");
+  if (!btnThemeToggle || !themeDropdown) return;
+
+  btnThemeToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wasActive = themeDropdown.classList.contains("active");
+    if (!wasActive) {
+      // Position dropdown dynamically relative to the toggle button to avoid nested backdrop-filter bug
+      const rect = btnThemeToggle.getBoundingClientRect();
+      themeDropdown.style.top = `${rect.bottom + window.scrollY + 12}px`;
+      themeDropdown.style.left = `${rect.right + window.scrollX - 170}px`;
+
+      themeDropdown.classList.add("active");
+      history.pushState({ themeDropdown: true }, "");
+    } else {
+      themeDropdown.classList.remove("active");
+      if (history.state && history.state.themeDropdown) {
+        themeClosedViaPopState = true;
+        history.back();
+      }
+    }
+  });
+
+  // Handle item selection in the theme dropdown
+  themeDropdown.querySelectorAll(".theme-dropdown-item").forEach(item => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const selectedTheme = item.getAttribute("data-theme");
+      applyTheme(selectedTheme, true);
+      
+      // Close dropdown
+      themeDropdown.classList.remove("active");
+      if (history.state && history.state.themeDropdown) {
+        themeClosedViaPopState = true;
+        history.back();
+      }
+    });
+  });
+}
+
 // Toggle profile dropdown menu
 let profileClosedViaPopState = false;
 
@@ -3951,12 +4089,18 @@ btnProfileBadge?.addEventListener("click", (e) => {
 window.addEventListener("click", (e) => {
   const profileDropdown = document.getElementById("profile-dropdown");
   const isProfileActive = profileDropdown && profileDropdown.classList.contains("active");
+  const themeDropdown = document.getElementById("theme-dropdown");
+  const isThemeActive = themeDropdown && themeDropdown.classList.contains("active");
   const hasExpandedCard = expandedCardIds.size > 0;
 
-  if (isProfileActive || hasExpandedCard) {
+  if (isProfileActive || isThemeActive || hasExpandedCard) {
     const btnProfileBadge = document.getElementById("btn-profile-badge");
     const clickedInsideProfile = (profileDropdown && profileDropdown.contains(e.target)) || 
                                  (btnProfileBadge && btnProfileBadge.contains(e.target));
+                                 
+    const btnThemeToggle = document.getElementById("btn-theme-toggle");
+    const clickedInsideTheme = (themeDropdown && themeDropdown.contains(e.target)) || 
+                               (btnThemeToggle && btnThemeToggle.contains(e.target));
                                  
     const clickedInsideExpandedCard = e.target.closest(".card-progress.expanded");
 
@@ -3966,6 +4110,16 @@ window.addEventListener("click", (e) => {
       profileDropdown.classList.remove("active");
       if (history.state && history.state.profileDropdown) {
         profileClosedViaPopState = true;
+        history.back();
+      }
+    }
+
+    if (isThemeActive && !clickedInsideTheme) {
+      e.stopPropagation();
+      e.preventDefault();
+      themeDropdown.classList.remove("active");
+      if (history.state && history.state.themeDropdown) {
+        themeClosedViaPopState = true;
         history.back();
       }
     }
@@ -4122,6 +4276,15 @@ initAuthProtection(async (user) => {
     currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
   }
 
+  // Load preferred theme setting from user metadata or local storage
+  let currentThemePref = "system";
+  if (user && user.themePreference) {
+    currentThemePref = user.themePreference;
+  } else {
+    currentThemePref = localStorage.getItem("ps_theme_preference") || "system";
+  }
+  applyTheme(currentThemePref, false);
+
   // Update sort dropdown value in UI to match currentSort
   const sortSelect = document.getElementById("sort-select");
   if (sortSelect) {
@@ -4171,6 +4334,7 @@ initAuthProtection(async (user) => {
   }
 
   setupDownloadApk();
+  setupThemeDropdown();
 
   // Subscribe to progress bars collection
   let firstLoad = true;

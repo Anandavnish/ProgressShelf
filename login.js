@@ -77,3 +77,16 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// System theme listener for landing page
+const savedTheme = localStorage.getItem("ps_theme_preference") || "system";
+if (savedTheme === "system") {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const handleThemeChange = (e) => {
+    if (localStorage.getItem("ps_theme_preference") === "system") {
+      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+    }
+  };
+  media.removeEventListener("change", handleThemeChange);
+  media.addEventListener("change", handleThemeChange);
+}

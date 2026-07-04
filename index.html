@@ -10,6 +10,16 @@
   <link rel="stylesheet" href="index.css?v=5.2">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
+  <script>
+    (function() {
+      const theme = localStorage.getItem("ps_theme_preference") || "system";
+      let activeTheme = theme;
+      if (theme === "system") {
+        activeTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", activeTheme);
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="logo.svg">

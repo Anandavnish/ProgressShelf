@@ -19,7 +19,8 @@ function mapSupabaseUser(supabaseUser) {
     email: supabaseUser.email,
     displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email || "Tracker User",
     photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y",
-    preferredSort: supabaseUser.user_metadata?.preferred_sort || null
+    preferredSort: supabaseUser.user_metadata?.preferred_sort || null,
+    themePreference: supabaseUser.user_metadata?.theme_preference || null
   };
 }
 
@@ -220,5 +221,21 @@ export async function updateUserPreferredSort(sortValue) {
     if (error) throw error;
   } catch (err) {
     console.error("Failed to update user preferred sort:", err);
+  }
+}
+
+/**
+ * Persists the user's theme preference to Supabase user_metadata.
+ * @param {string} themeValue Theme preference value ("system", "light", "dark").
+ */
+export async function updateUserPreferredTheme(themeValue) {
+  if (!isConfigured || isGuestMode()) return;
+  try {
+    const { error } = await supabase.auth.updateUser({
+      data: { theme_preference: themeValue }
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.error("Failed to update user preferred theme:", err);
   }
 }

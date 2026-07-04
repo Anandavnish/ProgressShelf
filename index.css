@@ -16,6 +16,35 @@
   --border-radius: 12px;
   --transition-speed: 0.3s;
   --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --nav-bg: rgba(13, 17, 23, 0.8);
+  --dropdown-bg: rgba(13, 17, 23, 0.7);
+  --logo-text-outline: #E5E7EB;
+  --search-bg: #0b0d10;
+  --search-border: #21262d;
+  --search-btn-bg: #1f242c;
+  --search-btn-hover-bg: #30363d;
+  --search-btn-hover-color: #fff;
+}
+
+:root[data-theme="light"] {
+  --bg-color: #F4F6F9;
+  --card-bg: #FFFFFF;
+  --card-border: #E1E5EB;
+  --text-primary: #1A202C;
+  --text-muted: #627285;
+  --accent: #2A74E6;
+  --accent-glow: rgba(42, 116, 230, 0.12);
+  --success: #10B981;
+  --error: #EF4444;
+  --warning: #F59E0B;
+  --nav-bg: rgba(244, 246, 249, 0.8);
+  --dropdown-bg: rgba(255, 255, 255, 0.8);
+  --logo-text-outline: #1A202C;
+  --search-bg: rgba(0, 0, 0, 0.05);
+  --search-border: #CED4DA;
+  --search-btn-bg: #E9ECEF;
+  --search-btn-hover-bg: #DEE2E6;
+  --search-btn-hover-color: var(--text-primary);
 }
 
 /* Base resets */
@@ -216,7 +245,7 @@ body {
 
 .logo-text .text-outline {
   color: transparent;
-  -webkit-text-stroke: 1.1px #E5E7EB;
+  -webkit-text-stroke: 1.1px var(--logo-text-outline);
   font-weight: 500;
   margin-left: 2px;
   letter-spacing: 2px;
@@ -369,7 +398,7 @@ body {
   z-index: 100;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--nav-bg);
   border-bottom: 1px solid var(--card-border);
   padding: 12px 24px;
   will-change: transform;
@@ -415,7 +444,7 @@ body {
 .nav-logo-text .text-outline {
   -webkit-text-fill-color: transparent;
   color: transparent;
-  -webkit-text-stroke: 1.25px #E5E7EB;
+  -webkit-text-stroke: 1.25px var(--logo-text-outline);
   font-weight: 500;
   margin-left: 1px;
   letter-spacing: 0.75px;
@@ -496,7 +525,7 @@ body {
 }
 
 .version-select {
-  background-color: #0D1117;
+  background-color: var(--bg-color);
   border: 1px solid var(--card-border);
   color: var(--text-muted);
   font-family: var(--font-family);
@@ -635,7 +664,7 @@ body {
   position: sticky;
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px));
   z-index: 98;
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--nav-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--card-border);
@@ -2264,8 +2293,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .nav-search-container .nav-search-btn:hover {
-  background-color: #30363d;
-  color: #fff;
+  background-color: var(--search-btn-hover-bg);
+  color: var(--search-btn-hover-color);
 }
 
 .nav-search-container .nav-search-btn:active {
@@ -2281,9 +2310,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .nav-search-container.search-pill-mode {
   display: flex;
   align-items: center;
-  background-color: #0b0d10;
+  background-color: var(--search-bg);
   /* Slate/dark theme background */
-  border: 1px solid #21262d;
+  border: 1px solid var(--search-border);
   /* Sleek thin border */
   border-radius: 9999px;
   /* Perfect pill shape */
@@ -2318,7 +2347,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   position: relative;
   right: auto;
   top: auto;
-  background-color: #1f242c;
+  background-color: var(--search-btn-bg);
   width: 26px;
   height: 26px;
 }
@@ -2375,7 +2404,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   right: 8px;
   width: calc(100% - 16px);
   height: 38px;
-  background-color: #0b0d10;
+  background-color: var(--search-bg);
   border: 1px solid var(--accent);
   border-radius: 9999px;
   padding: 3px 3px 3px 16px;
@@ -2399,7 +2428,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   position: relative;
   right: auto;
   top: auto;
-  background-color: #1f242c;
+  background-color: var(--search-btn-bg);
 }
 
 .mobile-subbar {
@@ -2409,7 +2438,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   justify-content: flex-end;
   align-items: center;
   padding: 8px 16px;
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--nav-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--card-border);
@@ -3693,7 +3722,6 @@ textarea.form-input-single-line {
   pointer-events: none;
 }
 
-/* On mobile, keep it slightly smaller and shifted */
 @media (max-width: 493px) {
   .btn-fab {
     bottom: 28px;
@@ -3701,4 +3729,80 @@ textarea.form-input-single-line {
     width: 52px;
     height: 52px;
   }
+}
+
+/* Theme Toggle & Dropdown Menu */
+.nav-theme-btn {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all var(--transition-speed) ease;
+}
+
+.nav-theme-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background-color: var(--accent-glow);
+}
+
+.theme-dropdown {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 170px;
+  background: var(--dropdown-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  pointer-events: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+  z-index: 110;
+}
+
+.theme-dropdown.active {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.theme-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.theme-dropdown-item:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background-color: var(--accent-glow);
+}
+
+.theme-dropdown-item.active {
+  color: var(--accent);
+  background-color: var(--accent-glow);
+  font-weight: 600;
 }
