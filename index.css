@@ -3631,6 +3631,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 #update-note-text {
   min-height: 450px;
   line-height: 1.6;
+  padding-left: 28px !important;
+  text-indent: -14px !important;
 }
 
 /* Styling for single-line textareas replacing inputs to suppress Chrome Autofill */
