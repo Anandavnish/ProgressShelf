@@ -1026,9 +1026,7 @@ body {
 
 /* Progress Card Styles */
 .card-progress {
-  background-color: rgba(13, 17, 23, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--border-radius);
   padding: 24px;
@@ -1275,9 +1273,7 @@ body {
 }
 
 .modal-container {
-  background-color: rgba(13, 17, 23, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 16px;
   width: 100%;
