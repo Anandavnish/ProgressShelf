@@ -1824,6 +1824,16 @@ window.addEventListener("wheel", (e) => {
 
 // Close expanded checklist cards on scroll only if scroll originated outside the card
 window.addEventListener("scroll", () => {
+  // Close profile dropdown on scroll if active
+  const profileDropdown = document.getElementById("profile-dropdown");
+  if (profileDropdown && profileDropdown.classList.contains("active")) {
+    profileDropdown.classList.remove("active");
+    if (history.state && history.state.profileDropdown) {
+      profileClosedViaPopState = true;
+      history.back();
+    }
+  }
+
   if (document.querySelector(".modal-overlay.active")) return;
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
     const cardBarId = card.getAttribute('data-bar-id');
