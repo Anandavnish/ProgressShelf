@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=4.7">
+  <link rel="stylesheet" href="index.css?v=4.8">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -855,11 +855,19 @@
     </button>
   </div>
 
+  <button id="btn-fab" class="btn-fab" title="Add New Tracker">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="8" x2="12" y2="16"></line>
+      <line x1="8" y1="12" x2="16" y2="12"></line>
+    </svg>
+  </button>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=5.8"></script>
+  <script type="module" src="app.js?v=5.9"></script>
 </body>
 </html>

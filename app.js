@@ -1610,6 +1610,7 @@ function renderDashboard(bars) {
   });
 
   syncRowHeights();
+  syncFabVisibility();
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes
@@ -1822,6 +1823,25 @@ window.addEventListener("wheel", (e) => {
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
 }, { passive: true });
 
+// Sync floating action button (FAB) visibility based on "Add New Tracker" card scrolling
+function syncFabVisibility() {
+  const addCard = document.getElementById("btn-add-card");
+  const fab = document.getElementById("btn-fab");
+  if (addCard && fab) {
+    const rect = addCard.getBoundingClientRect();
+    const navbarHeight = document.querySelector(".navbar")?.offsetHeight || 57;
+    // Show FAB when the bottom of "Add New Tracker" has scrolled above the navbar
+    if (rect.bottom < navbarHeight) {
+      fab.classList.add("visible");
+    } else {
+      fab.classList.remove("visible");
+    }
+  }
+}
+
+// Bind FAB click event
+document.getElementById("btn-fab")?.addEventListener("click", () => openCreateModal());
+
 // Close expanded checklist cards on scroll only if scroll originated outside the card
 window.addEventListener("scroll", () => {
   // Close profile dropdown on scroll if active
@@ -1833,6 +1853,9 @@ window.addEventListener("scroll", () => {
       history.back();
     }
   }
+
+  // Update FAB visibility
+  syncFabVisibility();
 
   if (document.querySelector(".modal-overlay.active")) return;
   document.querySelectorAll(".card-progress.expanded").forEach(card => {

@@ -3641,3 +3641,58 @@ textarea.form-input-single-line {
   white-space: nowrap !important;
   overflow: hidden !important;
 }
+
+/* Floating Action Button (FAB) */
+.btn-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: #FFF;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  z-index: 999;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, visibility 0.2s;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.85);
+  padding: 0;
+}
+
+.btn-fab:hover {
+  transform: scale(1.08);
+  background-color: #1d4ed8;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-fab:active {
+  transform: scale(0.95);
+}
+
+.btn-fab.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.btn-fab svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* On mobile, keep it slightly smaller and shifted */
+@media (max-width: 493px) {
+  .btn-fab {
+    bottom: 20px;
+    right: 20px;
+    width: 46px;
+    height: 46px;
+  }
+}
