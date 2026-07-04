@@ -1716,6 +1716,8 @@ window.addEventListener("wheel", (e) => {
 
 // Close expanded checklist cards on scroll only if scroll originated outside the card
 window.addEventListener("scroll", () => {
+  syncFabVisibility();
+
   if (document.querySelector(".modal-overlay.active")) return;
   document.querySelectorAll(".card-progress.expanded").forEach(card => {
     const cardBarId = card.getAttribute('data-bar-id');
@@ -1733,6 +1735,24 @@ function collapseCard(card) {
   card.classList.remove("expanded");
   syncRowHeights();
 }
+
+// Sync floating action button (FAB) visibility based on "Add New Tracker" card scrolling
+function syncFabVisibility() {
+  const addCard = document.querySelector(".card-add");
+  const fab = document.getElementById("btn-fab");
+  if (addCard && fab) {
+    const rect = addCard.getBoundingClientRect();
+    // Show FAB when the bottom of "Add New Tracker" has scrolled above the navbar
+    if (rect.bottom < 57) {
+      fab.classList.add("visible");
+    } else {
+      fab.classList.remove("visible");
+    }
+  }
+}
+
+// Bind FAB click event
+document.getElementById("btn-fab")?.addEventListener("click", () => openCreateModal());
 
 let syncRowHeightsTimeout = null;
 
@@ -4026,6 +4046,7 @@ initAuthProtection(async (user) => {
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
+      syncFabVisibility();
       
       // Dynamic Notification Permission Banner check (Rule 3)
       if (user && user.uid && Notification.permission === "default") {
