@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=4.1">
+  <link rel="stylesheet" href="index.css?v=4.2">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -385,8 +385,7 @@
             <!-- Title -->
             <div class="form-group">
               <label class="form-label" for="bar-title">Title</label>
-              <input class="form-input" type="text" id="bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar"
-                required maxlength="50" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false">
+              <textarea class="form-input form-input-single-line" rows="1" id="bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             </div>
 
             <!-- GOAL FIELDS -->
@@ -572,8 +571,7 @@
             <!-- Title -->
             <div class="form-group">
               <label class="form-label" for="edit-bar-title">Title</label>
-              <input class="form-input" type="text" id="edit-bar-title"
-                placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false">
+              <textarea class="form-input form-input-single-line" rows="1" id="edit-bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             </div>
 
             <!-- GOAL FIELDS -->
@@ -863,6 +861,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=4.8"></script>
+  <script type="module" src="app.js?v=4.9"></script>
 </body>
 </html>
