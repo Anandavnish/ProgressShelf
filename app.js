@@ -2424,14 +2424,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
     `;
     createTargetDynamic.appendChild(targetCol);
 
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -2773,7 +2773,7 @@ function openEditModal(bar) {
       const targetCol = document.createElement("div");
       targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
       `;
       editTargetDynamic.appendChild(targetCol);
 
@@ -2781,7 +2781,7 @@ function openEditModal(bar) {
         const currentCol = document.createElement("div");
         currentCol.innerHTML = `
           <label class="form-row-label">${escapeHtml(level.name)}</label>
-          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
+          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
         `;
         editCurrentDynamic.appendChild(currentCol);
       }
@@ -2825,10 +2825,12 @@ function openEditModal(bar) {
   if (editDateInput) {
     editDateInput.type = 'text';
     editDateInput.value = "";
+    editDateInput.setAttribute('readonly', '');
   }
   if (editTimeInput) {
     editTimeInput.type = 'text';
     editTimeInput.value = "";
+    editTimeInput.setAttribute('readonly', '');
   }
 
   // Pre-fill deadline if bar has one
@@ -2846,10 +2848,12 @@ function openEditModal(bar) {
       const dateInput = document.getElementById('edit-deadline-date');
       const timeInput = document.getElementById('edit-deadline-time');
       if (dateInput) {
+        dateInput.removeAttribute('readonly');
         dateInput.type = 'date';
         dateInput.value = dateStr;
       }
       if (timeInput) {
+        timeInput.removeAttribute('readonly');
         timeInput.type = 'time';
         timeInput.value = `${hrsStr}:${minsStr}`;
       }
