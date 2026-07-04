@@ -3896,6 +3896,11 @@ btnProfileBadge?.addEventListener("click", (e) => {
   if (profileDropdown) {
     const wasActive = profileDropdown.classList.contains("active");
     if (!wasActive) {
+      // Position dropdown dynamically relative to the badge to avoid nested backdrop-filter bug
+      const rect = btnProfileBadge.getBoundingClientRect();
+      profileDropdown.style.top = `${rect.bottom + window.scrollY + 12}px`;
+      profileDropdown.style.left = `${rect.right + window.scrollX - 220}px`;
+
       profileDropdown.classList.add("active");
       history.pushState({ profileDropdown: true }, "");
     } else {
