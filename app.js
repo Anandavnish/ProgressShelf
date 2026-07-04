@@ -5309,8 +5309,10 @@ if ('serviceWorker' in navigator) {
   });
 
   // Automatically refresh the page when the service worker updates and takes control
+  const hadControllerOnLoad = !!navigator.serviceWorker.controller;
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadControllerOnLoad) return; // Skip reload if this is the initial service worker activation after unregistering
     if (!refreshing) {
       refreshing = true;
 
