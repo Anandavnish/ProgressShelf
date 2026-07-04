@@ -3708,71 +3708,70 @@ function adjustSearchLayout() {
 
   if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar || !subbarEl || !subbarContainer) return;
 
-  const btnRefresh = document.getElementById("btn-refresh");
-  const btnDownload = document.getElementById("btn-download-apk");
-  const githubLink = document.querySelector(".nav-github-link");
-  const versionSelector = document.querySelector(".version-selector");
+  // Always keep search container in pill mode (always expanded)
+  searchContainer.classList.add("search-pill-mode");
+  searchContainer.classList.remove("expanded");
 
-  // Mobile layout threshold at 494px wide
-  const isMobileSize = window.innerWidth < 494;
-  const isCurrentlyInMobileDOM = btnRefresh && btnRefresh.parentElement === subbarContainer;
+  // Dynamically gather all transferable elements from both potential containers
+  const transferItems = [];
+  // Gather from toolbar
+  Array.from(toolbar.children).forEach(child => {
+    if (!child.classList.contains("profile-menu-container") && !transferItems.includes(child)) {
+      transferItems.push(child);
+    }
+  });
+  // Gather from subbarContainer
+  Array.from(subbarContainer.children).forEach(child => {
+    if (!transferItems.includes(child)) {
+      transferItems.push(child);
+    }
+  });
+
+  const isCurrentlyInMobileDOM = transferItems.length > 0 && transferItems[0].parentElement === subbarContainer;
 
   // Cache toolbar width when in desktop mode so we don't do layout thrashing on resize
   if (!isCurrentlyInMobileDOM && toolbar.clientWidth > 0) {
     cachedToolbarWidth = toolbar.getBoundingClientRect().width;
   }
 
-  // Fallback if not cached yet
-  const toolbarWidth = cachedToolbarWidth || 180;
+  // Fallback if not cached yet: calculate based on active transfer items (approx 40px per item)
+  const toolbarWidth = cachedToolbarWidth || (transferItems.length * 40);
 
-  if (isMobileSize) {
+  // Calculate dynamic spacing
+  const navWidth = navContainer.clientWidth;
+  const logoWidth = logo.getBoundingClientRect().width || 170;
+  const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
+  const searchMinWidth = 160;
+
+  // Total required width: Logo + Min Search Pill Width + Profile Badge + Toolbar width + 50px buffer
+  const totalRequiredWidth = logoWidth + searchMinWidth + profileWidth + toolbarWidth + 50;
+  const shouldMoveToSubbar = navWidth < totalRequiredWidth;
+
+  if (shouldMoveToSubbar) {
     if (!isCurrentlyInMobileDOM) {
       // Mobile layout: move elements to mobile subbar
-      if (btnDownload) subbarContainer.appendChild(btnDownload);
-      if (btnRefresh) subbarContainer.appendChild(btnRefresh);
-      if (githubLink) subbarContainer.appendChild(githubLink);
-      if (versionSelector) subbarContainer.appendChild(versionSelector);
-
-      subbarEl.style.display = ""; // Show subbar
-      searchContainer.classList.add("search-pill-mode");
-      searchContainer.classList.remove("expanded");
-
-      // Update sticky offsets since heights changed
+      transferItems.forEach(item => {
+        if (item.parentElement !== subbarContainer) {
+          subbarContainer.appendChild(item);
+        }
+      });
+      subbarEl.style.display = "flex"; // Show subbar
       window.updateStickyOffsets?.();
     }
   } else {
     if (isCurrentlyInMobileDOM) {
       // Desktop layout: move elements back to navbar (before profile badge)
-      if (profileBadge) {
-        if (btnDownload) toolbar.insertBefore(btnDownload, profileBadge);
-        if (btnRefresh) toolbar.insertBefore(btnRefresh, profileBadge);
-        if (githubLink) toolbar.insertBefore(githubLink, profileBadge);
-        if (versionSelector) toolbar.insertBefore(versionSelector, profileBadge);
-      } else {
-        if (btnDownload) toolbar.appendChild(btnDownload);
-        if (btnRefresh) toolbar.appendChild(btnRefresh);
-        if (githubLink) toolbar.appendChild(githubLink);
-        if (versionSelector) toolbar.appendChild(versionSelector);
-      }
-
+      transferItems.forEach(item => {
+        if (item.parentElement !== toolbar) {
+          if (profileBadge) {
+            toolbar.insertBefore(item, profileBadge);
+          } else {
+            toolbar.appendChild(item);
+          }
+        }
+      });
       subbarEl.style.display = "none"; // Hide subbar
-
-      // Update sticky offsets since heights changed
       window.updateStickyOffsets?.();
-    }
-
-    // Check if search bar should be pill mode or icon-only on desktop
-    const navWidth = navContainer.clientWidth;
-    const logoWidth = logo.getBoundingClientRect().width;
-    const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-    
-    const minRequiredWidth = getPlaceholderWidth(searchInput) + 64;
-    const availableWidthWithDesktopToolbar = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
-
-    if (searchInput.value.trim() !== "" || availableWidthWithDesktopToolbar >= minRequiredWidth) {
-      searchContainer.classList.add("search-pill-mode");
-    } else {
-      searchContainer.classList.remove("search-pill-mode");
     }
   }
 }

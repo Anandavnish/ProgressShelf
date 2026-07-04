@@ -562,7 +562,7 @@ body {
   top: calc(100% + 12px);
   right: 0;
   width: 220px;
-  background: rgba(22, 27, 34, 0.95);
+  background: rgba(13, 17, 23, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--card-border);
@@ -2400,7 +2400,33 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .mobile-subbar {
-  display: none;
+  position: sticky;
+  top: var(--navbar-height, 51px);
+  display: none; /* Controlled dynamically by JS */
+  justify-content: flex-end;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: rgba(13, 17, 23, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--card-border);
+  z-index: 99;
+  will-change: transform;
+}
+
+.mobile-subbar-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.mobile-subbar .nav-download-btn,
+.mobile-subbar .nav-refresh-btn,
+.mobile-subbar .nav-github-link,
+.mobile-subbar .version-selector {
+  display: flex;
 }
 
 /* --- Mobile Responsive Collapsible Navbar Layout --- */
@@ -2445,38 +2471,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     height: 32px !important;
   }
 
-  /* Secondary mobile subbar stylesheet */
+  /* Secondary mobile subbar layout */
   .mobile-subbar {
     position: sticky !important;
     top: var(--navbar-height, 51px) !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    /* Align from right */
-    align-items: center;
-    padding: 8px 16px;
-    background-color: rgba(13, 17, 23, 0.8);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--card-border);
     z-index: 99;
     will-change: transform;
-  }
-
-  .mobile-subbar-container {
-    display: flex;
-    justify-content: flex-end;
-    /* Align from right */
-    align-items: center;
-    gap: 16px;
-    width: 100%;
-  }
-
-  /* Style toolbar items when dynamically moved to the mobile subbar */
-  .mobile-subbar .nav-download-btn,
-  .mobile-subbar .nav-refresh-btn,
-  .mobile-subbar .nav-github-link,
-  .mobile-subbar .version-selector {
-    display: flex !important;
   }
 
   .mobile-subbar .version-select {
