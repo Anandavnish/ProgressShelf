@@ -5078,12 +5078,6 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
-    // Reveal mobile subbar at the absolute bottom of the page
-    const isAtBottom = (window.innerHeight + currentScrollY) >= (document.documentElement.scrollHeight - 5);
-    if (isAtBottom && H_subbar > 0) {
-      y_subbar = 0;
-    }
-
     if (editModeActive) {
       y_nav = 0;
       y_subbar = 0;
@@ -5107,7 +5101,7 @@ function setupStaggeredHeaderScroll() {
         toDistribute -= take;
       }
       
-      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar && !isAtBottom) {
+      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar) {
         const space = H_subbar - y_subbar;
         const take = Math.min(space, toDistribute);
         y_subbar += take;
