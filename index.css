@@ -3645,31 +3645,35 @@ textarea.form-input-single-line {
 /* Floating Action Button (FAB) */
 .btn-fab {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 50px;
-  height: 50px;
+  bottom: 32px;
+  right: 32px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  background-color: var(--accent);
-  color: #FFF;
-  border: none;
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   cursor: pointer;
   z-index: 999;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, visibility 0.2s;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, border-color 0.25s ease, color 0.25s, opacity 0.2s, visibility 0.2s;
   opacity: 0;
   visibility: hidden;
-  transform: scale(0.85);
+  transform: scale(0.8);
   padding: 0;
 }
 
 .btn-fab:hover {
   transform: scale(1.08);
-  background-color: #1d4ed8;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: rgba(37, 99, 235, 0.2);
+  border-color: var(--accent);
+  color: #FFF;
+  box-shadow: 0 12px 40px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-fab:active {
@@ -3690,9 +3694,9 @@ textarea.form-input-single-line {
 /* On mobile, keep it slightly smaller and shifted */
 @media (max-width: 493px) {
   .btn-fab {
-    bottom: 20px;
-    right: 20px;
-    width: 46px;
-    height: 46px;
+    bottom: 28px;
+    right: 28px;
+    width: 52px;
+    height: 52px;
   }
 }
