@@ -3652,7 +3652,7 @@ textarea.form-input-single-line {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: rgba(22, 27, 34, 0.85) !important;
+  background: rgba(22, 27, 34, 0.5) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: #3F85F6;
