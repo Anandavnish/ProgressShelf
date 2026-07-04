@@ -2030,6 +2030,39 @@ input.form-input-time {
   padding-right: 40px;
 }
 
+input.form-input-date,
+input.form-input-time {
+  position: relative;
+}
+
+/* Custom placeholder styling for native date/time inputs when empty and not focused */
+input[type="date"]:not(.has-value):not(:focus),
+input[type="time"]:not(.has-value):not(:focus) {
+  color: transparent !important;
+}
+
+input[type="date"]:not(.has-value):not(:focus)::before {
+  content: attr(placeholder);
+  color: var(--text-muted);
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input[type="time"]:not(.has-value):not(:focus)::before {
+  content: attr(placeholder);
+  color: var(--text-muted);
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: inherit;
+  font-size: inherit;
+}
+
 input[type="date"],
 input[type="time"] {
   position: relative;
@@ -3591,6 +3624,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 #create-note-text,
 #edit-note-text,
 #update-note-text {
-  min-height: 180px;
+  min-height: 450px;
   line-height: 1.6;
 }

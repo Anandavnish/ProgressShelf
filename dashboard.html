@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=3.9">
+  <link rel="stylesheet" href="index.css?v=4.0">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -386,7 +386,7 @@
             <div class="form-group">
               <label class="form-label" for="bar-title">Title</label>
               <input class="form-input" type="text" id="bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar"
-                required maxlength="50" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                required maxlength="50" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
 
             <!-- GOAL FIELDS -->
@@ -451,7 +451,7 @@
             <div id="create-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="create-note-text">Note Text</label>
-                <textarea class="form-input" id="create-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="create-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
                 <div class="textarea-footer">
                   <span class="char-counter" id="create-note-char-count">0 / 1600</span>
                 </div>
@@ -469,9 +469,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" step="any" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH" autocomplete="off">
+                  <input type="number" step="any" class="form-input deadline-hrs" id="deadline-hrs" min="0" placeholder="HH" autocomplete="one-time-code">
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" step="any" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM" autocomplete="off">
+                  <input type="number" step="any" class="form-input deadline-min" id="deadline-mins" min="0" placeholder="MM" autocomplete="one-time-code">
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -485,8 +485,8 @@
               <div class="deadline-absolute">
                 <span class="deadline-way-label">Specific date &amp; time</span>
                 <div class="deadline-absolute-inputs">
-                  <input type="text" class="form-input form-input-date" id="deadline-date" placeholder="Select date" autocomplete="off" readonly onclick="this.removeAttribute('readonly'); this.type='date'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value){ this.type='text'; this.setAttribute('readonly',''); }">
-                  <input type="text" class="form-input form-input-time" id="deadline-time" placeholder="Select time" autocomplete="off" readonly onclick="this.removeAttribute('readonly'); this.type='time'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value){ this.type='text'; this.setAttribute('readonly',''); }">
+                  <input type="date" class="form-input form-input-date" id="deadline-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="deadline-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
               </div>
               <!-- Section divider -->
@@ -521,9 +521,9 @@
                     <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0" autocomplete="off">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-hrs" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-mins" placeholder="0" autocomplete="off">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="notify-mins" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -538,7 +538,7 @@
                     <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0" autocomplete="off">
+                        <input type="number" min="0" max="100" class="form-input notify-input" id="notify-percent" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                     </div>
@@ -573,7 +573,7 @@
             <div class="form-group">
               <label class="form-label" for="edit-bar-title">Title</label>
               <input class="form-input" type="text" id="edit-bar-title"
-                placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
 
             <!-- GOAL FIELDS -->
@@ -633,7 +633,7 @@
             <div id="edit-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="edit-note-text">Note Text</label>
-                <textarea class="form-input" id="edit-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="edit-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
                 <div class="textarea-footer">
                   <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
                 </div>
@@ -651,9 +651,9 @@
               <div class="deadline-relative">
                 <span class="deadline-way-label">From now</span>
                 <div class="deadline-relative-inputs">
-                  <input type="number" step="any" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH" autocomplete="off">
+                  <input type="number" step="any" class="form-input deadline-hrs" id="edit-deadline-hrs" min="0" placeholder="HH" autocomplete="one-time-code">
                   <span class="deadline-sep">hrs</span>
-                  <input type="number" step="any" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM" autocomplete="off">
+                  <input type="number" step="any" class="form-input deadline-min" id="edit-deadline-mins" min="0" placeholder="MM" autocomplete="one-time-code">
                   <span class="deadline-sep">min</span>
                 </div>
               </div>
@@ -667,8 +667,8 @@
               <div class="deadline-absolute">
                 <span class="deadline-way-label">Specific date &amp; time</span>
                 <div class="deadline-absolute-inputs">
-                  <input type="text" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" autocomplete="off" readonly onclick="this.removeAttribute('readonly'); this.type='date'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value){ this.type='text'; this.setAttribute('readonly',''); }">
-                  <input type="text" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" autocomplete="off" readonly onclick="this.removeAttribute('readonly'); this.type='time'; try { this.showPicker(); } catch(e) {}" onblur="if(!this.value){ this.type='text'; this.setAttribute('readonly',''); }">
+                  <input type="date" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
               </div>
               <!-- Section divider -->
@@ -702,9 +702,9 @@
                     <span class="notify-sub-label">Fixed time</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0" autocomplete="off">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-hrs" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-sep">hr</span>
-                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-mins" placeholder="0" autocomplete="off">
+                        <input type="number" step="any" min="0" class="form-input notify-input" id="edit-notify-mins" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-sep">min</span>
                         <span class="notify-suffix">before deadline</span>
                       </div>
@@ -719,7 +719,7 @@
                     <span class="notify-sub-label">Remind at</span>
                     <div class="notify-inputs-wrapper">
                       <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
-                        <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0" autocomplete="off">
+                        <input type="number" min="0" max="100" class="form-input notify-input" id="edit-notify-percent" placeholder="0" autocomplete="one-time-code">
                         <span class="notify-suffix">% of time remaining</span>
                       </div>
                     </div>
@@ -779,7 +779,7 @@
             <div id="update-note-fields" class="hidden">
               <p class="section-label">Note Text</p>
               <div class="form-group">
-                <textarea class="form-input" id="update-note-text" rows="5" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <textarea class="form-input" id="update-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
                 <div class="textarea-footer">
                   <span class="char-counter" id="update-note-char-count">0 / 1600</span>
                 </div>

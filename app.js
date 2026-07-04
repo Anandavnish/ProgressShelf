@@ -17,6 +17,41 @@ if (isConfigured) {
   }
 }
 
+// Global Date/Time Input Value Setter Override to add .has-value class
+const originalValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+Object.defineProperty(HTMLInputElement.prototype, 'value', {
+  set: function(val) {
+    originalValueSetter.call(this, val);
+    if (this.type === 'date' || this.type === 'time') {
+      if (val) {
+        this.classList.add('has-value');
+      } else {
+        this.classList.remove('has-value');
+      }
+    }
+  },
+  configurable: true
+});
+
+function updateDateTimeHasValueClass(input) {
+  if (input.value) {
+    input.classList.add('has-value');
+  } else {
+    input.classList.remove('has-value');
+  }
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target && (e.target.type === 'date' || e.target.type === 'time')) {
+    updateDateTimeHasValueClass(e.target);
+  }
+});
+document.addEventListener('change', (e) => {
+  if (e.target && (e.target.type === 'date' || e.target.type === 'time')) {
+    updateDateTimeHasValueClass(e.target);
+  }
+});
+
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
@@ -2187,8 +2222,8 @@ function openCreateModal() {
   formCreate.reset();
   const dateInput = document.getElementById('deadline-date');
   const timeInput = document.getElementById('deadline-time');
-  if (dateInput) dateInput.type = 'text';
-  if (timeInput) timeInput.type = 'text';
+  if (dateInput) dateInput.value = "";
+  if (timeInput) timeInput.value = "";
   document.getElementById("create-type-goal").checked = true;
   createChecklistItems = [];
   renderCreateChecklist();
@@ -2249,45 +2284,45 @@ function rebuildCustomConfigFields() {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required autocomplete="one-time-code">
       </div>
     `;
   } else if (count === 2) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Chapters" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Chapters" required autocomplete="one-time-code">
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Smallest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Sections" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Sections" required autocomplete="one-time-code">
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Sections per Chapter?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required autocomplete="one-time-code">
       </div>
     `;
   } else if (count === 3) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required autocomplete="one-time-code">
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Middle)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Chapters" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Chapters" required autocomplete="one-time-code">
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Chapters per Book?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required autocomplete="one-time-code">
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 3 Unit Name (Smallest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l3-name" placeholder="e.g. Pages" required>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l3-name" placeholder="e.g. Pages" required autocomplete="one-time-code">
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l3">
         <label class="form-label" id="label-ratio-l3">How many Pages per Chapter?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l3-ratio" value="10" min="2" required>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l3-ratio" value="10" min="2" required autocomplete="one-time-code">
       </div>
     `;
   }
@@ -2424,14 +2459,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
+      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
     `;
     createTargetDynamic.appendChild(targetCol);
 
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
+      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -2773,7 +2808,7 @@ function openEditModal(bar) {
       const targetCol = document.createElement("div");
       targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
+        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
       `;
       editTargetDynamic.appendChild(targetCol);
 
@@ -2781,7 +2816,7 @@ function openEditModal(bar) {
         const currentCol = document.createElement("div");
         currentCol.innerHTML = `
           <label class="form-row-label">${escapeHtml(level.name)}</label>
-          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="off">
+          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
         `;
         editCurrentDynamic.appendChild(currentCol);
       }
@@ -2823,14 +2858,10 @@ function openEditModal(bar) {
   const editDateInput = document.getElementById('edit-deadline-date');
   const editTimeInput = document.getElementById('edit-deadline-time');
   if (editDateInput) {
-    editDateInput.type = 'text';
     editDateInput.value = "";
-    editDateInput.setAttribute('readonly', '');
   }
   if (editTimeInput) {
-    editTimeInput.type = 'text';
     editTimeInput.value = "";
-    editTimeInput.setAttribute('readonly', '');
   }
 
   // Pre-fill deadline if bar has one
@@ -2848,13 +2879,9 @@ function openEditModal(bar) {
       const dateInput = document.getElementById('edit-deadline-date');
       const timeInput = document.getElementById('edit-deadline-time');
       if (dateInput) {
-        dateInput.removeAttribute('readonly');
-        dateInput.type = 'date';
         dateInput.value = dateStr;
       }
       if (timeInput) {
-        timeInput.removeAttribute('readonly');
-        timeInput.type = 'time';
         timeInput.value = `${hrsStr}:${minsStr}`;
       }
 
