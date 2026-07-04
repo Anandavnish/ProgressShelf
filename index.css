@@ -3627,3 +3627,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   min-height: 450px;
   line-height: 1.6;
 }
+
+/* Styling for single-line textareas replacing inputs to suppress Chrome Autofill */
+textarea.form-input-single-line {
+  resize: none !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+  line-height: 24px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}

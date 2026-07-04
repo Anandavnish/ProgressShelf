@@ -52,6 +52,30 @@ document.addEventListener('change', (e) => {
   }
 });
 
+// Ensure single-line textareas behave exactly like text inputs (no linebreaks)
+document.addEventListener('keydown', (e) => {
+  if (e.target && e.target.classList.contains('form-input-single-line')) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.target.blur();
+    }
+  }
+});
+
+document.addEventListener('paste', (e) => {
+  if (e.target && e.target.classList.contains('form-input-single-line')) {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    const cleanText = text.replace(/[\r\n]+/g, ' ');
+    const start = e.target.selectionStart;
+    const end = e.target.selectionEnd;
+    const val = e.target.value;
+    e.target.value = val.substring(0, start) + cleanText + val.substring(end);
+    e.target.selectionStart = e.target.selectionEnd = start + cleanText.length;
+    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+});
+
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
@@ -2284,45 +2308,45 @@ function rebuildCustomConfigFields() {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Books" required></textarea>
       </div>
     `;
   } else if (count === 2) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Chapters" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Chapters" required></textarea>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Smallest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Sections" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l2-name" placeholder="e.g. Sections" required></textarea>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Sections per Chapter?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l2-ratio" required>10</textarea>
       </div>
     `;
   } else if (count === 3) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Books" required></textarea>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Middle)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Chapters" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l2-name" placeholder="e.g. Chapters" required></textarea>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Chapters per Book?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l2-ratio" required>10</textarea>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 3 Unit Name (Smallest)</label>
-        <input class="form-input custom-level-name-input" type="text" id="custom-l3-name" placeholder="e.g. Pages" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l3-name" placeholder="e.g. Pages" required></textarea>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l3">
         <label class="form-label" id="label-ratio-l3">How many Pages per Chapter?</label>
-        <input class="form-input custom-level-ratio-input" type="number" id="custom-l3-ratio" value="10" min="2" required autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l3-ratio" required>10</textarea>
       </div>
     `;
   }
@@ -2459,14 +2483,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
+      <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
     `;
     createTargetDynamic.appendChild(targetCol);
 
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
+      <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -2808,7 +2832,7 @@ function openEditModal(bar) {
       const targetCol = document.createElement("div");
       targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
+        <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
       `;
       editTargetDynamic.appendChild(targetCol);
 
@@ -2816,7 +2840,7 @@ function openEditModal(bar) {
         const currentCol = document.createElement("div");
         currentCol.innerHTML = `
           <label class="form-row-label">${escapeHtml(level.name)}</label>
-          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0" autocomplete="one-time-code">
+          <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
         `;
         editCurrentDynamic.appendChild(currentCol);
       }
