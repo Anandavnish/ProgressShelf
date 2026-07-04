@@ -3652,16 +3652,18 @@ textarea.form-input-single-line {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: #3F85F6;
-  color: #FFFFFF;
-  border: none;
+  background: rgba(22, 27, 34, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #3F85F6;
+  border: 1.5px solid rgba(63, 133, 246, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(63, 133, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   cursor: pointer;
   z-index: 999;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, box-shadow 0.25s ease, opacity 0.2s, visibility 0.2s;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, border-color 0.25s ease, color 0.25s, opacity 0.2s, visibility 0.2s;
   opacity: 0;
   visibility: hidden;
   transform: scale(0.8);
@@ -3670,8 +3672,9 @@ textarea.form-input-single-line {
 
 .btn-fab:hover {
   transform: scale(1.08);
-  background-color: #2b76ee;
-  box-shadow: 0 12px 32px rgba(63, 133, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: #3F85F6;
+  background: rgba(63, 133, 246, 0.15) !important;
+  box-shadow: 0 12px 40px rgba(63, 133, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .btn-fab:active {
@@ -3687,6 +3690,12 @@ textarea.form-input-single-line {
 .btn-fab svg {
   display: block;
   pointer-events: none;
+  stroke: #3F85F6;
+  transition: transform 0.25s ease;
+}
+
+.btn-fab:hover svg {
+  transform: rotate(90deg);
 }
 
 /* On mobile, keep it slightly smaller and shifted */
