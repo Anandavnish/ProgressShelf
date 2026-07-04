@@ -78,6 +78,42 @@ document.addEventListener('paste', (e) => {
   }
 });
 
+// Auto-scroll focused modal fields into view when keyboard opens
+let activeFocusedModalInput = null;
+
+function scrollFocusedInputIntoView() {
+  if (activeFocusedModalInput) {
+    activeFocusedModalInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
+document.addEventListener('focusin', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+    if (e.target.closest('.modal-body')) {
+      activeFocusedModalInput = e.target;
+      setTimeout(scrollFocusedInputIntoView, 300);
+    }
+  }
+});
+
+document.addEventListener('focusout', (e) => {
+  if (e.target === activeFocusedModalInput) {
+    activeFocusedModalInput = null;
+  }
+});
+
+if (window.visualViewport) {
+  let prevViewportHeight = window.visualViewport.height;
+  window.visualViewport.addEventListener('resize', () => {
+    const currentHeight = window.visualViewport.height;
+    // If viewport height decreased significantly, keyboard probably opened
+    if (currentHeight < prevViewportHeight - 50) {
+      setTimeout(scrollFocusedInputIntoView, 100);
+    }
+    prevViewportHeight = currentHeight;
+  });
+}
+
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
@@ -1640,7 +1676,13 @@ setInterval(() => {
 // Modal Controllers & Form Interactions
 // ==========================================
 
+let modalScrollY = 0;
+
 function openModal(modal) {
+  modalScrollY = window.scrollY;
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${modalScrollY}px`;
+  document.body.style.width = '100%';
   modal.classList.add("active");
   // Push a state to browser history stack to intercept back button
   history.pushState({ modalId: modal.id }, "");
@@ -1649,6 +1691,11 @@ function openModal(modal) {
 function closeModal(modal, isPopState = false) {
   if (!modal.classList.contains("active")) return;
   modal.classList.remove("active");
+
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+  window.scrollTo(0, modalScrollY);
 
   if (!isPopState) {
     closedViaPopState = true;
