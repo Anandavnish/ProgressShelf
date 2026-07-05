@@ -932,20 +932,29 @@ function getCurrentSearchTokens() {
   return query.split(/\s+/).filter(Boolean);
 }
 
-// Builds a combined lowercase searchable string for a bar (card)
-function getBarSearchableText(bar) {
-  const parts = [bar.title || ""];
+// Helper that extracts normalized text fields from a card separately
+function getBarSearchFields(bar) {
+  const titleText = (bar.title || "").toLowerCase();
+  const otherParts = [];
   const barType = bar.type || "goal";
+  
   if (barType === "note" && bar.text) {
-    parts.push(bar.text);
+    otherParts.push(bar.text);
   } else if (barType === "checklist" && bar.items) {
     bar.items.forEach(item => {
       if (item && item.text) {
-        parts.push(item.text);
+        otherParts.push(item.text);
       }
     });
   }
-  return parts.join(" ").toLowerCase();
+  const otherText = otherParts.join(" ").toLowerCase();
+  return { titleText, otherText };
+}
+
+// Builds a combined lowercase searchable string for a bar (card)
+function getBarSearchableText(bar) {
+  const { titleText, otherText } = getBarSearchFields(bar);
+  return titleText + " " + otherText;
 }
 
 // Determines if a bar matches any of the search tokens
@@ -955,15 +964,17 @@ function matchBarSearch(bar, tokens) {
   return tokens.some(token => combinedText.includes(token));
 }
 
-// Calculates a match score for relevance sorting (count of unique matching tokens)
+// Calculates a match score for relevance sorting (count of unique matching tokens, title weighted higher)
 function getBarSearchScore(bar, tokens) {
   if (tokens.length === 0) return 0;
-  const combinedText = getBarSearchableText(bar);
+  const { titleText, otherText } = getBarSearchFields(bar);
   
   let score = 0;
   tokens.forEach(token => {
-    if (combinedText.includes(token)) {
-      score++;
+    if (titleText.includes(token)) {
+      score += 10;
+    } else if (otherText.includes(token)) {
+      score += 1;
     }
   });
   return score;
