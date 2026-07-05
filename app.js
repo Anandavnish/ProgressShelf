@@ -4067,6 +4067,18 @@ const setupGlobalSearchListener = () => {
   const searchContainer = document.querySelector(".nav-search-container");
   const clearBtn = document.getElementById("btn-clear-search");
 
+  const updateSearchPlaceholder = () => {
+    if (!searchInput) return;
+    const isLargeScreen = window.innerWidth >= 1024;
+    if (isLargeScreen) {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const shortcutText = isMac ? "⌘F" : "Ctrl+F";
+      searchInput.placeholder = `Global Search [${shortcutText}]`;
+    } else {
+      searchInput.placeholder = "Global Search";
+    }
+  };
+
   const toggleClearBtn = () => {
     if (searchInput && searchInput.value) {
       clearBtn?.classList.remove("hidden");
@@ -4138,14 +4150,21 @@ const setupGlobalSearchListener = () => {
     });
   }
 
-  window.addEventListener("resize", adjustSearchLayout);
+  window.addEventListener("resize", () => {
+    adjustSearchLayout();
+    updateSearchPlaceholder();
+  });
 
   if (document.fonts) {
-    document.fonts.ready.then(adjustSearchLayout);
+    document.fonts.ready.then(() => {
+      adjustSearchLayout();
+      updateSearchPlaceholder();
+    });
   }
 
   // Run initial layout check
   adjustSearchLayout();
+  updateSearchPlaceholder();
 };
 setupGlobalSearchListener();
 
