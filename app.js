@@ -1711,13 +1711,13 @@ function renderDashboard(bars) {
   if (searchTokens.length > 0) {
     const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
     scored.sort((a, b) => {
-      if (b.score !== a.score) {
-        return b.score - a.score;
+      // Invert comparator order because of .reverse() in the reconciliation loop!
+      if (a.score !== b.score) {
+        return a.score - b.score;
       }
-      return a.index - b.index; // Stable sort fallback (preserve original dashboard sort order)
+      return b.index - a.index; // Stable sort fallback (preserve original dashboard sort order)
     });
     filtered = scored.map(item => item.bar);
-    console.log("SEARCH REVENUE SORTED FILTERED BARS:", filtered.map(b => ({ title: b.title, score: getBarSearchScore(b, searchTokens) })));
   }
 
   updateOverallStats(bars);
