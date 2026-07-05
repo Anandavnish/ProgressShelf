@@ -3493,9 +3493,9 @@ formCreate.addEventListener("submit", async (e) => {
     }
   }
 
-  if (currentBars.length >= 50) {
+  if (currentBars.length >= 85) {
     showToast(
-      "You've reached the maximum of 50 progress bars. Delete one to create a new one.",
+      "You've reached the maximum of 85 progress bars. Delete one to create a new one.",
       "error"
     );
     return;
