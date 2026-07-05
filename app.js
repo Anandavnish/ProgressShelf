@@ -870,6 +870,40 @@ function filterBars(bars) {
   });
 }
 
+// Determines which indices of the items array should be visible when the card is collapsed.
+// - Splits into pending and completed, keeping relative order.
+// - Fits visibleCount items total.
+// - If both categories exist, guarantees at least one completed item is shown.
+function getCollapsedVisibleIndices(items, visibleCount) {
+  const pending = [];
+  const completed = [];
+  
+  items.forEach((item, index) => {
+    const entry = { item, index };
+    if (item.done) {
+      completed.push(entry);
+    } else {
+      pending.push(entry);
+    }
+  });
+
+  const selectedIndices = new Set();
+
+  if (pending.length === 0) {
+    completed.slice(0, visibleCount).forEach(e => selectedIndices.add(e.index));
+  } else if (completed.length === 0) {
+    pending.slice(0, visibleCount).forEach(e => selectedIndices.add(e.index));
+  } else {
+    const pendingToTake = Math.min(pending.length, Math.max(0, visibleCount - 1));
+    const completedToTake = Math.min(completed.length, visibleCount - pendingToTake);
+    
+    pending.slice(0, pendingToTake).forEach(e => selectedIndices.add(e.index));
+    completed.slice(0, completedToTake).forEach(e => selectedIndices.add(e.index));
+  }
+  
+  return selectedIndices;
+}
+
 function updateCardElement(card, bar) {
   card._barData = bar;
   const barType = bar.type || "goal";
@@ -972,9 +1006,11 @@ function updateCardElement(card, bar) {
     const container = card.querySelector(".card-checklist-container");
     if (container) {
       const isExpanded = expandedCardIds.has(bar.id);
+      const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
       const itemsHtml = items.map((item, index) => {
-        const collapsibleClass = index >= 3 ? " collapsible-item" : "";
-        const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
+        const isCollapsedVisible = collapsedVisibleSet.has(index);
+        const collapsibleClass = isCollapsedVisible ? "" : " collapsible-item";
+        const inlineStyle = isCollapsedVisible ? '' : (isExpanded ? ' style="display: flex;"' : ' style="display: none;"');
         return `
           <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
             <input type="checkbox" ${item.done ? "checked" : ""}>
@@ -1041,6 +1077,10 @@ function updateCardElement(card, bar) {
           if (summaryEl) {
             summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
           }
+
+          // Update local memory and trigger immediate row height + visibility recalculation
+          bar.items = updatedItems;
+          syncRowHeights();
 
           try {
             await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
@@ -1212,9 +1252,11 @@ function createCardElement(bar) {
 
     const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
+    const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
     const itemsHtml = items.map((item, index) => {
-      const collapsibleClass = index >= 3 ? " collapsible-item" : "";
-      const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
+      const isCollapsedVisible = collapsedVisibleSet.has(index);
+      const collapsibleClass = isCollapsedVisible ? "" : " collapsible-item";
+      const inlineStyle = isCollapsedVisible ? '' : (isExpanded ? ' style="display: flex;"' : ' style="display: none;"');
       return `
         <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
           <input type="checkbox" ${item.done ? "checked" : ""}>
@@ -1412,6 +1454,10 @@ function createCardElement(bar) {
         if (summaryEl) {
           summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
         }
+
+        // Update local memory and trigger immediate row height + visibility recalculation
+        currentBar.items = updatedItems;
+        syncRowHeights();
 
         try {
           await editBar(isGuestMode() ? null : currentUser.uid, currentBar.id, {
@@ -2009,12 +2055,11 @@ function syncRowHeights() {
           container.style.maxHeight = "";
         }
         const isExpanded = card.classList.contains("expanded");
+        const items = bar.items || [];
+        const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
         card.querySelectorAll(".card-checklist-item").forEach((item, index) => {
-          if (index >= 3) {
-            item.style.display = isExpanded ? "flex" : "none";
-          } else {
-            item.style.display = "flex";
-          }
+          const isCollapsedVisible = collapsedVisibleSet.has(index);
+          item.style.display = isExpanded || isCollapsedVisible ? "flex" : "none";
         });
       }
 
@@ -2177,9 +2222,12 @@ function syncRowHeights() {
                 }
               });
 
+              const barItems = bar.items || [];
+              const collapsedVisibleSet = getCollapsedVisibleIndices(barItems, visibleCount);
+
               // Set final display state based on which items fit
               items.forEach((item, index) => {
-                if (index < visibleCount) {
+                if (collapsedVisibleSet.has(index)) {
                   item.style.display = "flex";
                 } else {
                   item.style.display = "none";
