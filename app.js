@@ -1893,7 +1893,12 @@ function collapseCard(card) {
     expandedCardIds.delete(barId);
   }
 
-  // Fix A: Scroll-position compensation — capture position before collapse
+  // Disable transition during collapse so the reflow captures the true final
+  // height instantly, not a mid-animation value from the min-height transition.
+  // Same pattern as syncRowHeights() uses for .card-note-text measurement.
+  card.style.transition = 'none';
+
+  // Capture position before collapse
   const beforeTop = card.getBoundingClientRect().top;
 
   card.classList.remove("expanded");
@@ -1906,6 +1911,12 @@ function collapseCard(card) {
   if (delta !== 0) {
     window.scrollBy(0, delta);
   }
+
+  // Restore transition after the deferred syncRowHeights pass (360ms) completes,
+  // so future expand/collapse interactions still animate smoothly.
+  setTimeout(() => {
+    card.style.transition = '';
+  }, 400);
 }
 
 let syncRowHeightsTimeout = null;
