@@ -3849,30 +3849,22 @@ textarea.form-input-single-line {
   margin-top: 6px;
   background-color: #161B22;
   border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 12px;
-  width: 260px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  padding: 8px 10px;
+  max-width: 240px;
+  width: max-content;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 10000;
   font-weight: normal;
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.72rem;
+  line-height: 1.35;
   text-align: left;
   cursor: default;
-  display: block;
+  color: #c9d1d9;
 }
 
 .formatting-popover.hidden {
   display: none !important;
-}
-
-.formatting-popover h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--accent);
-  border-bottom: 1px solid var(--card-border);
-  padding-bottom: 4px;
 }
 
 .formatting-popover ul {
@@ -3882,28 +3874,9 @@ textarea.form-input-single-line {
 }
 
 .formatting-popover li {
-  margin-bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  margin-bottom: 4px;
 }
 
 .formatting-popover li:last-child {
   margin-bottom: 0;
-}
-
-.formatting-popover .syntax {
-  font-family: var(--font-family);
-  font-weight: 600;
-  color: var(--warning);
-  background: rgba(243, 156, 18, 0.12);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  width: fit-content;
-}
-
-.formatting-popover .desc {
-  color: var(--text-muted);
-  font-size: 0.75rem;
 }
