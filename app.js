@@ -4499,8 +4499,8 @@ initAuthProtection(async (user) => {
       
       // Dynamic Notification Permission Banner check (Rule 3)
       if (user && user.uid && Notification.permission === "default") {
-        const hasNotifyAt = (bars || []).some(bar => bar.notifyAt);
-        if (hasNotifyAt) {
+        const hasUpcomingNotifications = (bars || []).some(bar => hasActiveNotification(bar));
+        if (hasUpcomingNotifications) {
           showNotificationBanner(user.uid);
         } else {
           document.getElementById("notification-banner")?.remove();
