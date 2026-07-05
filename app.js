@@ -1878,7 +1878,7 @@ window.addEventListener("scroll", () => {
     document.querySelectorAll(".card-progress.expanded").forEach(card => {
       const cardBarId = card.getAttribute('data-bar-id');
       if (cardBarId !== lastInteractionCardId) {
-        collapseCard(card);
+        collapseCard(card, true);
       }
     });
   }, 150);
@@ -1919,10 +1919,12 @@ function expandCard(card, barData) {
   }
 }
 
-// Collapse a card with instant scroll compensation.
-// Always disables transition for accurate measurement, compensates scroll position,
-// then restores transition after the deferred syncRowHeights pass (360ms).
-function collapseCard(card) {
+// Collapse a card with scroll compensation.
+// - If triggered by scroll (isScrollTriggered = true): scroll compensation is calculated
+//   to keep the viewport content below the card in the exact same relative position.
+// - If triggered by user interaction (click collapse/outside): if the card's top is
+//   partially/fully off-screen, scroll up to bring its top flush with the sticky nav bars.
+function collapseCard(card, isScrollTriggered = false) {
   const barId = card.getAttribute("data-bar-id");
   if (barId) {
     expandedCardIds.delete(barId);
@@ -1930,14 +1932,40 @@ function collapseCard(card) {
 
   card.style.transition = 'none';
   const beforeTop = card.getBoundingClientRect().top;
+  const beforeHeight = card.getBoundingClientRect().height;
+  const beforeScrollY = window.scrollY;
+  const topOffset = getStickyTopOffset();
+
   card.classList.remove("expanded");
   syncRowHeights();
-  document.body.offsetHeight;
-  const afterTop = card.getBoundingClientRect().top;
-  const delta = afterTop - beforeTop;
-  if (delta !== 0) {
-    window.scrollBy(0, delta);
+  document.body.offsetHeight; // Force layout reflow and browser scroll clamping
+
+  const afterHeight = card.getBoundingClientRect().height;
+  const afterScrollY = window.scrollY;
+  const autoScrolled = beforeScrollY - afterScrollY;
+
+  if (isScrollTriggered) {
+    // Keep content at/below the viewport top from jumping by calculating the height
+    // difference of the collapsing card that was above the top offset.
+    const distAbove = Math.max(0, topOffset - beforeTop);
+    const amtBefore = Math.min(beforeHeight, distAbove);
+    const amtAfter = Math.min(afterHeight, distAbove);
+    const shift = amtBefore - amtAfter;
+
+    const remainingShift = shift - autoScrolled;
+    if (remainingShift > 0) {
+      window.scrollBy(0, -remainingShift);
+    }
+  } else {
+    // User-initiated collapse: bring card top flush with nav bars if it was above/cut off
+    if (beforeTop < topOffset) {
+      const finalScrollDelta = (beforeTop - autoScrolled) - topOffset;
+      if (finalScrollDelta < 0) {
+        window.scrollBy(0, finalScrollDelta);
+      }
+    }
   }
+
   // Restore transition after deferred syncRowHeights pass (360ms)
   setTimeout(() => { card.style.transition = ''; }, 400);
 }
