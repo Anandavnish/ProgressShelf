@@ -4088,6 +4088,22 @@ const setupGlobalSearchListener = () => {
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         searchInput.blur(); // Collapse virtual keyboard on mobile / enter on desktop
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        deactivateSearch(false);
+      }
+    });
+
+    // Intercept CTRL+F / CMD+F to focus global search
+    window.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        const searchContainer = document.querySelector(".nav-search-container");
+        if (searchContainer && !searchContainer.classList.contains("search-pill-mode")) {
+          searchContainer.classList.add("expanded");
+        }
+        searchInput.focus();
+        activateSearch();
       }
     });
   }
