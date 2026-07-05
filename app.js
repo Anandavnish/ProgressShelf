@@ -910,10 +910,8 @@ function getCurrentSearchTokens() {
   return query.split(/\s+/).filter(Boolean);
 }
 
-// Determines if a bar matches all the whitespace-split search tokens
-function matchBarSearch(bar, tokens) {
-  if (tokens.length === 0) return true;
-  
+// Builds a combined lowercase searchable string for a bar (card)
+function getBarSearchableText(bar) {
   const parts = [bar.title || ""];
   const barType = bar.type || "goal";
   if (barType === "note" && bar.text) {
@@ -925,8 +923,28 @@ function matchBarSearch(bar, tokens) {
       }
     });
   }
-  const combinedText = parts.join(" ").toLowerCase();
-  return tokens.every(token => combinedText.includes(token));
+  return parts.join(" ").toLowerCase();
+}
+
+// Determines if a bar matches any of the search tokens
+function matchBarSearch(bar, tokens) {
+  if (tokens.length === 0) return true;
+  const combinedText = getBarSearchableText(bar);
+  return tokens.some(token => combinedText.includes(token));
+}
+
+// Calculates a match score for relevance sorting (count of unique matching tokens)
+function getBarSearchScore(bar, tokens) {
+  if (tokens.length === 0) return 0;
+  const combinedText = getBarSearchableText(bar);
+  
+  let score = 0;
+  tokens.forEach(token => {
+    if (combinedText.includes(token)) {
+      score++;
+    }
+  });
+  return score;
 }
 
 // Safely highlights search query tokens in the HTML-escaped card title
@@ -1632,7 +1650,21 @@ function renderDashboard(bars) {
   }
 
   const sortedBars = sortBars(bars);
-  const filtered = filterBars([...sortedBars]);
+  let filtered = filterBars([...sortedBars]);
+
+  // Sort by search relevance score descending when search is active
+  const searchTokens = getCurrentSearchTokens();
+  if (searchTokens.length > 0) {
+    const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
+    scored.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return a.index - b.index; // Stable sort fallback (preserve original dashboard sort order)
+    });
+    filtered = scored.map(item => item.bar);
+  }
+
   updateOverallStats(bars);
 
   // Update search helper text for matches in other categories
