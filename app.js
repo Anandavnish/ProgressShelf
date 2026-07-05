@@ -1717,6 +1717,7 @@ function renderDashboard(bars) {
       return a.index - b.index; // Stable sort fallback (preserve original dashboard sort order)
     });
     filtered = scored.map(item => item.bar);
+    console.log("SEARCH REVENUE SORTED FILTERED BARS:", filtered.map(b => ({ title: b.title, score: getBarSearchScore(b, searchTokens) })));
   }
 
   updateOverallStats(bars);
