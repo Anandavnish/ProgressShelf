@@ -1884,8 +1884,21 @@ window.addEventListener("scroll", () => {
   }, 150);
 }, { passive: true });
 
-// Expand a card with scroll-into-view: ensures the card's top is always visible,
-// scrolling just enough to reveal the bottom without pushing the top above Y=0.
+// Measure the actual bottom edge of the sticky nav bar stack.
+// This varies dynamically as the nav bars translate off-screen on scroll.
+function getStickyTopOffset() {
+  const controls = document.querySelector(".dashboard-controls");
+  if (controls) return controls.getBoundingClientRect().bottom;
+  const stats = document.getElementById("stats-banner");
+  if (stats && !stats.classList.contains("hidden")) return stats.getBoundingClientRect().bottom;
+  const navbar = document.querySelector(".navbar");
+  if (navbar) return navbar.getBoundingClientRect().bottom;
+  return 0;
+}
+
+// Expand a card with scroll-into-view: ensures the card's top is always visible
+// below the sticky nav bars, scrolling just enough to reveal the bottom without
+// pushing the top above the nav bar edge.
 function expandCard(card, barData) {
   card.classList.add("expanded");
   expandedCardIds.add(barData.id);
@@ -1894,47 +1907,39 @@ function expandCard(card, barData) {
   // Force reflow so layout is fully settled before measuring
   document.body.offsetHeight;
   const rect = card.getBoundingClientRect();
+  const topOffset = getStickyTopOffset();
 
-  if (rect.top < 0) {
-    // Card's top is above the viewport — bring it to Y=0
-    window.scrollBy(0, rect.top);
+  if (rect.top < topOffset) {
+    // Card's top is behind or above the sticky nav bars — bring it just below them
+    window.scrollBy(0, rect.top - topOffset);
   } else if (rect.bottom > window.innerHeight) {
     // Card's bottom extends past viewport — scroll down to reveal more,
-    // but never scroll further than would push the top above Y=0.
-    window.scrollBy(0, Math.min(rect.bottom - window.innerHeight, rect.top));
+    // but never scroll further than would push the top behind the nav bars.
+    window.scrollBy(0, Math.min(rect.bottom - window.innerHeight, rect.top - topOffset));
   }
 }
 
-// Context-aware collapse: visible cards get natural CSS-driven layout change,
-// off-screen cards get instant collapse with scroll compensation.
+// Collapse a card with instant scroll compensation.
+// Always disables transition for accurate measurement, compensates scroll position,
+// then restores transition after the deferred syncRowHeights pass (360ms).
 function collapseCard(card) {
   const barId = card.getAttribute("data-bar-id");
   if (barId) {
     expandedCardIds.delete(barId);
   }
 
-  const rect = card.getBoundingClientRect();
-  const isOffScreen = rect.bottom <= 0 || rect.top >= window.innerHeight;
-
-  if (isOffScreen) {
-    // Card is not visible — collapse instantly, compensate scroll position
-    card.style.transition = 'none';
-    const beforeTop = rect.top;
-    card.classList.remove("expanded");
-    syncRowHeights();
-    document.body.offsetHeight;
-    const afterTop = card.getBoundingClientRect().top;
-    const delta = afterTop - beforeTop;
-    if (delta !== 0) {
-      window.scrollBy(0, delta);
-    }
-    // Restore transition after deferred syncRowHeights pass (360ms)
-    setTimeout(() => { card.style.transition = ''; }, 400);
-  } else {
-    // Card is visible — let natural layout change occur
-    card.classList.remove("expanded");
-    syncRowHeights();
+  card.style.transition = 'none';
+  const beforeTop = card.getBoundingClientRect().top;
+  card.classList.remove("expanded");
+  syncRowHeights();
+  document.body.offsetHeight;
+  const afterTop = card.getBoundingClientRect().top;
+  const delta = afterTop - beforeTop;
+  if (delta !== 0) {
+    window.scrollBy(0, delta);
   }
+  // Restore transition after deferred syncRowHeights pass (360ms)
+  setTimeout(() => { card.style.transition = ''; }, 400);
 }
 
 let syncRowHeightsTimeout = null;
