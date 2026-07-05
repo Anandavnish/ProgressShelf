@@ -186,6 +186,28 @@ function getDeadlineMs(bar) {
     : Number(bar.deadlineAt);
 }
 
+// Determines whether the bar has a scheduled notification that has not fired yet
+function hasActiveNotification(bar) {
+  if (!bar) return false;
+  if (isTrackerCompleted(bar)) return false;
+  
+  const now = Date.now();
+  
+  // 1. Check relative/percent/pre-deadline notification
+  if (bar.notifyAt) {
+    const notifyAtMs = Number(bar.notifyAt);
+    if (!isNaN(notifyAtMs) && notifyAtMs > now) return true;
+  }
+  
+  // 2. Check at-deadline notification
+  if (bar.alertAtDeadline) {
+    const deadlineMs = getDeadlineMs(bar);
+    if (deadlineMs && deadlineMs > now) return true;
+  }
+  
+  return false;
+}
+
 function applyDeadlineTick(barEl) {
   const deadlineMs = Number(barEl.dataset.deadlineMs);
   const deadlineSetMs = Number(barEl.dataset.deadlineSetMs);
@@ -1217,7 +1239,20 @@ function updateCardElement(card, bar) {
       labelEl.setAttribute("data-completed", "false");
       labelEl.setAttribute("data-deadline-ms", dMs);
       labelEl.setAttribute("data-percent", percent);
-      labelEl.innerHTML = `<span class="deadline-text-val">⏱ ${label}</span>`;
+      
+      labelEl.style.display = "flex";
+      labelEl.style.justifyContent = "space-between";
+      labelEl.style.alignItems = "center";
+
+      const bellHtml = hasActiveNotification(bar) ? `
+        <span class="active-notification-bell" title="active notification" style="display: inline-flex; align-items: center; color: var(--warning); cursor: help;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
+          </svg>
+        </span>
+      ` : '';
+
+      labelEl.innerHTML = `<span class="deadline-text-val">⏱ ${label}</span>${bellHtml}`;
       if (isOverdue) {
         labelEl.classList.add("overdue");
       } else {
@@ -1412,10 +1447,18 @@ function createCardElement(bar) {
       } else {
         const { label, isOverdue } = formatTimeLeft(dMs);
         const overdueClass = isOverdue ? ' overdue' : '';
+        const bellHtml = hasActiveNotification(bar) ? `
+          <span class="active-notification-bell" title="active notification" style="display: inline-flex; align-items: center; color: var(--warning); cursor: help;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
+            </svg>
+          </span>
+        ` : '';
         return `
           <hr class="card-divider">
-          <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+          <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
             <span class="deadline-text-val">⏱ ${label}</span>
+            ${bellHtml}
           </div>
         `;
       }
@@ -1786,6 +1829,10 @@ setInterval(() => {
           labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
         }
       } else {
+        labelEl.style.display = "flex";
+        labelEl.style.justifyContent = "space-between";
+        labelEl.style.alignItems = "center";
+
         // Remove completed badge if present (e.g. if user edited progress back below 100%)
         const completedBadge = labelEl.querySelector('.badge-completed');
         if (completedBadge) {
@@ -1804,6 +1851,31 @@ setInterval(() => {
           labelEl.classList.add("overdue");
         } else {
           labelEl.classList.remove("overdue");
+        }
+
+        // Dynamically update/verify active notification bell icon
+        const card = labelEl.closest('.card-progress');
+        const bar = card ? card._barData : null;
+        let bellSpan = labelEl.querySelector('.active-notification-bell');
+
+        if (bar && hasActiveNotification(bar)) {
+          if (!bellSpan) {
+            bellSpan = document.createElement("span");
+            bellSpan.className = "active-notification-bell";
+            bellSpan.title = "active notification";
+            bellSpan.style.display = "inline-flex";
+            bellSpan.style.alignItems = "center";
+            bellSpan.style.color = "var(--warning)";
+            bellSpan.style.cursor = "help";
+            bellSpan.innerHTML = `
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
+              </svg>
+            `;
+            labelEl.appendChild(bellSpan);
+          }
+        } else {
+          bellSpan?.remove();
         }
       }
     }
