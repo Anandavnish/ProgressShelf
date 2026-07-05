@@ -5284,6 +5284,59 @@ function setupNoteCharCounters() {
 
 setupNoteCharCounters();
 
+// Setup formatting guide popover toggle and dismiss actions
+function setupFormattingGuides() {
+  document.querySelectorAll(".info-icon-wrapper").forEach(wrapper => {
+    const icon = wrapper.querySelector(".info-icon");
+    const popover = wrapper.querySelector(".formatting-popover");
+    if (!icon || !popover) return;
+    
+    icon.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      const isHidden = popover.classList.contains("hidden");
+      // Close all other formatting popovers first
+      document.querySelectorAll(".formatting-popover").forEach(p => {
+        p.classList.add("hidden");
+      });
+      
+      if (isHidden) {
+        popover.classList.remove("hidden");
+        
+        // Calculate viewport-relative position (avoids modal body overflow clipping)
+        const rect = icon.getBoundingClientRect();
+        const popoverWidth = 260;
+        
+        let left = rect.left;
+        if (left + popoverWidth > window.innerWidth - 16) {
+          left = window.innerWidth - popoverWidth - 16;
+        }
+        left = Math.max(16, left);
+        
+        popover.style.top = `${rect.bottom + 6}px`;
+        popover.style.left = `${left}px`;
+      }
+    });
+
+    popover.addEventListener("click", (e) => {
+      e.stopPropagation(); // Avoid closing the popover when tapping inside it
+    });
+  });
+
+  // Tap/click anywhere else on screen closes all formatting popovers
+  window.addEventListener("click", () => {
+    document.querySelectorAll(".formatting-popover").forEach(p => p.classList.add("hidden"));
+  });
+
+  // Close formatting popovers on any scrolling to prevent detached floating states
+  window.addEventListener("scroll", () => {
+    document.querySelectorAll(".formatting-popover").forEach(p => p.classList.add("hidden"));
+  }, { passive: true, capture: true });
+}
+
+setupFormattingGuides();
+
 // ==========================================
 // APK & Edit Mode & Manual Ordering Controls
 // ==========================================
