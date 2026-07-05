@@ -3833,3 +3833,12 @@ textarea.form-input-single-line {
     height: 52px;
   }
 }
+
+/* Search highlight style */
+.search-highlight {
+  background-color: rgba(243, 156, 18, 0.25);
+  color: #F39C12;
+  border-radius: 3px;
+  padding: 0px 2px;
+  font-weight: 500;
+}

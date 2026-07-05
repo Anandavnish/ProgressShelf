@@ -829,11 +829,10 @@ function updateOverallStats(bars) {
 
 function filterBars(bars) {
   const now = Date.now();
-  const searchInput = document.getElementById("global-search");
-  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const tokens = getCurrentSearchTokens();
 
   return bars.filter(bar => {
-    if (query && !bar.title.toLowerCase().includes(query)) {
+    if (tokens.length > 0 && !matchBarSearch(bar, tokens)) {
       return false;
     }
 
@@ -904,6 +903,54 @@ function getCollapsedVisibleIndices(items, visibleCount) {
   return selectedIndices;
 }
 
+// Retrieves the current search query tokens split on whitespace
+function getCurrentSearchTokens() {
+  const searchInput = document.getElementById("global-search");
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  return query.split(/\s+/).filter(Boolean);
+}
+
+// Determines if a bar matches all the whitespace-split search tokens
+function matchBarSearch(bar, tokens) {
+  if (tokens.length === 0) return true;
+  
+  const parts = [bar.title || ""];
+  const barType = bar.type || "goal";
+  if (barType === "note" && bar.text) {
+    parts.push(bar.text);
+  } else if (barType === "checklist" && bar.items) {
+    bar.items.forEach(item => {
+      if (item && item.text) {
+        parts.push(item.text);
+      }
+    });
+  }
+  const combinedText = parts.join(" ").toLowerCase();
+  return tokens.every(token => combinedText.includes(token));
+}
+
+// Safely highlights search query tokens in the HTML-escaped card title
+function getHighlightedTitle(title, tokens) {
+  const escapedTitle = escapeHtml(title);
+  if (tokens.length === 0) return escapedTitle;
+
+  // Escape regex characters and sort by length descending to match longer tokens first
+  const escapedTokens = tokens
+    .map(token => escapeHtml(token).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+    .sort((a, b) => b.length - a.length);
+
+  const tokenPattern = escapedTokens.join('|');
+  if (!tokenPattern) return escapedTitle;
+
+  // Regex matches HTML entities first to avoid highlighting inside them
+  const regex = new RegExp(`(&[a-zA-Z0-9#]+;)|(${tokenPattern})`, 'gi');
+
+  return escapedTitle.replace(regex, (match, entity, term) => {
+    if (entity) return entity;
+    return `<span class="search-highlight">${term}</span>`;
+  });
+}
+
 function updateCardElement(card, bar) {
   card._barData = bar;
   const barType = bar.type || "goal";
@@ -941,11 +988,13 @@ function updateCardElement(card, bar) {
   // Update title
   const titleTextEl = card.querySelector(".card-title-text");
   if (titleTextEl) {
-    titleTextEl.textContent = bar.title;
+    const tokens = getCurrentSearchTokens();
+    titleTextEl.innerHTML = getHighlightedTitle(bar.title, tokens);
   } else {
     const titleEl = card.querySelector(".card-title");
     if (titleEl) {
-      titleEl.textContent = bar.title;
+      const tokens = getCurrentSearchTokens();
+      titleEl.innerHTML = getHighlightedTitle(bar.title, tokens);
     }
   }
   const titleEl = card.querySelector(".card-title");
@@ -1330,7 +1379,7 @@ function createCardElement(bar) {
           </svg>
         </span>
       </span>
-      <span class="card-title-text">${escapeHtml(bar.title)}</span>
+      <span class="card-title-text">${getHighlightedTitle(bar.title, getCurrentSearchTokens())}</span>
     </h3>
     ${bodyHtml}
     ${(isCompleted || getDeadlineMs(bar)) ? (() => {
@@ -1592,7 +1641,8 @@ function renderDashboard(bars) {
   const searchHelper = document.getElementById("search-helper");
   if (searchHelper) {
     if (query && currentFilter !== "all") {
-      const totalQueryMatches = bars.filter(bar => bar.title.toLowerCase().includes(query)).length;
+      const tokens = getCurrentSearchTokens();
+      const totalQueryMatches = bars.filter(bar => matchBarSearch(bar, tokens)).length;
       const currentCategoryMatches = filtered.length;
       const diff = totalQueryMatches - currentCategoryMatches;
       if (diff > 0) {
