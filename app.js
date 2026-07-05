@@ -1949,20 +1949,6 @@ function expandCard(card, barData) {
   card.classList.add("expanded");
   expandedCardIds.add(barData.id);
   syncRowHeights();
-
-  // Force reflow so layout is fully settled before measuring
-  document.body.offsetHeight;
-  const rect = card.getBoundingClientRect();
-  const topOffset = getStickyTopOffset();
-
-  if (rect.top < topOffset) {
-    // Card's top is behind or above the sticky nav bars — bring it just below them
-    window.scrollBy(0, rect.top - topOffset);
-  } else if (rect.bottom > window.innerHeight) {
-    // Card's bottom extends past viewport — scroll down to reveal more,
-    // but never scroll further than would push the top behind the nav bars.
-    window.scrollBy(0, Math.min(rect.bottom - window.innerHeight, rect.top - topOffset));
-  }
 }
 
 // Collapse a card with scroll compensation.
@@ -1976,21 +1962,21 @@ function collapseCard(card, isScrollTriggered = false) {
     expandedCardIds.delete(barId);
   }
 
-  card.style.transition = 'none';
-  const beforeTop = card.getBoundingClientRect().top;
-  const beforeHeight = card.getBoundingClientRect().height;
-  const beforeScrollY = window.scrollY;
-  const topOffset = getStickyTopOffset();
-
-  card.classList.remove("expanded");
-  syncRowHeights();
-  document.body.offsetHeight; // Force layout reflow and browser scroll clamping
-
-  const afterHeight = card.getBoundingClientRect().height;
-  const afterScrollY = window.scrollY;
-  const autoScrolled = beforeScrollY - afterScrollY;
-
   if (isScrollTriggered) {
+    card.style.transition = 'none';
+    const beforeTop = card.getBoundingClientRect().top;
+    const beforeHeight = card.getBoundingClientRect().height;
+    const beforeScrollY = window.scrollY;
+    const topOffset = getStickyTopOffset();
+
+    card.classList.remove("expanded");
+    syncRowHeights();
+    document.body.offsetHeight; // Force layout reflow and browser scroll clamping
+
+    const afterHeight = card.getBoundingClientRect().height;
+    const afterScrollY = window.scrollY;
+    const autoScrolled = beforeScrollY - afterScrollY;
+
     // Keep content at/below the viewport top from jumping by calculating the height
     // difference of the collapsing card that was above the top offset.
     const distAbove = Math.max(0, topOffset - beforeTop);
@@ -2002,18 +1988,13 @@ function collapseCard(card, isScrollTriggered = false) {
     if (remainingShift > 0) {
       window.scrollBy(0, -remainingShift);
     }
-  } else {
-    // User-initiated collapse: bring card top flush with nav bars if it was above/cut off
-    if (beforeTop < topOffset) {
-      const finalScrollDelta = (beforeTop - autoScrolled) - topOffset;
-      if (finalScrollDelta < 0) {
-        window.scrollBy(0, finalScrollDelta);
-      }
-    }
-  }
 
-  // Restore transition after deferred syncRowHeights pass (360ms)
-  setTimeout(() => { card.style.transition = ''; }, 400);
+    // Restore transition after deferred syncRowHeights pass (360ms)
+    setTimeout(() => { card.style.transition = ''; }, 400);
+  } else {
+    card.classList.remove("expanded");
+    syncRowHeights();
+  }
 }
 
 let syncRowHeightsTimeout = null;
@@ -2149,6 +2130,7 @@ function syncRowHeights() {
             if (isExpanded) {
               if (showLessBtn) showLessBtn.style.display = "inline-block";
               if (showMoreBtn) showMoreBtn.style.display = "none";
+              textEl.style.maxHeight = `${textEl.scrollHeight}px`;
             } else {
               // Clamp to the exact number of lines that fit within maxAvailableHeight
               const linesCount = Math.max(4, Math.floor(maxAvailableHeight / lineHeight));
@@ -2183,6 +2165,14 @@ function syncRowHeights() {
           } else {
             if (isExpanded) {
               if (showLessBtn) showLessBtn.style.display = "inline-block";
+              // Calculate full height of all checklist items
+              const items = Array.from(card.querySelectorAll(".card-checklist-item"));
+              let fullHeight = 0;
+              items.forEach((item, index) => {
+                const itemSpacing = index === 0 ? item.offsetHeight : item.offsetHeight + 8;
+                fullHeight += itemSpacing;
+              });
+              container.style.maxHeight = `${fullHeight}px`;
             } else {
               // First, make all items display: flex so we can measure their offsets and heights
               const items = Array.from(card.querySelectorAll(".card-checklist-item"));
