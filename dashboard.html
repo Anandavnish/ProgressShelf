@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=5.5">
+  <link rel="stylesheet" href="index.css?v=5.6">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -415,7 +415,7 @@
             <div id="create-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="create-note-text">Note Text</label>
-                <textarea class="form-input" id="create-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="form-input note-editor-contenteditable" id="create-note-text" contenteditable="true" placeholder="Write your note here..."></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="create-note-char-count">0 / 1600</span>
                 </div>
@@ -596,7 +596,7 @@
             <div id="edit-note-fields" class="hidden">
               <div class="form-group">
                 <label class="form-label" for="edit-note-text">Note Text</label>
-                <textarea class="form-input" id="edit-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="form-input note-editor-contenteditable" id="edit-note-text" contenteditable="true" placeholder="Write your note here..."></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
                 </div>
@@ -742,7 +742,7 @@
             <div id="update-note-fields" class="hidden">
               <p class="section-label">Note Text</p>
               <div class="form-group">
-                <textarea class="form-input" id="update-note-text" rows="12" maxlength="1600" placeholder="Write your note here..."></textarea>
+                <div class="form-input note-editor-contenteditable" id="update-note-text" contenteditable="true" placeholder="Write your note here..."></div>
                 <div class="textarea-footer">
                   <span class="char-counter" id="update-note-char-count">0 / 1600</span>
                 </div>
@@ -867,6 +867,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=6.3"></script>
+  <script type="module" src="app.js?v=6.4"></script>
 </body>
 </html>

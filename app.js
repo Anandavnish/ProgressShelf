@@ -454,14 +454,15 @@ function parseMarkdown(text) {
     }
     
     // Numbered lists (1. or 2. etc.)
-    const numberMatch = line.match(/^(\s*)(?:\d+)\.\s+(.*)$/);
+    const numberMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
     if (numberMatch) {
       if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
       if (inList !== 'ol') {
-        htmlLines.push("<ol class=\"note-ol\">");
+        const startVal = parseInt(numberMatch[2]);
+        htmlLines.push(`<ol class="note-ol" start="${startVal}">`);
         inList = 'ol';
       }
-      let content = escapeHtml(numberMatch[2]);
+      let content = escapeHtml(numberMatch[3]);
       content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -480,12 +481,13 @@ function parseMarkdown(text) {
     }
     
     // Normal line
-    if (inList === 'ul' || inList === 'ol') {
+    if ((inList === 'ul' || inList === 'ol') && /^\s+/.test(line)) {
       const lastItemIdx = htmlLines.length - 1;
       if (lastItemIdx >= 0 && htmlLines[lastItemIdx].endsWith("</li>")) {
         const popped = htmlLines[lastItemIdx];
         const stripped = popped.substring(0, popped.length - 5); // remove "</li>"
-        htmlLines[lastItemIdx] = stripped + "<br>" + parsedLine + "</li>";
+        const cleanLine = escapeHtml(line.trimStart());
+        htmlLines[lastItemIdx] = stripped + "<br>" + cleanLine + "</li>";
       } else {
         htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
       }
@@ -503,6 +505,8 @@ function parseMarkdown(text) {
   
   return htmlLines.join("");
 }
+
+// Lightweight Markdown-to-HTML parser for editor sync backdrop (retains exact character count and spacing)
 
 function formatNumber(value) {
   // Returns integer string if whole number, else up to 2 decimal places
@@ -2359,6 +2363,13 @@ function openCreateModal() {
 
   updateNotificationPreview("");
 
+  const createNoteText = document.getElementById("create-note-text");
+  if (createNoteText) {
+    initializeNoteEditor(createNoteText, "");
+    const counter = document.getElementById("create-note-char-count");
+    if (counter) counter.textContent = "0 / 1600";
+  }
+
   openModal(modalCreate);
 }
 
@@ -2731,7 +2742,7 @@ function openUpdateModal(bar) {
     const textVal = bar.text || "";
     const updateTextEl = document.getElementById("update-note-text");
     if (updateTextEl) {
-      updateTextEl.value = textVal;
+      initializeNoteEditor(updateTextEl, textVal);
       const counter = document.getElementById("update-note-char-count");
       if (counter) counter.textContent = `${textVal.length} / 1600`;
     }
@@ -2961,7 +2972,7 @@ function openEditModal(bar) {
     const textVal = bar.text || "";
     const editTextEl = document.getElementById("edit-note-text");
     if (editTextEl) {
-      editTextEl.value = textVal;
+      initializeNoteEditor(editTextEl, textVal);
       const counter = document.getElementById("edit-note-char-count");
       if (counter) counter.textContent = `${textVal.length} / 1600`;
     }
@@ -3164,7 +3175,7 @@ formCreate.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (type === "note") {
-    text = document.getElementById("create-note-text").value.substring(0, 1600);
+    text = serializeNoteEditor("create-note-text");
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3326,7 +3337,7 @@ formEdit.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (barType === "note") {
-    text = document.getElementById("edit-note-text").value.substring(0, 1600);
+    text = serializeNoteEditor("edit-note-text");
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3521,7 +3532,7 @@ formUpdate.addEventListener("submit", async (e) => {
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
-    const text = document.getElementById("update-note-text").value.substring(0, 1600);
+    const text = serializeNoteEditor("update-note-text");
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -4648,194 +4659,410 @@ function setupNotificationListeners(prefix = "") {
 setupNotificationListeners("");
 setupNotificationListeners("edit-");
 
+function getListContinuationIndent(line) {
+  const bulletMatch = line.match(/^(\s*)([-*•●])(\s+)/);
+  if (bulletMatch) {
+    return bulletMatch[1] + ' '.repeat(bulletMatch[2].length + bulletMatch[3].length);
+  }
+  const numMatch = line.match(/^(\s*)(\d+)([.)])(\s+)/);
+  if (numMatch) {
+    return numMatch[1] + ' '.repeat(numMatch[2].length + numMatch[3].length + numMatch[4].length);
+  }
+  const alphaMatch = line.match(/^(\s*)([a-zA-Z])([.)])(\s+)/);
+  if (alphaMatch) {
+    return alphaMatch[1] + ' '.repeat(alphaMatch[2].length + alphaMatch[3].length + alphaMatch[4].length);
+  }
+  const romanMatch = line.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])(\s+)/i);
+  if (romanMatch) {
+    return romanMatch[1] + ' '.repeat(romanMatch[2].length + romanMatch[3].length + romanMatch[4].length);
+  }
+  return null;
+}
+
+function updateListNumbers(editor) {
+  let currentNumber = 1;
+  let inNumberSequence = false;
+  const children = editor.children;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.getAttribute('data-type') === 'number') {
+      if (!inNumberSequence) {
+        inNumberSequence = true;
+        currentNumber = 1;
+      }
+      child.setAttribute('data-number', currentNumber);
+      currentNumber++;
+    } else {
+      inNumberSequence = false;
+    }
+  }
+}
+
+function formatLineNode(node, editor) {
+  if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+  const text = node.textContent;
+
+  // 1. Bullet formatting: ^([-*])\s
+  const bulletMatch = text.match(/^([-*])\s(.*)$/);
+  if (bulletMatch) {
+    const marker = bulletMatch[1];
+    const rest = bulletMatch[2];
+
+    const selection = window.getSelection();
+    let offset = 0;
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      offset = range.startOffset;
+    }
+
+    node.className = "note-line-bullet";
+    node.setAttribute("data-type", "bullet");
+    node.setAttribute("data-marker", marker);
+
+    if (rest === "") {
+      node.innerHTML = "<br>";
+    } else {
+      node.textContent = rest;
+    }
+
+    // Restore caret position
+    const newRange = document.createRange();
+    const textNode = node.firstChild || node;
+    const newOffset = Math.max(0, offset - 2);
+    try {
+      newRange.setStart(textNode, Math.min(newOffset, textNode.length || 0));
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } catch (e) {
+      console.warn("Caret restore error:", e);
+    }
+    return true;
+  }
+
+  // 2. Numbered formatting: ^(\d+)\.\s
+  const numMatch = text.match(/^(\d+)\.\s(.*)$/);
+  if (numMatch) {
+    const num = numMatch[1];
+    const rest = numMatch[2];
+    const prefixLen = num.length + 2;
+
+    const selection = window.getSelection();
+    let offset = 0;
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      offset = range.startOffset;
+    }
+
+    node.className = "note-line-number";
+    node.setAttribute("data-type", "number");
+    node.setAttribute("data-number", num);
+
+    if (rest === "") {
+      node.innerHTML = "<br>";
+    } else {
+      node.textContent = rest;
+    }
+
+    // Restore caret position
+    const newRange = document.createRange();
+    const textNode = node.firstChild || node;
+    const newOffset = Math.max(0, offset - prefixLen);
+    try {
+      newRange.setStart(textNode, Math.min(newOffset, textNode.length || 0));
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } catch (e) {
+      console.warn("Caret restore error:", e);
+    }
+
+    updateListNumbers(editor);
+    return true;
+  }
+
+  return false;
+}
+
+function initializeNoteEditor(editor, rawText) {
+  if (typeof editor === 'string') {
+    editor = document.getElementById(editor);
+  }
+  if (!editor) return;
+
+  editor.innerHTML = "";
+  if (!rawText) {
+    const div = document.createElement("div");
+    div.className = "note-p";
+    div.innerHTML = "<br>";
+    editor.appendChild(div);
+    return;
+  }
+
+  const lines = rawText.split("\n");
+  lines.forEach(line => {
+    const div = document.createElement("div");
+    const bulletMatch = line.match(/^(\s*)([-*•●])\s+(.*)$/);
+    const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    
+    if (bulletMatch) {
+      div.className = "note-line-bullet";
+      div.setAttribute("data-type", "bullet");
+      div.setAttribute("data-marker", bulletMatch[2]);
+      div.textContent = bulletMatch[3];
+    } else if (numMatch) {
+      div.className = "note-line-number";
+      div.setAttribute("data-type", "number");
+      div.setAttribute("data-number", numMatch[2]);
+      div.textContent = numMatch[3];
+    } else {
+      div.className = "note-p";
+      if (line === "") {
+        div.innerHTML = "<br>";
+      } else {
+        div.textContent = line;
+      }
+    }
+    editor.appendChild(div);
+  });
+  updateListNumbers(editor);
+}
+
+function serializeNoteEditor(editor) {
+  if (typeof editor === 'string') {
+    editor = document.getElementById(editor);
+  }
+  if (!editor) return "";
+
+  const lines = [];
+  const children = editor.children;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const type = child.getAttribute("data-type");
+    const text = child.textContent;
+    if (type === "bullet") {
+      lines.push("- " + text);
+    } else if (type === "number") {
+      const num = child.getAttribute("data-number") || "1";
+      lines.push(num + ". " + text);
+    } else {
+      lines.push(text);
+    }
+  }
+  return lines.join("\n");
+}
+
+function setupContenteditableEditor(editor, counterId) {
+  const counter = document.getElementById(counterId);
+
+  function updateCounter() {
+    const text = serializeNoteEditor(editor);
+    if (counter) counter.textContent = `${text.length} / 1600`;
+  }
+
+  editor.addEventListener('input', (e) => {
+    // Character limit enforcement
+    const serialized = serializeNoteEditor(editor);
+    if (serialized.length > 1600) {
+      const selection = window.getSelection();
+      let offset = 0;
+      let textNode = null;
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        textNode = range.startContainer;
+        offset = range.startOffset;
+      }
+      const overAmount = serialized.length - 1600;
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        const val = textNode.nodeValue;
+        textNode.nodeValue = val.substring(0, Math.max(0, val.length - overAmount));
+        // Restore caret
+        const newRange = document.createRange();
+        newRange.setStart(textNode, Math.min(offset, textNode.length));
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+      showToast("Character limit of 1600 reached.", "warning");
+      updateCounter();
+      return;
+    }
+
+    // Ensure editor always contains at least one line element
+    if (editor.children.length === 0) {
+      const div = document.createElement("div");
+      div.className = "note-p";
+      div.innerHTML = "<br>";
+      editor.appendChild(div);
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.setStart(div, 0);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    // Check formatting on active line
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      let node = range.startContainer;
+      while (node && node.parentElement !== editor) {
+        node = node.parentElement;
+      }
+      if (node && node.nodeType === Node.ELEMENT_NODE) {
+        formatLineNode(node, editor);
+      }
+    }
+    updateCounter();
+  });
+
+  editor.addEventListener('keydown', (e) => {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    let node = range.startContainer;
+    while (node && node.parentElement !== editor) {
+      node = node.parentElement;
+    }
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+
+    if (e.key === 'Enter') {
+      const type = node.getAttribute("data-type");
+      const contentText = node.textContent.trim();
+
+      if ((type === 'bullet' || type === 'number') && contentText === '') {
+        // Hitting Enter on empty list item -> breakout to plain paragraph
+        e.preventDefault();
+        node.className = "note-p";
+        node.removeAttribute("data-type");
+        node.removeAttribute("data-number");
+        node.innerHTML = "<br>";
+        
+        const newRange = document.createRange();
+        newRange.setStart(node, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+        
+        updateListNumbers(editor);
+        updateCounter();
+        return;
+      }
+
+      if (type === 'number') {
+        setTimeout(() => {
+          updateListNumbers(editor);
+          updateCounter();
+        }, 10);
+      }
+    }
+
+    if (e.key === 'Backspace') {
+      const type = node.getAttribute("data-type");
+      const offset = range.startOffset;
+      if ((type === 'bullet' || type === 'number') && offset === 0) {
+        // Caret is at the start of list item node -> convert back to plain paragraph
+        e.preventDefault();
+        node.className = "note-p";
+        node.removeAttribute("data-type");
+        node.removeAttribute("data-number");
+        
+        const textNode = node.firstChild || node;
+        const newRange = document.createRange();
+        newRange.setStart(textNode, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+        
+        updateListNumbers(editor);
+        updateCounter();
+        return;
+      }
+    }
+  });
+
+  editor.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text) return;
+
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
+    const lines = text.split('\n');
+    const fragment = document.createDocumentFragment();
+    lines.forEach(line => {
+      const div = document.createElement('div');
+      const bulletMatch = line.match(/^(\s*)([-*•●])\s+(.*)$/);
+      const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+      if (bulletMatch) {
+        div.className = "note-line-bullet";
+        div.setAttribute("data-type", "bullet");
+        div.setAttribute("data-marker", bulletMatch[2]);
+        div.textContent = bulletMatch[3];
+      } else if (numMatch) {
+        div.className = "note-line-number";
+        div.setAttribute("data-type", "number");
+        div.setAttribute("data-number", numMatch[2]);
+        div.textContent = numMatch[3];
+      } else {
+        div.className = "note-p";
+        if (line === "") {
+          div.innerHTML = "<br>";
+        } else {
+          div.textContent = line;
+        }
+      }
+      fragment.appendChild(div);
+    });
+
+    range.deleteContents();
+    
+    let node = range.startContainer;
+    while (node && node.parentElement !== editor) {
+      node = node.parentElement;
+    }
+    
+    if (node) {
+      const parent = node.parentElement;
+      const lastInserted = fragment.lastChild;
+      const isEmptyNode = node.textContent === "" && node.innerHTML === "<br>";
+      if (isEmptyNode) {
+        parent.replaceChild(fragment, node);
+      } else {
+        parent.insertBefore(fragment, node.nextSibling);
+      }
+
+      if (lastInserted) {
+        const newRange = document.createRange();
+        const textNode = lastInserted.lastChild || lastInserted;
+        newRange.setStart(textNode, textNode.nodeType === Node.TEXT_NODE ? textNode.length : 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+    } else {
+      editor.appendChild(fragment);
+    }
+
+    updateListNumbers(editor);
+    updateCounter();
+  });
+}
+
 function setupNoteCharCounters() {
-  const textareas = [
+  const editors = [
     { id: 'create-note-text', counterId: 'create-note-char-count' },
     { id: 'edit-note-text',   counterId: 'edit-note-char-count'   },
     { id: 'update-note-text', counterId: 'update-note-char-count' }
   ];
 
-  textareas.forEach(({ id, counterId }) => {
+  editors.forEach(({ id, counterId }) => {
     const el = document.getElementById(id);
-    const counter = document.getElementById(counterId);
     if (!el) return;
-
-    // Update char counter
-    function updateCounter() {
-      if (counter) counter.textContent = `${el.value.length} / 1600`;
-    }
-
-    el.addEventListener('input', (e) => {
-      updateCounter();
-
-      const start = el.selectionStart;
-      const val = el.value;
-      const beforeCursor = val.substring(0, start);
-      const lineStart = beforeCursor.lastIndexOf('\n') + 1;
-      const currentLine = beforeCursor.substring(lineStart);
-
-      // ── Smart Space: convert - or * at line start to bullet instantly on mobile/desktop ────
-      if (currentLine.endsWith(' ')) {
-        const lineWithoutTrailingSpace = currentLine.slice(0, -1);
-
-        // Match "- " or "* " with optional leading whitespace
-        const bulletTyped = lineWithoutTrailingSpace.match(/^(\s*)([-*])$/);
-        if (bulletTyped) {
-          const indent = bulletTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + '● ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
-          updateCounter();
-          return;
-        }
-
-        // Match numbered list prefix (e.g. "1." or "1)") with optional leading whitespace
-        const numTyped = lineWithoutTrailingSpace.match(/^(\s*)(\d+)([.)])$/);
-        if (numTyped) {
-          const indent = numTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + numTyped[2] + numTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + numTyped[2].length + numTyped[3].length + 1;
-          updateCounter();
-          return;
-        }
-
-        // Match alphabetical list prefix (e.g. "a." or "a)") with optional leading whitespace
-        const alphaTyped = lineWithoutTrailingSpace.match(/^(\s*)([a-zA-Z])([.)])$/);
-        if (alphaTyped) {
-          const indent = alphaTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + alphaTyped[2] + alphaTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + 3;
-          updateCounter();
-          return;
-        }
-
-        // Match Roman numeral list prefix (e.g. "i." or "i)") with optional leading whitespace
-        const romanTyped = lineWithoutTrailingSpace.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])$/i);
-        if (romanTyped) {
-          const indent = romanTyped[1] || '    '; // Default to 4 spaces
-          const newVal = val.substring(0, lineStart) + indent + romanTyped[2] + romanTyped[3] + ' ' + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart + indent.length + romanTyped[2].length + 2;
-          updateCounter();
-          return;
-        }
-      }
-    });
-
-    el.addEventListener('keydown', (e) => {
-      const start = el.selectionStart;
-      const val = el.value;
-      const beforeCursor = val.substring(0, start);
-      const lineStart = beforeCursor.lastIndexOf('\n') + 1;
-      const currentLine = beforeCursor.substring(lineStart);
-
-      // ── Smart Backspace: exit list formatting in one click ──────────────────
-      if (e.key === 'Backspace') {
-        // If the line consists strictly of optional spaces + a list prefix + a trailing space
-        // and the cursor is at the end of the line, we delete the entire prefix and spaces.
-        // Matches e.g. "    ● ", "    • ", "    1. ", "    a) "
-        const emptyListRegex = /^(\s*)([•●]|\d+[.)]|[a-zA-Z][.)]|(i{1,3}|iv|vi{0,3}|ix|x)[.)])\s$/i;
-        if (emptyListRegex.test(currentLine)) {
-          e.preventDefault();
-          const newVal = val.substring(0, lineStart) + val.substring(start);
-          el.value = newVal;
-          el.selectionStart = el.selectionEnd = lineStart;
-          updateCounter();
-          return;
-        }
-      }
-
-      // ── Smart Enter: continue or exit list ───────────────────────────────
-      if (e.key === 'Enter') {
-
-        // Bullet: - or * or • or ● (allowing optional leading whitespace)
-        const bulletMatch = currentLine.match(/^(\s*)([-*•●]) (.*)$/);
-        if (bulletMatch) {
-          e.preventDefault();
-          const indent = bulletMatch[1];
-          const content = bulletMatch[3].trim();
-          if (content === '') {
-            // Empty bullet → exit list, delete the bullet prefix and spaces
-            const newVal = val.substring(0, lineStart) + val.substring(start);
-            el.value = newVal;
-            el.selectionStart = el.selectionEnd = lineStart;
-          } else {
-            const insert = `\n${indent}${bulletMatch[2]} `;
-            el.value = val.substring(0, start) + insert + val.substring(start);
-            el.selectionStart = el.selectionEnd = start + insert.length;
-          }
-          updateCounter();
-          return;
-        }
-
-        // Numbered: 1. or 1) (allowing optional leading whitespace)
-        const numMatch = currentLine.match(/^(\s*)(\d+)([.)]) (.*)$/);
-        if (numMatch) {
-          e.preventDefault();
-          const indent = numMatch[1];
-          const content = numMatch[4].trim();
-          if (content === '') {
-            const newVal = val.substring(0, lineStart) + val.substring(start);
-            el.value = newVal;
-            el.selectionStart = el.selectionEnd = lineStart;
-          } else {
-            const next = parseInt(numMatch[2]) + 1;
-            const insert = `\n${indent}${next}${numMatch[3]} `;
-            el.value = val.substring(0, start) + insert + val.substring(start);
-            el.selectionStart = el.selectionEnd = start + insert.length;
-          }
-          updateCounter();
-          return;
-        }
-
-        // Alphabetical: a. or a) (allowing optional leading whitespace)
-        const alphaMatch = currentLine.match(/^(\s*)([a-zA-Z])([.)]) (.*)$/);
-        if (alphaMatch) {
-          e.preventDefault();
-          const indent = alphaMatch[1];
-          const content = alphaMatch[4].trim();
-          if (content === '') {
-            const newVal = val.substring(0, lineStart) + val.substring(start);
-            el.value = newVal;
-            el.selectionStart = el.selectionEnd = lineStart;
-          } else {
-            const next = String.fromCharCode(alphaMatch[2].charCodeAt(0) + 1);
-            const insert = `\n${indent}${next}${alphaMatch[3]} `;
-            el.value = val.substring(0, start) + insert + val.substring(start);
-            el.selectionStart = el.selectionEnd = start + insert.length;
-          }
-          updateCounter();
-          return;
-        }
-
-        // Roman numerals (allowing optional leading whitespace)
-        const romanMatch = currentLine.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)]) (.*)$/i);
-        if (romanMatch) {
-          e.preventDefault();
-          const indent = romanMatch[1];
-          const content = romanMatch[4].trim();
-          const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x'];
-          const idx = romans.indexOf(romanMatch[2].toLowerCase());
-          if (content === '') {
-            const newVal = val.substring(0, lineStart) + val.substring(start);
-            el.value = newVal;
-            el.selectionStart = el.selectionEnd = lineStart;
-          } else {
-            const next = idx >= 0 && idx < romans.length - 1 ? romans[idx + 1] : romans[idx];
-            const insert = `\n${indent}${next}${romanMatch[3]} `;
-            el.value = val.substring(0, start) + insert + val.substring(start);
-            el.selectionStart = el.selectionEnd = start + insert.length;
-          }
-          updateCounter();
-          return;
-        }
-      }
-    });
-
-    // Initial counter update
-    updateCounter();
+    setupContenteditableEditor(el, counterId);
   });
 }
 
@@ -5533,7 +5760,7 @@ const checkIsPWA = () => {
          window.navigator.standalone === true;
 };
 
-const setupDownloadApk = () => {
+function setupDownloadApk() {
   const btnDownload = document.getElementById("btn-download-apk");
   if (!btnDownload) return;
 

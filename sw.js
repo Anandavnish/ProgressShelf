@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v102';
+const CACHE_NAME = 'progressshelf-cache-v103';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -65,7 +65,8 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+      const isNavigate = event.request.mode === 'navigate';
+      return cache.match(event.request, { ignoreSearch: isNavigate }).then((cachedResponse) => {
         // Fetch new version from network in parallel
         const fetchPromise = fetch(event.request).then((networkResponse) => {
           if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {

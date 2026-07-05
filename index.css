@@ -3621,14 +3621,140 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 
 
-/* Note Textareas Sizing & Line-Spacing */
-#create-note-text,
-#edit-note-text,
-#update-note-text {
-  min-height: 450px;
-  line-height: 1.6;
-  padding-left: 28px !important;
-  text-indent: -14px !important;
+
+/* Real-Time Contenteditable Note Editor Styles (v4.0) */
+.note-editor-contenteditable {
+  margin: 0 !important;
+  width: 100% !important;
+  height: 450px !important;
+  min-height: 450px !important;
+  max-height: 450px !important;
+  font-family: var(--font-family) !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  padding: 10px 14px !important;
+  box-sizing: border-box !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  overflow-y: auto !important;
+  outline: none !important;
+  background-color: rgba(13, 17, 23, 0.6) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 8px !important;
+  user-select: text !important;
+}
+
+.note-editor-contenteditable:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+
+/* Placeholder for contenteditable */
+.note-editor-contenteditable:empty::before {
+  content: attr(placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: block;
+}
+
+/* Contenteditable Line Block Elements styling */
+.note-editor-contenteditable div {
+  margin: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  color: inherit !important;
+  display: block;
+}
+
+/* Bullet Line Indent & Marker */
+.note-editor-contenteditable .note-line-bullet {
+  position: relative;
+  padding-left: 20px !important;
+  text-indent: 0 !important;
+  margin-bottom: 4px;
+}
+.note-editor-contenteditable .note-line-bullet::before {
+  content: "●";
+  position: absolute;
+  left: 4px;
+  color: rgba(139, 148, 158, 0.6);
+  font-size: 0.75rem;
+  line-height: 2.1;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Numbered Line Indent & Marker */
+.note-editor-contenteditable .note-line-number {
+  position: relative;
+  padding-left: 24px !important;
+  text-indent: 0 !important;
+  margin-bottom: 4px;
+}
+.note-editor-contenteditable .note-line-number::before {
+  content: attr(data-number) ".";
+  position: absolute;
+  left: 4px;
+  color: rgba(139, 148, 158, 0.6);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Plain Line */
+.note-editor-contenteditable .note-p {
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* Markdown Header Elements inside Editor */
+.note-editor-contenteditable .note-h1 {
+  font-size: 1.4rem !important;
+  font-weight: 700;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  display: block;
+}
+.note-editor-contenteditable .note-h2 {
+  font-size: 1.2rem !important;
+  font-weight: 700;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  display: block;
+}
+.note-editor-contenteditable .note-h3 {
+  font-size: 1.05rem !important;
+  font-weight: 700;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* Markdown Inline Syntax Markers (styled low-opacity) */
+.note-editor-contenteditable .markdown-syntax {
+  color: rgba(139, 148, 158, 0.5) !important;
+}
+
+/* Code Styles inside Editor */
+.note-editor-contenteditable .note-code {
+  background-color: #21262d;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+}
+
+.note-editor-contenteditable .note-code-block {
+  background-color: #161b22;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  overflow-x: auto;
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 
 /* Styling for single-line textareas replacing inputs to suppress Chrome Autofill */
