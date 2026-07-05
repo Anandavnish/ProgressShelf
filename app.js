@@ -296,6 +296,7 @@ let authInitialized = false;
 let currentFilter = "all";
 let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
+let lastInteractionY = null;
 let searchClosedViaPopState = false;
 let closedViaPopState = false;
 let isSearchActiveHistoryPushed = false;
@@ -1462,15 +1463,11 @@ function createCardElement(bar) {
 
     if (barType === "checklist") {
       if (isTruncatable && !card.classList.contains("expanded")) {
-        card.classList.add("expanded");
-        expandedCardIds.add(currentBar.id);
-        syncRowHeights();
+        expandCard(card, currentBar);
       }
     } else if (barType === "note") {
       if (isTruncatable && !card.classList.contains("expanded")) {
-        card.classList.add("expanded");
-        expandedCardIds.add(currentBar.id);
-        syncRowHeights();
+        expandCard(card, currentBar);
       } else {
         openUpdateModal(currentBar);
       }
@@ -1485,9 +1482,7 @@ function createCardElement(bar) {
     showMoreBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const currentBar = card._barData;
-      card.classList.add("expanded");
-      expandedCardIds.add(currentBar.id);
-      syncRowHeights();
+      expandCard(card, currentBar);
     });
   }
 
@@ -1822,15 +1817,17 @@ window.addEventListener("click", (e) => {
   }
 });
 
-// Track card interaction origin to prevent collapse during scroll/swipe
+// Track card interaction origin and Y position for collapse/expand decisions
 window.addEventListener("mousedown", (e) => {
   const card = e.target.closest('.card-progress');
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
+  lastInteractionY = e.clientY;
 }, { passive: true });
 
 window.addEventListener("touchstart", (e) => {
   const card = e.target.closest('.card-progress');
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
+  lastInteractionY = e.touches[0] ? e.touches[0].clientY : null;
 }, { passive: true });
 
 window.addEventListener("wheel", (e) => {
@@ -1887,36 +1884,57 @@ window.addEventListener("scroll", () => {
   }, 150);
 }, { passive: true });
 
+// Expand a card with scroll-into-view: ensures the card's top is always visible,
+// scrolling just enough to reveal the bottom without pushing the top above Y=0.
+function expandCard(card, barData) {
+  card.classList.add("expanded");
+  expandedCardIds.add(barData.id);
+  syncRowHeights();
+
+  // Force reflow so layout is fully settled before measuring
+  document.body.offsetHeight;
+  const rect = card.getBoundingClientRect();
+
+  if (rect.top < 0) {
+    // Card's top is above the viewport — bring it to Y=0
+    window.scrollBy(0, rect.top);
+  } else if (rect.bottom > window.innerHeight) {
+    // Card's bottom extends past viewport — scroll down to reveal more,
+    // but never scroll further than would push the top above Y=0.
+    window.scrollBy(0, Math.min(rect.bottom - window.innerHeight, rect.top));
+  }
+}
+
+// Context-aware collapse: visible cards get natural CSS-driven layout change,
+// off-screen cards get instant collapse with scroll compensation.
 function collapseCard(card) {
   const barId = card.getAttribute("data-bar-id");
   if (barId) {
     expandedCardIds.delete(barId);
   }
 
-  // Disable transition during collapse so the reflow captures the true final
-  // height instantly, not a mid-animation value from the min-height transition.
-  // Same pattern as syncRowHeights() uses for .card-note-text measurement.
-  card.style.transition = 'none';
+  const rect = card.getBoundingClientRect();
+  const isOffScreen = rect.bottom <= 0 || rect.top >= window.innerHeight;
 
-  // Capture position before collapse
-  const beforeTop = card.getBoundingClientRect().top;
-
-  card.classList.remove("expanded");
-  syncRowHeights();
-
-  // Force reflow so layout is fully settled, then compensate scroll
-  document.body.offsetHeight;
-  const afterTop = card.getBoundingClientRect().top;
-  const delta = afterTop - beforeTop;
-  if (delta !== 0) {
-    window.scrollBy(0, delta);
+  if (isOffScreen) {
+    // Card is not visible — collapse instantly, compensate scroll position
+    card.style.transition = 'none';
+    const beforeTop = rect.top;
+    card.classList.remove("expanded");
+    syncRowHeights();
+    document.body.offsetHeight;
+    const afterTop = card.getBoundingClientRect().top;
+    const delta = afterTop - beforeTop;
+    if (delta !== 0) {
+      window.scrollBy(0, delta);
+    }
+    // Restore transition after deferred syncRowHeights pass (360ms)
+    setTimeout(() => { card.style.transition = ''; }, 400);
+  } else {
+    // Card is visible — let natural layout change occur
+    card.classList.remove("expanded");
+    syncRowHeights();
   }
-
-  // Restore transition after the deferred syncRowHeights pass (360ms) completes,
-  // so future expand/collapse interactions still animate smoothly.
-  setTimeout(() => {
-    card.style.transition = '';
-  }, 400);
 }
 
 let syncRowHeightsTimeout = null;

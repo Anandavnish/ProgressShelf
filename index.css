@@ -1040,8 +1040,7 @@ body {
   height: auto;
   transition: transform var(--transition-speed) var(--transition-ease),
     border-color var(--transition-speed) var(--transition-ease),
-    box-shadow var(--transition-speed) var(--transition-ease),
-    min-height 0.25s ease;
+    box-shadow var(--transition-speed) var(--transition-ease);
 }
 
 .card-progress:hover {
