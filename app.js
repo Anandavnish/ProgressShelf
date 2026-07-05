@@ -1858,6 +1858,7 @@ function syncFabVisibility() {
 document.getElementById("btn-fab")?.addEventListener("click", () => openCreateModal());
 
 // Close expanded checklist cards on scroll only if scroll originated outside the card
+let scrollEndCollapseTimeout = null;
 window.addEventListener("scroll", () => {
   // Close profile dropdown on scroll if active
   const profileDropdown = document.getElementById("profile-dropdown");
@@ -1872,13 +1873,18 @@ window.addEventListener("scroll", () => {
   // Update FAB visibility
   syncFabVisibility();
 
-  if (document.querySelector(".modal-overlay.active")) return;
-  document.querySelectorAll(".card-progress.expanded").forEach(card => {
-    const cardBarId = card.getAttribute('data-bar-id');
-    if (cardBarId !== lastInteractionCardId) {
-      collapseCard(card);
-    }
-  });
+  // Debounce the collapse-check: only collapse after scroll has settled for 150ms
+  if (scrollEndCollapseTimeout) clearTimeout(scrollEndCollapseTimeout);
+  scrollEndCollapseTimeout = setTimeout(() => {
+    scrollEndCollapseTimeout = null;
+    if (document.querySelector(".modal-overlay.active")) return;
+    document.querySelectorAll(".card-progress.expanded").forEach(card => {
+      const cardBarId = card.getAttribute('data-bar-id');
+      if (cardBarId !== lastInteractionCardId) {
+        collapseCard(card);
+      }
+    });
+  }, 150);
 }, { passive: true });
 
 function collapseCard(card) {
@@ -1886,8 +1892,20 @@ function collapseCard(card) {
   if (barId) {
     expandedCardIds.delete(barId);
   }
+
+  // Fix A: Scroll-position compensation — capture position before collapse
+  const beforeTop = card.getBoundingClientRect().top;
+
   card.classList.remove("expanded");
   syncRowHeights();
+
+  // Force reflow so layout is fully settled, then compensate scroll
+  document.body.offsetHeight;
+  const afterTop = card.getBoundingClientRect().top;
+  const delta = afterTop - beforeTop;
+  if (delta !== 0) {
+    window.scrollBy(0, delta);
+  }
 }
 
 let syncRowHeightsTimeout = null;
