@@ -3875,8 +3875,27 @@ textarea.form-input-single-line {
 
 .formatting-popover li {
   margin-bottom: 4px;
+  padding-right: 12px; /* make space for X button on first lines */
 }
 
 .formatting-popover li:last-child {
   margin-bottom: 0;
+}
+
+.formatting-popover .btn-close-popover {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.formatting-popover .btn-close-popover:hover {
+  color: var(--text-primary);
 }

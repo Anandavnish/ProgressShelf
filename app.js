@@ -5291,7 +5291,10 @@ function setupFormattingGuides() {
     const popover = wrapper.querySelector(".formatting-popover");
     if (!icon || !popover) return;
     
-    icon.addEventListener("click", (e) => {
+    wrapper.addEventListener("click", (e) => {
+      // If clicked inside popover (including close button), let its own handler manage it
+      if (e.target.closest(".formatting-popover")) return;
+
       e.stopPropagation();
       e.preventDefault();
       
@@ -5304,17 +5307,20 @@ function setupFormattingGuides() {
       if (isHidden) {
         popover.classList.remove("hidden");
         
-        // Calculate viewport-relative position (avoids modal body overflow clipping)
+        // Calculate position relative to the modal-container (due to transform containing block behavior)
         const rect = icon.getBoundingClientRect();
-        const popoverWidth = 260;
+        const modalContainer = wrapper.closest(".modal-container");
+        const modalRect = modalContainer ? modalContainer.getBoundingClientRect() : { left: 0, top: 0 };
+        const popoverWidth = 240;
         
-        let left = rect.left;
-        if (left + popoverWidth > window.innerWidth - 16) {
-          left = window.innerWidth - popoverWidth - 16;
+        let left = rect.left - modalRect.left;
+        const containerWidth = modalRect.width || window.innerWidth;
+        if (left + popoverWidth > containerWidth - 16) {
+          left = containerWidth - popoverWidth - 16;
         }
         left = Math.max(16, left);
         
-        popover.style.top = `${rect.bottom + 6}px`;
+        popover.style.top = `${rect.bottom - modalRect.top + 6}px`;
         popover.style.left = `${left}px`;
       }
     });
@@ -5322,6 +5328,15 @@ function setupFormattingGuides() {
     popover.addEventListener("click", (e) => {
       e.stopPropagation(); // Avoid closing the popover when tapping inside it
     });
+
+    const closeBtn = popover.querySelector(".btn-close-popover");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        popover.classList.add("hidden");
+      });
+    }
   });
 
   // Tap/click anywhere else on screen closes all formatting popovers
