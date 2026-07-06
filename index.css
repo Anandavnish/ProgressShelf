@@ -263,6 +263,42 @@ body {
   height: 20px;
 }
 
+/* Email Sign Up Button */
+.btn-email-signup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 12px 28px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-email-signup:hover {
+  transform: translateY(-2px);
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: var(--accent);
+  box-shadow: 0 6px 20px rgba(74, 144, 217, 0.2);
+}
+
+.btn-email-signup:active {
+  transform: translateY(0);
+}
+
+.btn-email-signup svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Premium SVG Logo Styles */
 .logo-svg {
   width: 38px;

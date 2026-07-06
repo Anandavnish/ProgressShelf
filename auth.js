@@ -77,6 +77,7 @@ export async function signOut() {
     // Step 2: Always clear local state regardless of FCM cleanup result
     localStorage.removeItem('ps_fcm_token');
     localStorage.removeItem('ps_guest_bars');
+    sessionStorage.removeItem('password_setup_pending');
     // Step 3: Sign out from Supabase
     if (isConfigured) {
       await supabase.auth.signOut();
@@ -110,6 +111,59 @@ export function isGuestMode() {
 
 export function exitGuestMode() {
   sessionStorage.removeItem('guest_mode');
+}
+
+/**
+ * Initiates email sign-up using passwordless OTP.
+ */
+export async function signUpWithOtp(name, email) {
+  const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
+  const redirectUrl = window.location.origin + pathPrefix + 'dashboard.html';
+
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+      data: { full_name: name },
+      emailRedirectTo: redirectUrl
+    }
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Verifies the OTP token for email sign-up/sign-in.
+ */
+export async function verifyOtpCode(email, code) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'email'
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Updates the current authenticated user's password.
+ */
+export async function updateUserPassword(password) {
+  const { data, error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Signs in user using email and password.
+ */
+export async function signInWithEmail(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+  if (error) throw error;
+  return data;
 }
 
 /**
@@ -154,9 +208,10 @@ export function initAuthProtection(onUserActive) {
   supabase.auth.getSession().then(({ data: { session } }) => {
     const user = session ? mapSupabaseUser(session.user) : null;
     const isGuest = isGuestMode();
+    const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
     if (user) {
-      if (!isDashboard) {
+      if (!isDashboard && !isPasswordSetupPending) {
         window.location.href = "dashboard.html";
       } else if (onUserActive) {
         onUserActive(user);
@@ -180,13 +235,14 @@ export function initAuthProtection(onUserActive) {
 
       const user = session ? mapSupabaseUser(session.user) : null;
       const isGuest = isGuestMode();
+      const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
       if (event === 'SIGNED_OUT') {
         if (isDashboard && !isGuest) {
           window.location.href = "index.html";
         }
       } else if (event === 'SIGNED_IN') {
-        if (!isDashboard) {
+        if (!isDashboard && !isPasswordSetupPending) {
           window.location.href = "dashboard.html";
         } else if (onUserActive && user) {
           onUserActive(user);
@@ -205,6 +261,15 @@ export async function deleteCurrentUserAccount() {
     return;
   }
   console.log("Supabase account deletion requested. Data was removed via deleteUserData.");
+}
+
+/**
+ * Checks if there is an active authenticated session.
+ */
+export async function hasActiveSession() {
+  if (!isConfigured) return false;
+  const { data: { session } } = await supabase.auth.getSession();
+  return !!session;
 }
 
 /**

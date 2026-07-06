@@ -99,6 +99,14 @@
           Sign in with Google
         </button>
 
+        <button id="btn-email-login-trigger" class="btn-email-signup" style="margin-top: 12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <polyline points="22,6 12,13 2,6"></polyline>
+          </svg>
+          Continue with Email
+        </button>
+
         <div class="auth-divider">
           <span>or</span>
         </div>
@@ -131,6 +139,137 @@
       <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
     </div>
   </footer>
-  <script type="module" src="login.js?v=1.7"></script>
+
+  <!-- Email Sign In Modal -->
+  <div id="signin-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="signin-modal-title" class="modal-title">Sign In with Email</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-signin-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-signin" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+            <label for="input-signin-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+            <input type="email" id="input-signin-email" placeholder="you@example.com" required 
+              style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+          </div>
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+            <label for="input-signin-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Password</label>
+            <input type="password" id="input-signin-password" placeholder="••••••••" required 
+              style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+          </div>
+          
+          <div style="display: flex; justify-content: flex-start; margin-top: -8px;">
+            <a href="#" id="link-forgot-password" style="font-size: 0.85rem; color: var(--accent); text-decoration: none; transition: filter 0.2s;">Forgot password?</a>
+          </div>
+
+          <p id="signin-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+          
+          <button type="submit" id="btn-signin-submit" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+            Log In
+          </button>
+
+          <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 8px; margin-bottom: 0;">
+            Don't have an account? <a href="#" id="link-goto-signup" style="color: var(--accent); text-decoration: none; font-weight: 600;">Create one</a>
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Sign Up Modal -->
+  <div id="signup-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="signup-modal-title" class="modal-title">Sign Up with Email</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-signup-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Step 1: Details (Name, Email, Password, Confirm Password) -->
+        <div id="signup-step-details" class="signup-step">
+          <form id="form-signup-details" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-name" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Name</label>
+              <input type="text" id="input-signup-name" placeholder="Your Name" required 
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+              <input type="email" id="input-signup-email" placeholder="you@example.com" required 
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Password</label>
+              <input type="password" id="input-signup-password" placeholder="At least 6 characters" required minlength="6"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-confirm-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Confirm Password</label>
+              <input type="password" id="input-signup-confirm-password" placeholder="Confirm your password" required minlength="6"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="signup-details-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-send-otp" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+              Send Verification Code
+            </button>
+            <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 8px; margin-bottom: 0;">
+              Already have an account? <a href="#" id="link-goto-signin" style="color: var(--accent); text-decoration: none; font-weight: 600;">Log in</a>
+            </p>
+          </form>
+        </div>
+
+        <!-- Step 2: OTP Verification -->
+        <div id="signup-step-otp" class="signup-step hidden">
+          <form id="form-signup-otp" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              We sent a verification code to <strong id="signup-sent-email-label"></strong>. Please enter the code below.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-otp" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Verification Code</label>
+              <input type="text" id="input-signup-otp" placeholder="6-digit code" required autocomplete="one-time-code"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1.1rem; font-weight: 600; letter-spacing: 2px; text-align: center; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="signup-otp-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <div style="display: flex; gap: 12px; margin-top: 8px;">
+              <button type="button" id="btn-back-to-details" style="flex: 1; background-color: transparent; border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                Back
+              </button>
+              <button type="submit" id="btn-verify-otp" style="flex: 2; background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+                Verify Code
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 3: Set Password -->
+        <div id="signup-step-password" class="signup-step hidden">
+          <form id="form-signup-password" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Your email is verified! Now, set a secure password to protect your account.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-setup-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Password</label>
+              <input type="password" id="input-setup-password" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-setup-confirm-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Confirm Password</label>
+              <input type="password" id="input-setup-confirm-password" placeholder="Confirm your password" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="signup-password-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-complete-setup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+              Complete Setup &amp; Log In
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="login.js?v=3.0"></script>
 </body>
 </html>
