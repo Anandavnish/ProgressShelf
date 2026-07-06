@@ -1,13 +1,15 @@
-const CACHE_NAME = 'progressshelf-cache-v140';
+const CACHE_NAME = 'progressshelf-cache-v141';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
   'dashboard.html',
+  'reset-password.html',
   'index.css',
   'app.js',
   'auth.js',
   'db.js',
   'login.js',
+  'reset-password.js',
   'supabase-config.js',
   'favicon.svg',
   'logo.svg',

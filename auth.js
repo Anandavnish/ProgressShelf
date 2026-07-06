@@ -188,7 +188,7 @@ export async function checkEmailExists(email) {
  */
 export async function sendPasswordResetEmail(email) {
   const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
-  const redirectUrl = window.location.origin + pathPrefix + 'index.html';
+  const redirectUrl = window.location.origin + pathPrefix + 'reset-password.html';
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: redirectUrl
   });
