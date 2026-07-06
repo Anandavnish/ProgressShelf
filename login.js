@@ -1,6 +1,6 @@
 // login.js
 import { isConfigured } from "./supabase-config.js";
-import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail } from "./auth.js";
+import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetEmail } from "./auth.js";
 
 const configBanner = document.getElementById("config-banner");
 const googleLoginBtn = document.getElementById("btn-google-login");
@@ -61,6 +61,17 @@ const linkGotoSignup = document.getElementById("link-goto-signup");
 const linkGotoSignin = document.getElementById("link-goto-signin");
 const linkForgotPassword = document.getElementById("link-forgot-password");
 
+const forgotModal = document.getElementById("forgot-modal");
+const closeForgotModalBtn = document.getElementById("btn-close-forgot-modal");
+const formForgotPassword = document.getElementById("form-forgot-password");
+const inputForgotEmail = document.getElementById("input-forgot-email");
+const forgotError = document.getElementById("forgot-error");
+const forgotSuccess = document.getElementById("forgot-success");
+const linkBackToSignin = document.getElementById("link-back-to-signin");
+const linkSigninFromExists = document.getElementById("link-signin-from-exists");
+const linkForgotFromExists = document.getElementById("link-forgot-from-exists");
+const signupEmailExistsNotice = document.getElementById("signup-email-exists-notice");
+
 const signupModal = document.getElementById("signup-modal");
 const closeSignupModalBtn = document.getElementById("btn-close-signup-modal");
 const backToDetailsBtn = document.getElementById("btn-back-to-details");
@@ -76,8 +87,7 @@ const formSignupPassword = document.getElementById("form-signup-password");
 const inputSignupName = document.getElementById("input-signup-name");
 const inputSignupEmail = document.getElementById("input-signup-email");
 const inputSignupOtp = document.getElementById("input-signup-otp");
-const inputSignupPassword = document.getElementById("input-signup-password");
-const inputSignupConfirmPassword = document.getElementById("input-signup-confirm-password");
+// inputSignupPassword and inputSignupConfirmPassword removed — passwords are now only collected in Step 3
 const inputSetupPassword = document.getElementById("input-setup-password");
 const inputSetupConfirmPassword = document.getElementById("input-setup-confirm-password");
 
@@ -135,39 +145,122 @@ if (closeSigninModalBtn) {
   });
 }
 
+function openSignupModal() {
+  if (signinModal) signinModal.classList.remove("active");
+  if (forgotModal) forgotModal.classList.remove("active");
+  if (signupModal) {
+    signupModal.classList.add("active");
+    showSignupStep("signup-step-details");
+    if (detailsError) detailsError.classList.add("hidden");
+    if (signupEmailExistsNotice) signupEmailExistsNotice.classList.add("hidden");
+    if (inputSignupName) inputSignupName.value = "";
+    if (inputSignupEmail) inputSignupEmail.value = "";
+  }
+}
+
+function openSigninModal(prefillEmail) {
+  if (signupModal) signupModal.classList.remove("active");
+  if (forgotModal) forgotModal.classList.remove("active");
+  if (signinModal) {
+    signinModal.classList.add("active");
+    if (signinError) signinError.classList.add("hidden");
+    if (inputSigninEmail) inputSigninEmail.value = prefillEmail || "";
+    if (inputSigninPassword) inputSigninPassword.value = "";
+  }
+}
+
+function openForgotModal(prefillEmail) {
+  if (signupModal) signupModal.classList.remove("active");
+  if (signinModal) signinModal.classList.remove("active");
+  if (forgotModal) {
+    forgotModal.classList.add("active");
+    if (forgotError) forgotError.classList.add("hidden");
+    if (forgotSuccess) forgotSuccess.classList.add("hidden");
+    if (inputForgotEmail) inputForgotEmail.value = prefillEmail || "";
+  }
+}
+
 if (linkGotoSignup) {
   linkGotoSignup.addEventListener("click", (e) => {
     e.preventDefault();
-    if (signinModal) signinModal.classList.remove("active");
-    if (signupModal) {
-      signupModal.classList.add("active");
-      showSignupStep("signup-step-details");
-      detailsError.classList.add("hidden");
-      inputSignupName.value = "";
-      inputSignupEmail.value = "";
-      inputSignupPassword.value = "";
-      inputSignupConfirmPassword.value = "";
-    }
+    openSignupModal();
   });
 }
 
 if (linkGotoSignin) {
   linkGotoSignin.addEventListener("click", (e) => {
     e.preventDefault();
-    if (signupModal) signupModal.classList.remove("active");
-    if (signinModal) {
-      signinModal.classList.add("active");
-      signinError.classList.add("hidden");
-      inputSigninEmail.value = "";
-      inputSigninPassword.value = "";
-    }
+    openSigninModal();
   });
 }
 
 if (linkForgotPassword) {
   linkForgotPassword.addEventListener("click", (e) => {
     e.preventDefault();
-    alert("Password recovery is not implemented yet.");
+    const email = inputSigninEmail ? inputSigninEmail.value.trim() : "";
+    openForgotModal(email);
+  });
+}
+
+if (linkSigninFromExists) {
+  linkSigninFromExists.addEventListener("click", (e) => {
+    e.preventDefault();
+    const email = inputSignupEmail ? inputSignupEmail.value.trim() : "";
+    openSigninModal(email);
+  });
+}
+
+if (linkForgotFromExists) {
+  linkForgotFromExists.addEventListener("click", (e) => {
+    e.preventDefault();
+    const email = inputSignupEmail ? inputSignupEmail.value.trim() : "";
+    openForgotModal(email);
+  });
+}
+
+// Forgot modal close buttons
+if (closeForgotModalBtn) {
+  closeForgotModalBtn.addEventListener("click", () => {
+    if (forgotModal) forgotModal.classList.remove("active");
+  });
+}
+
+if (linkBackToSignin) {
+  linkBackToSignin.addEventListener("click", (e) => {
+    e.preventDefault();
+    openSigninModal(inputForgotEmail ? inputForgotEmail.value.trim() : "");
+  });
+}
+
+// Forgot Password Form submission
+if (formForgotPassword) {
+  formForgotPassword.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (forgotError) { forgotError.classList.add("hidden"); forgotError.textContent = ""; }
+    if (forgotSuccess) { forgotSuccess.classList.add("hidden"); forgotSuccess.textContent = ""; }
+
+    const email = inputForgotEmail ? inputForgotEmail.value.trim() : "";
+    if (!email) return;
+
+    const btnSendReset = document.getElementById("btn-send-reset");
+    const originalText = btnSendReset ? btnSendReset.textContent : "Send Reset Link";
+    if (btnSendReset) { btnSendReset.textContent = "Sending..."; btnSendReset.style.pointerEvents = "none"; }
+
+    try {
+      await sendPasswordResetEmail(email);
+      if (forgotSuccess) {
+        forgotSuccess.textContent = "Reset link sent! Check your inbox.";
+        forgotSuccess.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.error(err);
+      if (forgotError) {
+        forgotError.textContent = err.message || "Failed to send reset email. Please try again.";
+        forgotError.classList.remove("hidden");
+      }
+    } finally {
+      if (btnSendReset) { btnSendReset.textContent = originalText; btnSendReset.style.pointerEvents = "all"; }
+    }
   });
 }
 
@@ -216,46 +309,57 @@ if (backToDetailsBtn) {
   });
 }
 
-// Step 1: Details Submission
+// Step 1: Details Submission (Name + Email only — passwords moved to Step 3)
 if (formSignupDetails) {
+  // Hide exists notice whenever user edits the email field
+  if (inputSignupEmail) {
+    inputSignupEmail.addEventListener("input", () => {
+      if (signupEmailExistsNotice) signupEmailExistsNotice.classList.add("hidden");
+      if (detailsError) detailsError.classList.add("hidden");
+    });
+  }
+
   formSignupDetails.addEventListener("submit", async (e) => {
     e.preventDefault();
-    detailsError.classList.add("hidden");
-    
-    const name = inputSignupName.value.trim();
-    const email = inputSignupEmail.value.trim();
-    const password = inputSignupPassword.value;
-    const confirmPassword = inputSignupConfirmPassword.value;
+    if (detailsError) detailsError.classList.add("hidden");
+    if (signupEmailExistsNotice) signupEmailExistsNotice.classList.add("hidden");
 
-    if (password !== confirmPassword) {
-      detailsError.textContent = "Passwords do not match.";
-      detailsError.classList.remove("hidden");
+    const name = inputSignupName ? inputSignupName.value.trim() : "";
+    const email = inputSignupEmail ? inputSignupEmail.value.trim() : "";
+
+    if (!name) {
+      if (detailsError) { detailsError.textContent = "Please enter your name."; detailsError.classList.remove("hidden"); }
       return;
     }
-    
-    if (password.length < 6) {
-      detailsError.textContent = "Password must be at least 6 characters.";
-      detailsError.classList.remove("hidden");
+    if (!email) {
+      if (detailsError) { detailsError.textContent = "Please enter your email."; detailsError.classList.remove("hidden"); }
       return;
     }
 
     const btnSendOtp = document.getElementById("btn-send-otp");
-    const originalText = btnSendOtp.textContent;
-    btnSendOtp.textContent = "Sending Code...";
-    btnSendOtp.style.pointerEvents = "none";
-    
+    const originalText = btnSendOtp ? btnSendOtp.textContent : "Send Verification Code";
+    if (btnSendOtp) { btnSendOtp.textContent = "Checking..."; btnSendOtp.style.pointerEvents = "none"; }
+
     try {
+      // Check if email is already registered before sending OTP
+      const exists = await checkEmailExists(email);
+      if (exists) {
+        if (signupEmailExistsNotice) signupEmailExistsNotice.classList.remove("hidden");
+        return;
+      }
+
+      if (btnSendOtp) btnSendOtp.textContent = "Sending Code...";
       await signUpWithOtp(name, email);
-      pendingPassword = password; // Hold password in memory
-      sentEmailLabel.textContent = email;
+      if (sentEmailLabel) sentEmailLabel.textContent = email;
       showSignupStep("signup-step-otp");
     } catch (err) {
       console.error(err);
-      detailsError.textContent = err.message || "Failed to send code. Please try again.";
-      detailsError.classList.remove("hidden");
+      if (detailsError) {
+        detailsError.textContent = err.message || "Failed to send code. Please try again.";
+        detailsError.classList.remove("hidden");
+      }
     } finally {
-      btnSendOtp.textContent = originalText;
-      btnSendOtp.style.pointerEvents = "all";
+      if (btnSendOtp) { btnSendOtp.textContent = originalText; btnSendOtp.style.pointerEvents = "all"; }
     }
   });
 }

@@ -167,6 +167,35 @@ export async function signInWithEmail(email, password) {
 }
 
 /**
+ * Checks if an email address is already registered by probing the sign-in endpoint.
+ * Returns true if the account exists (even if password is wrong), false if no account found.
+ */
+export async function checkEmailExists(email) {
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: "__probe_existence__"
+  });
+  if (!error) return true; // signed in (extremely unlikely with dummy password)
+  // "Invalid login credentials" means user exists but password was wrong
+  if (error.message.toLowerCase().includes("invalid login credentials")) return true;
+  // "Email not confirmed" means account exists but OTP not yet confirmed
+  if (error.message.toLowerCase().includes("email not confirmed")) return true;
+  return false;
+}
+
+/**
+ * Sends a password reset email to the specified address.
+ */
+export async function sendPasswordResetEmail(email) {
+  const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
+  const redirectUrl = window.location.origin + pathPrefix + 'index.html';
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  });
+  if (error) throw error;
+}
+
+/**
  * Registers a callback for Supabase auth state changes.
  */
 export function onAuthStateChange(callback) {
