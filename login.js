@@ -156,7 +156,7 @@ if (closeSigninModalBtn) {
   });
 }
 
-function openSignupModal() {
+function openSignupModal(prefillEmail) {
   if (signinModal) signinModal.classList.remove("active");
   if (forgotModal) forgotModal.classList.remove("active");
   if (signupModal) {
@@ -165,7 +165,7 @@ function openSignupModal() {
     if (detailsError) detailsError.classList.add("hidden");
     if (signupEmailExistsNotice) signupEmailExistsNotice.classList.add("hidden");
     if (inputSignupName) inputSignupName.value = "";
-    if (inputSignupEmail) inputSignupEmail.value = "";
+    if (inputSignupEmail) inputSignupEmail.value = prefillEmail || "";
   }
 }
 
@@ -192,6 +192,8 @@ function openForgotModal(prefillEmail) {
   if (forgotModal) {
     forgotModal.classList.add("active");
     showForgotStep("forgot-step-email");
+    const notFoundNotice = document.getElementById("forgot-email-not-found-notice");
+    if (notFoundNotice) notFoundNotice.classList.add("hidden");
     if (forgotEmailError) { forgotEmailError.classList.add("hidden"); forgotEmailError.textContent = ""; }
     if (forgotOtpError) { forgotOtpError.classList.add("hidden"); forgotOtpError.textContent = ""; }
     if (forgotPasswordError) { forgotPasswordError.classList.add("hidden"); forgotPasswordError.textContent = ""; }
@@ -240,6 +242,15 @@ if (linkForgotFromExists) {
   });
 }
 
+const linkCreateFromForgot = document.getElementById("link-create-from-forgot");
+if (linkCreateFromForgot) {
+  linkCreateFromForgot.addEventListener("click", (e) => {
+    e.preventDefault();
+    const email = inputForgotEmail ? inputForgotEmail.value.trim() : "";
+    openSignupModal(email);
+  });
+}
+
 // Forgot modal — close button
 if (closeForgotModalBtn) {
   closeForgotModalBtn.addEventListener("click", () => {
@@ -267,18 +278,36 @@ if (btnForgotBackToEmail) {
 let forgotPendingEmail = "";
 
 if (formForgotEmail) {
+  if (inputForgotEmail) {
+    inputForgotEmail.addEventListener("input", () => {
+      if (forgotEmailError) { forgotEmailError.classList.add("hidden"); forgotEmailError.textContent = ""; }
+      const notFoundNotice = document.getElementById("forgot-email-not-found-notice");
+      if (notFoundNotice) notFoundNotice.classList.add("hidden");
+    });
+  }
+
   formForgotEmail.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (forgotEmailError) { forgotEmailError.classList.add("hidden"); forgotEmailError.textContent = ""; }
+    const notFoundNotice = document.getElementById("forgot-email-not-found-notice");
+    if (notFoundNotice) notFoundNotice.classList.add("hidden");
 
     const email = inputForgotEmail ? inputForgotEmail.value.trim() : "";
     if (!email) return;
 
     const btn = document.getElementById("btn-send-reset-otp");
     const orig = btn ? btn.textContent : "Send Verification Code";
-    if (btn) { btn.textContent = "Sending..."; btn.style.pointerEvents = "none"; }
+    if (btn) { btn.textContent = "Checking..."; btn.style.pointerEvents = "none"; }
 
     try {
+      // Perform explicit check first
+      const exists = await checkEmailExists(email);
+      if (!exists) {
+        if (notFoundNotice) notFoundNotice.classList.remove("hidden");
+        return;
+      }
+
+      if (btn) btn.textContent = "Sending...";
       await sendPasswordResetOtp(email);
       forgotPendingEmail = email;
       if (forgotSentEmailLabel) forgotSentEmailLabel.textContent = email;
@@ -286,14 +315,8 @@ if (formForgotEmail) {
       showForgotStep("forgot-step-otp");
     } catch (err) {
       console.error(err);
-      // "User not found" type errors — give a neutral message to not leak account existence
       if (forgotEmailError) {
-        const msg = err.message || "";
-        if (msg.toLowerCase().includes("user") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("signup disabled")) {
-          forgotEmailError.textContent = "If this email is registered, you'll receive a code shortly.";
-        } else {
-          forgotEmailError.textContent = msg || "Failed to send code. Please try again.";
-        }
+        forgotEmailError.textContent = err.message || "Failed to send code. Please try again.";
         forgotEmailError.classList.remove("hidden");
       }
     } finally {
@@ -321,6 +344,9 @@ if (formForgotOtp) {
     const orig = btn ? btn.textContent : "Verify Code";
     if (btn) { btn.textContent = "Verifying..."; btn.style.pointerEvents = "none"; }
 
+    // Intercept redirect race condition
+    sessionStorage.setItem('password_setup_pending', 'true');
+
     try {
       await verifyPasswordResetOtp(forgotPendingEmail, code);
       // OTP verified — session is now active, move to set-password step
@@ -330,6 +356,7 @@ if (formForgotOtp) {
       showForgotStep("forgot-step-password");
     } catch (err) {
       console.error(err);
+      sessionStorage.removeItem('password_setup_pending');
       if (forgotOtpError) {
         forgotOtpError.textContent = "Invalid or expired code. Please try again.";
         forgotOtpError.classList.remove("hidden");
@@ -371,13 +398,12 @@ if (formForgotNewPassword) {
     }
 
     const btn = document.getElementById("btn-set-new-password");
-    const orig = btn ? btn.textContent : "Update Password & Sign In";
-    if (btn) { btn.textContent = "Updating..."; btn.style.pointerEvents = "none"; }
+    const orig = btn ? btn.textContent : "Save Password & Access Dashboard";
+    if (btn) { btn.textContent = "Saving..."; btn.style.pointerEvents = "none"; }
 
     try {
       await updateUserPassword(password);
       sessionStorage.removeItem('password_setup_pending');
-      // Session is already active from OTP verification — go straight to dashboard
       window.location.href = "dashboard.html";
     } catch (err) {
       console.error(err);
@@ -387,6 +413,15 @@ if (formForgotNewPassword) {
       }
       if (btn) { btn.textContent = orig; btn.style.pointerEvents = "all"; }
     }
+  });
+}
+
+const linkForgotSkipPassword = document.getElementById("link-forgot-skip-password");
+if (linkForgotSkipPassword) {
+  linkForgotSkipPassword.addEventListener("click", (e) => {
+    e.preventDefault();
+    sessionStorage.removeItem('password_setup_pending');
+    window.location.href = "dashboard.html";
   });
 }
 
@@ -524,33 +559,9 @@ if (formSignupOtp) {
     }
 
     if (verified) {
-      try {
-        // Automatically finalize password setup using the memory variable
-        if (pendingPassword) {
-          btnVerifyOtp.textContent = "Completing Setup...";
-          await updateUserPassword(pendingPassword);
-          
-          sessionStorage.removeItem('password_setup_pending');
-          window.location.href = "dashboard.html";
-        } else {
-          // If no pending password in memory, transition to Step 3
-          showSignupStep("signup-step-password");
-          btnVerifyOtp.textContent = originalText;
-          btnVerifyOtp.style.pointerEvents = "all";
-        }
-      } catch (err) {
-        console.error("Failed to set password auto-flow:", err);
-        // Show error on the password screen, and transition to Step 3 so they can set a different password
-        passwordError.textContent = "That password wasn't accepted, please choose a different one.";
-        passwordError.classList.remove("hidden");
-        // Leave fields empty as per requirements
-        inputSetupPassword.value = "";
-        inputSetupConfirmPassword.value = "";
-        showSignupStep("signup-step-password");
-        
-        btnVerifyOtp.textContent = originalText;
-        btnVerifyOtp.style.pointerEvents = "all";
-      }
+      showSignupStep("signup-step-password");
+      btnVerifyOtp.textContent = originalText;
+      btnVerifyOtp.style.pointerEvents = "all";
     }
   });
 }
@@ -614,6 +625,15 @@ if (formSignupPassword) {
       btnCompleteSetup.textContent = originalText;
       btnCompleteSetup.style.pointerEvents = "all";
     }
+  });
+}
+
+const linkSignupSkipPassword = document.getElementById("link-signup-skip-password");
+if (linkSignupSkipPassword) {
+  linkSignupSkipPassword.addEventListener("click", (e) => {
+    e.preventDefault();
+    sessionStorage.removeItem('password_setup_pending');
+    window.location.href = "dashboard.html";
   });
 }
 
