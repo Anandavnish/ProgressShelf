@@ -2,6 +2,8 @@
 import { supabase, isConfigured } from "./supabase-config.js";
 import { isGuestMode } from "./auth.js";
 
+const writeQueues = new Map(); // barId -> latest pending write promise
+
 // Helper to get/set local storage bars for Sandbox mode
 export function getLocalBars() {
   const data = localStorage.getItem("progress_shelf_bars");
@@ -286,7 +288,16 @@ export async function deleteBar(uid, barId) {
 /**
  * Edits an existing progress bar document.
  */
-export async function editBar(uid, barId, {
+export async function editBar(uid, barId, updates) {
+  const previous = writeQueues.get(barId) || Promise.resolve();
+  const current = previous
+    .catch(() => {}) // don't let a prior failure block the next write
+    .then(() => _editBarInternal(uid, barId, updates));
+  writeQueues.set(barId, current);
+  return current;
+}
+
+async function _editBarInternal(uid, barId, {
   title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position
 }) {
   if (!isConfigured || isGuestMode()) {

@@ -326,6 +326,10 @@ let deferredPrompt = null;
 let isPopStateExit = false;
 let lastInteractionCardId = null;
 
+// Tracks bar IDs with an in-flight local write, so our own realtime echo
+// doesn't trigger a redundant full checklist rebuild mid-interaction.
+const pendingLocalWrites = new Map();
+
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
   if (activeUnsubscribe) {
@@ -1145,6 +1149,7 @@ function updateCardElement(card, bar) {
           checkbox.addEventListener("change", async (e) => {
           const isChecked = e.target.checked;
           const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
+          const originalItemsBackup = JSON.parse(JSON.stringify(bar.items || []));
           if (updatedItems[idx]) {
             updatedItems[idx].done = isChecked;
           }
@@ -1182,6 +1187,7 @@ function updateCardElement(card, bar) {
           bar.items = updatedItems;
           syncRowHeights();
 
+          pendingLocalWrites.set(bar.id, (pendingLocalWrites.get(bar.id) || 0) + 1);
           try {
             await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
               title: bar.title,
@@ -1191,7 +1197,22 @@ function updateCardElement(card, bar) {
               completed,
               updateDeadline: false
             });
+            setTimeout(() => {
+              const count = pendingLocalWrites.get(bar.id) || 0;
+              if (count <= 1) {
+                pendingLocalWrites.delete(bar.id);
+              } else {
+                pendingLocalWrites.set(bar.id, count - 1);
+              }
+            }, 800);
           } catch (error) {
+            bar.items = originalItemsBackup;
+            const count = pendingLocalWrites.get(bar.id) || 0;
+            if (count <= 1) {
+              pendingLocalWrites.delete(bar.id);
+            } else {
+              pendingLocalWrites.set(bar.id, count - 1);
+            }
             showToast("Failed to update checklist progress.", "error");
             renderDashboard(currentBars);
           }
@@ -1541,6 +1562,7 @@ function createCardElement(bar) {
         const currentBar = card._barData;
         const isChecked = e.target.checked;
         const updatedItems = JSON.parse(JSON.stringify(currentBar.items || []));
+        const originalItemsBackup = JSON.parse(JSON.stringify(currentBar.items || []));
         if (updatedItems[idx]) {
           updatedItems[idx].done = isChecked;
         }
@@ -1580,6 +1602,7 @@ function createCardElement(bar) {
         currentBar.items = updatedItems;
         syncRowHeights();
 
+        pendingLocalWrites.set(currentBar.id, (pendingLocalWrites.get(currentBar.id) || 0) + 1);
         try {
           await editBar(isGuestMode() ? null : currentUser.uid, currentBar.id, {
             title: currentBar.title,
@@ -1589,7 +1612,22 @@ function createCardElement(bar) {
             completed,
             updateDeadline: false
           });
+          setTimeout(() => {
+            const count = pendingLocalWrites.get(currentBar.id) || 0;
+            if (count <= 1) {
+              pendingLocalWrites.delete(currentBar.id);
+            } else {
+              pendingLocalWrites.set(currentBar.id, count - 1);
+            }
+          }, 800);
         } catch (error) {
+          currentBar.items = originalItemsBackup;
+          const count = pendingLocalWrites.get(currentBar.id) || 0;
+          if (count <= 1) {
+            pendingLocalWrites.delete(currentBar.id);
+          } else {
+            pendingLocalWrites.set(currentBar.id, count - 1);
+          }
           showToast("Failed to update checklist progress.", "error");
           renderDashboard(currentBars); // Revert to database state on error
         }
@@ -1773,13 +1811,18 @@ function renderDashboard(bars) {
   filtered.reverse().forEach((bar) => {
     const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
     if (oldCard) {
-      const updated = updateCardElement(oldCard, bar);
-      if (updated) {
+      if ((pendingLocalWrites.get(bar.id) || 0) > 0) {
+        // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
         expectedElements.push(oldCard);
       } else {
-        const newCard = createCardElement(bar);
-        oldCard.replaceWith(newCard);
-        expectedElements.push(newCard);
+        const updated = updateCardElement(oldCard, bar);
+        if (updated) {
+          expectedElements.push(oldCard);
+        } else {
+          const newCard = createCardElement(bar);
+          oldCard.replaceWith(newCard);
+          expectedElements.push(newCard);
+        }
       }
     } else {
       const newCard = createCardElement(bar);
@@ -2423,6 +2466,14 @@ function syncRowHeights() {
 }
 
 window.addEventListener("resize", syncRowHeights);
+
+window.addEventListener('offline', () => {
+  showToast("You're offline. Changes won't be saved until you're back online.", "error");
+});
+
+window.addEventListener('online', () => {
+  showToast("Back online. Your changes will now sync.", "success");
+});
 
 // Close active modals and dropdowns on Escape key press
 document.addEventListener("keydown", (e) => {
