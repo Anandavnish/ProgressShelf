@@ -5068,9 +5068,119 @@ function updateListNumbers(editor) {
   }
 }
 
+function getCaretCharacterOffsetWithin(element) {
+  try {
+    let caretOffset = 0;
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    if (sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(element);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      caretOffset = preCaretRange.toString().length;
+    }
+    return caretOffset;
+  } catch (e) {
+    console.warn("Error getting caret offset:", e);
+    return 0;
+  }
+}
+
+function setCaretCharacterOffsetWithin(element, offset) {
+  try {
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    const range = doc.createRange();
+    
+    let currentOffset = 0;
+    let found = false;
+
+    function traverse(node) {
+      if (found) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (currentOffset + node.length >= offset) {
+          range.setStart(node, offset - currentOffset);
+          range.collapse(true);
+          found = true;
+        } else {
+          currentOffset += node.length;
+        }
+      } else {
+        for (let i = 0; i < node.childNodes.length; i++) {
+          traverse(node.childNodes[i]);
+          if (found) break;
+        }
+      }
+    }
+
+    traverse(element);
+    if (!found) {
+      const targetNode = element.firstChild || element;
+      range.setStart(targetNode, 0);
+      range.collapse(true);
+    }
+    
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) {
+    console.warn("Error setting caret offset:", e);
+  }
+}
+
+function formatInlineStyles(text) {
+  if (!text) return "<br>";
+  let html = escapeHtml(text);
+  
+  // Wrap headers:
+  if (text.startsWith("### ")) {
+    html = '<span class="markdown-syntax">### </span>' + html.substring(4);
+  } else if (text.startsWith("## ")) {
+    html = '<span class="markdown-syntax">## </span>' + html.substring(3);
+  } else if (text.startsWith("# ")) {
+    html = '<span class="markdown-syntax"># </span>' + html.substring(2);
+  }
+  
+  // Bold: **text** or __text__
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="note-bold"><span class="markdown-syntax">**</span>$1<span class="markdown-syntax">**</span></strong>');
+  html = html.replace(/__(.*?)__/g, '<strong class="note-bold"><span class="markdown-syntax">__</span>$1<span class="markdown-syntax">__</span></strong>');
+  
+  // Italic: *text* or _text_
+  html = html.replace(/\*(.*?)\*/g, '<em class="note-italic"><span class="markdown-syntax">*</span>$1<span class="markdown-syntax">*</span></em>');
+  html = html.replace(/_(.*?)_/g, '<em class="note-italic"><span class="markdown-syntax">_</span>$1<span class="markdown-syntax">_</span></em>');
+  
+  // Inline Code: `code`
+  html = html.replace(/`(.*?)`/g, '<code class="note-code"><span class="markdown-syntax">`</span>$1<span class="markdown-syntax">`</span></code>');
+  
+  // Code block start/end on the line
+  if (text.trim().startsWith("```")) {
+    html = `<span class="markdown-syntax">` + html + `</span>`;
+  }
+  
+  return html;
+}
+
+function isLineInCodeBlock(node, editor) {
+  let inCodeBlock = false;
+  const children = editor.children;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child === node) {
+      return inCodeBlock;
+    }
+    if (child.textContent.trim().startsWith("```")) {
+      inCodeBlock = !inCodeBlock;
+    }
+  }
+  return false;
+}
+
 function formatLineNode(node, editor) {
   if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
   const text = node.textContent;
+  const currentType = node.getAttribute("data-type");
 
   // 1. Bullet formatting: ^([-*])\s
   const bulletMatch = text.match(/^([-*])\s(.*)$/);
@@ -5088,25 +5198,17 @@ function formatLineNode(node, editor) {
     node.className = "note-line-bullet";
     node.setAttribute("data-type", "bullet");
     node.setAttribute("data-marker", marker);
+    node.removeAttribute("data-number");
 
     if (rest === "") {
       node.innerHTML = "<br>";
     } else {
-      node.textContent = rest;
+      node.innerHTML = formatInlineStyles(rest);
     }
 
     // Restore caret position
-    const newRange = document.createRange();
-    const textNode = node.firstChild || node;
     const newOffset = Math.max(0, offset - 2);
-    try {
-      newRange.setStart(textNode, Math.min(newOffset, textNode.length || 0));
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } catch (e) {
-      console.warn("Caret restore error:", e);
-    }
+    setCaretCharacterOffsetWithin(node, newOffset);
     return true;
   }
 
@@ -5131,27 +5233,95 @@ function formatLineNode(node, editor) {
     if (rest === "") {
       node.innerHTML = "<br>";
     } else {
-      node.textContent = rest;
+      node.innerHTML = formatInlineStyles(rest);
     }
 
     // Restore caret position
-    const newRange = document.createRange();
-    const textNode = node.firstChild || node;
     const newOffset = Math.max(0, offset - prefixLen);
-    try {
-      newRange.setStart(textNode, Math.min(newOffset, textNode.length || 0));
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } catch (e) {
-      console.warn("Caret restore error:", e);
-    }
+    setCaretCharacterOffsetWithin(node, newOffset);
 
     updateListNumbers(editor);
     return true;
   }
 
-  return false;
+  // 3. Headers: H1 (# ), H2 (## ), H3 (### ) - prefix is NOT stripped!
+  if (text.startsWith("### ")) {
+    node.className = "note-h3";
+    node.setAttribute("data-type", "h3");
+    node.removeAttribute("data-number");
+    const offset = getCaretCharacterOffsetWithin(node);
+    node.innerHTML = formatInlineStyles(text);
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  if (text.startsWith("## ")) {
+    node.className = "note-h2";
+    node.setAttribute("data-type", "h2");
+    node.removeAttribute("data-number");
+    const offset = getCaretCharacterOffsetWithin(node);
+    node.innerHTML = formatInlineStyles(text);
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  if (text.startsWith("# ")) {
+    node.className = "note-h1";
+    node.setAttribute("data-type", "h1");
+    node.removeAttribute("data-number");
+    const offset = getCaretCharacterOffsetWithin(node);
+    node.innerHTML = formatInlineStyles(text);
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  // 4. Preserve existing formatting if already activated (only for lists and code blocks)
+  if (currentType === "bullet") {
+    node.className = "note-line-bullet";
+    const offset = getCaretCharacterOffsetWithin(node);
+    node.innerHTML = text === "" ? "<br>" : formatInlineStyles(text);
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  if (currentType === "number") {
+    node.className = "note-line-number";
+    const offset = getCaretCharacterOffsetWithin(node);
+    node.innerHTML = text === "" ? "<br>" : formatInlineStyles(text);
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  // 5. Code Block
+  const isCode = text.trim().startsWith("```") || isLineInCodeBlock(node, editor);
+  if (isCode) {
+    node.className = "note-code-block";
+    node.setAttribute("data-type", text.trim().startsWith("```") ? "code-block-boundary" : "code-block-content");
+    node.removeAttribute("data-number");
+
+    const offset = getCaretCharacterOffsetWithin(node);
+    if (text === "") {
+      node.innerHTML = "<br>";
+    } else {
+      node.innerHTML = formatInlineStyles(text);
+    }
+    setCaretCharacterOffsetWithin(node, offset);
+    return true;
+  }
+
+  // 6. Plain text
+  node.className = "note-p";
+  node.removeAttribute("data-type");
+  node.removeAttribute("data-number");
+
+  const offset = getCaretCharacterOffsetWithin(node);
+  if (text === "") {
+    node.innerHTML = "<br>";
+  } else {
+    node.innerHTML = formatInlineStyles(text);
+  }
+  setCaretCharacterOffsetWithin(node, offset);
+  return true;
 }
 
 function initializeNoteEditor(editor, rawText) {
@@ -5169,28 +5339,50 @@ function initializeNoteEditor(editor, rawText) {
     return;
   }
 
+  let inCodeBlock = false;
   const lines = rawText.split("\n");
   lines.forEach(line => {
     const div = document.createElement("div");
     const bulletMatch = line.match(/^(\s*)([-*•●])\s+(.*)$/);
     const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
     
-    if (bulletMatch) {
+    if (line.trim().startsWith("```")) {
+      div.className = "note-code-block";
+      div.setAttribute("data-type", "code-block-boundary");
+      div.innerHTML = formatInlineStyles(line);
+      inCodeBlock = !inCodeBlock;
+    } else if (inCodeBlock) {
+      div.className = "note-code-block";
+      div.setAttribute("data-type", "code-block-content");
+      div.innerHTML = formatInlineStyles(line);
+    } else if (bulletMatch) {
       div.className = "note-line-bullet";
       div.setAttribute("data-type", "bullet");
       div.setAttribute("data-marker", bulletMatch[2]);
-      div.textContent = bulletMatch[3];
+      div.innerHTML = formatInlineStyles(bulletMatch[3]);
     } else if (numMatch) {
       div.className = "note-line-number";
       div.setAttribute("data-type", "number");
       div.setAttribute("data-number", numMatch[2]);
-      div.textContent = numMatch[3];
+      div.innerHTML = formatInlineStyles(numMatch[3]);
+    } else if (line.startsWith("### ")) {
+      div.className = "note-h3";
+      div.setAttribute("data-type", "h3");
+      div.innerHTML = formatInlineStyles(line);
+    } else if (line.startsWith("## ")) {
+      div.className = "note-h2";
+      div.setAttribute("data-type", "h2");
+      div.innerHTML = formatInlineStyles(line);
+    } else if (line.startsWith("# ")) {
+      div.className = "note-h1";
+      div.setAttribute("data-type", "h1");
+      div.innerHTML = formatInlineStyles(line);
     } else {
       div.className = "note-p";
       if (line === "") {
         div.innerHTML = "<br>";
       } else {
-        div.textContent = line;
+        div.innerHTML = formatInlineStyles(line);
       }
     }
     editor.appendChild(div);
@@ -5300,6 +5492,27 @@ function setupContenteditableEditor(editor, counterId) {
     if (e.key === 'Enter') {
       const type = node.getAttribute("data-type");
       const contentText = node.textContent.trim();
+
+      if (type === 'h1' || type === 'h2' || type === 'h3') {
+        e.preventDefault();
+        const offset = getCaretCharacterOffsetWithin(node);
+        const text = node.textContent;
+        const currentLineText = text.substring(0, offset);
+        const newLineText = text.substring(offset);
+        
+        // Update current header line text content
+        node.innerHTML = currentLineText === "" ? "<br>" : formatInlineStyles(currentLineText);
+        
+        // Create new plain line below it
+        const newDiv = document.createElement("div");
+        newDiv.className = "note-p";
+        newDiv.innerHTML = newLineText === "" ? "<br>" : formatInlineStyles(newLineText);
+        
+        node.parentNode.insertBefore(newDiv, node.nextSibling);
+        setCaretCharacterOffsetWithin(newDiv, 0);
+        updateCounter();
+        return;
+      }
 
       if ((type === 'bullet' || type === 'number') && contentText === '') {
         // Hitting Enter on empty list item -> breakout to plain paragraph
