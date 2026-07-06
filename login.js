@@ -139,14 +139,49 @@ if (isConfigured && sessionStorage.getItem('password_setup_pending') === 'true')
 // ------------------------------------------
 // Sign In Modal Event Listeners
 // ------------------------------------------
+// Toast notifications on landing page (standalone helper)
+function showLandingToast(message, type = "info", duration = 4000) {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <span class="toast-message">${escapeHtml(message)}</span>
+    <button class="btn-close-toast">&times;</button>
+  `;
+  container.appendChild(toast);
+  toast.querySelector(".btn-close-toast").addEventListener("click", () => {
+    toast.classList.add("toast-out");
+    toast.addEventListener("animationend", () => toast.remove());
+  });
+  if (duration > 0) {
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.classList.add("toast-out");
+        toast.addEventListener("animationend", () => toast.remove());
+      }
+    }, duration);
+  }
+  return toast;
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.innerText = str;
+  return div.innerHTML;
+}
+
 if (emailLoginTrigger) {
-  emailLoginTrigger.addEventListener("click", () => {
-    if (signinModal) {
-      signinModal.classList.add("active");
-      signinError.classList.add("hidden");
-      inputSigninEmail.value = "";
-      inputSigninPassword.value = "";
-    }
+  emailLoginTrigger.addEventListener("click", (e) => {
+    e.preventDefault();
+    
+    // Shake animation logic
+    emailLoginTrigger.classList.remove("shake-anim");
+    void emailLoginTrigger.offsetWidth; // Trigger reflow to restart animation
+    emailLoginTrigger.classList.add("shake-anim");
+    
+    showLandingToast("Help Creator to buy domain to make this option live", "warning");
   });
 }
 

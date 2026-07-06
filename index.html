@@ -7,7 +7,7 @@
   <title>ProgressShelf - Track everything. One bar at a time.</title>
   <meta name="description" content="ProgressShelf is your personal progress tracking dashboard. Track your habits, courses, readings, or custom goals, one animated progress bar at a time.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=5.6">
+  <link rel="stylesheet" href="index.css?v=5.7">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,13 +99,16 @@
           Sign in with Google
         </button>
 
-        <button id="btn-email-login-trigger" class="btn-email-signup" style="margin-top: 12px;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-            <polyline points="22,6 12,13 2,6"></polyline>
-          </svg>
-          Continue with Email
-        </button>
+        <div style="position: relative; width: 100%; margin-top: 12px;">
+          <button id="btn-email-login-trigger" class="btn-email-signup" style="width: 100%; opacity: 0.5; filter: grayscale(1); cursor: not-allowed; pointer-events: auto;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            Continue with Email
+          </button>
+          <span style="position: absolute; top: -6px; right: 10px; background-color: var(--accent); color: #FFF; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none;">Beta</span>
+        </div>
 
         <div class="auth-divider">
           <span>or</span>
@@ -358,6 +361,9 @@
     </div>
   </div>
 
-  <script type="module" src="login.js?v=3.4"></script>
+  <!-- Toast System -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script type="module" src="login.js?v=3.5"></script>
 </body>
 </html>
