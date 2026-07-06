@@ -184,15 +184,29 @@ export async function checkEmailExists(email) {
 }
 
 /**
- * Sends a password reset email to the specified address.
+ * Sends a 6-digit OTP to an existing account for password reset.
+ * Uses shouldCreateUser:false so it only succeeds for registered emails.
  */
-export async function sendPasswordResetEmail(email) {
-  const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
-  const redirectUrl = window.location.origin + pathPrefix + 'reset-password.html';
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: redirectUrl
+export async function sendPasswordResetOtp(email) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false }
   });
   if (error) throw error;
+}
+
+/**
+ * Verifies an OTP code for the password reset flow (type: 'email').
+ * On success, Supabase creates an active session so updateUserPassword() can be called.
+ */
+export async function verifyPasswordResetOtp(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email'
+  });
+  if (error) throw error;
+  return data;
 }
 
 /**

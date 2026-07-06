@@ -267,36 +267,86 @@
     </div>
   </div>
 
-  <!-- Forgot Password Modal -->
+  <!-- Forgot Password Modal (3-step OTP flow) -->
   <div id="forgot-modal" class="modal-overlay">
     <div class="modal-container" style="max-width: 420px;">
       <div class="modal-header">
-        <h2 class="modal-title">Reset Password</h2>
+        <h2 id="forgot-modal-title" class="modal-title">Reset Password</h2>
         <button type="button" class="btn-close-modal" id="btn-close-forgot-modal">&times;</button>
       </div>
       <div class="modal-body">
-        <form id="form-forgot-password" style="display: flex; flex-direction: column; gap: 16px;">
-          <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
-            Enter your email address and we'll send you a link to reset your password.
-          </p>
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
-            <label for="input-forgot-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
-            <input type="email" id="input-forgot-email" placeholder="you@example.com" required
-              style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
-          </div>
-          <p id="forgot-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
-          <p id="forgot-success" style="color: #22c55e; font-size: 0.85rem; margin: 0;" class="hidden"></p>
-          <button type="submit" id="btn-send-reset" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
-            Send Reset Link
-          </button>
-          <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 4px; margin-bottom: 0;">
-            <a href="#" id="link-back-to-signin" style="color: var(--accent); text-decoration: none; font-weight: 600;">← Back to Sign In</a>
-          </p>
-        </form>
+
+        <!-- Forgot Step 1: Enter email -->
+        <div id="forgot-step-email" class="signup-step">
+          <form id="form-forgot-email" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Enter your registered email and we'll send a 6-digit verification code.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-forgot-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+              <input type="email" id="input-forgot-email" placeholder="you@example.com" required
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="forgot-email-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-send-reset-otp" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+              Send Verification Code
+            </button>
+            <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 4px; margin-bottom: 0;">
+              <a href="#" id="link-back-to-signin" style="color: var(--accent); text-decoration: none; font-weight: 600;">← Back to Sign In</a>
+            </p>
+          </form>
+        </div>
+
+        <!-- Forgot Step 2: Verify OTP -->
+        <div id="forgot-step-otp" class="signup-step hidden">
+          <form id="form-forgot-otp" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              We sent a code to <strong id="forgot-sent-email-label"></strong>. Enter it below.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-forgot-otp" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Verification Code</label>
+              <input type="text" id="input-forgot-otp" placeholder="6-digit code" required autocomplete="one-time-code"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1.1rem; font-weight: 600; letter-spacing: 2px; text-align: center; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="forgot-otp-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <div style="display: flex; gap: 12px; margin-top: 8px;">
+              <button type="button" id="btn-forgot-back-to-email" style="flex: 1; background-color: transparent; border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                Back
+              </button>
+              <button type="submit" id="btn-verify-reset-otp" style="flex: 2; background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+                Verify Code
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Forgot Step 3: Set new password -->
+        <div id="forgot-step-password" class="signup-step hidden">
+          <form id="form-forgot-new-password" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Identity verified! Set a new password for your account.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-reset-new-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">New Password</label>
+              <input type="password" id="input-reset-new-password" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-reset-confirm-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Confirm Password</label>
+              <input type="password" id="input-reset-confirm-password" placeholder="Confirm your password" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="forgot-password-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-set-new-password" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 4px; transition: transform 0.2s, background-color 0.2s;">
+              Update Password &amp; Sign In
+            </button>
+          </form>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <script type="module" src="login.js?v=3.2"></script>
+  <script type="module" src="login.js?v=3.3"></script>
 </body>
 </html>

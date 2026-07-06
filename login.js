@@ -1,6 +1,6 @@
 // login.js
 import { isConfigured } from "./supabase-config.js";
-import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetEmail } from "./auth.js";
+import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp } from "./auth.js";
 
 const configBanner = document.getElementById("config-banner");
 const googleLoginBtn = document.getElementById("btn-google-login");
@@ -63,14 +63,25 @@ const linkForgotPassword = document.getElementById("link-forgot-password");
 
 const forgotModal = document.getElementById("forgot-modal");
 const closeForgotModalBtn = document.getElementById("btn-close-forgot-modal");
-const formForgotPassword = document.getElementById("form-forgot-password");
 const inputForgotEmail = document.getElementById("input-forgot-email");
-const forgotError = document.getElementById("forgot-error");
-const forgotSuccess = document.getElementById("forgot-success");
+const forgotEmailError = document.getElementById("forgot-email-error");
+const forgotOtpError = document.getElementById("forgot-otp-error");
+const forgotPasswordError = document.getElementById("forgot-password-error");
+const forgotSentEmailLabel = document.getElementById("forgot-sent-email-label");
 const linkBackToSignin = document.getElementById("link-back-to-signin");
 const linkSigninFromExists = document.getElementById("link-signin-from-exists");
 const linkForgotFromExists = document.getElementById("link-forgot-from-exists");
 const signupEmailExistsNotice = document.getElementById("signup-email-exists-notice");
+
+const forgotStepEmail    = document.getElementById("forgot-step-email");
+const forgotStepOtp      = document.getElementById("forgot-step-otp");
+const forgotStepPassword = document.getElementById("forgot-step-password");
+const formForgotEmail       = document.getElementById("form-forgot-email");
+const formForgotOtp         = document.getElementById("form-forgot-otp");
+const formForgotNewPassword = document.getElementById("form-forgot-new-password");
+const inputForgotOtp         = document.getElementById("input-forgot-otp");
+const inputResetNewPassword  = document.getElementById("input-reset-new-password");
+const inputResetConfirmPassword = document.getElementById("input-reset-confirm-password");
 
 const signupModal = document.getElementById("signup-modal");
 const closeSignupModalBtn = document.getElementById("btn-close-signup-modal");
@@ -169,14 +180,25 @@ function openSigninModal(prefillEmail) {
   }
 }
 
+function showForgotStep(stepId) {
+  [forgotStepEmail, forgotStepOtp, forgotStepPassword].forEach(el => {
+    if (el) el.classList.toggle("hidden", el.id !== stepId);
+  });
+}
+
 function openForgotModal(prefillEmail) {
   if (signupModal) signupModal.classList.remove("active");
   if (signinModal) signinModal.classList.remove("active");
   if (forgotModal) {
     forgotModal.classList.add("active");
-    if (forgotError) forgotError.classList.add("hidden");
-    if (forgotSuccess) forgotSuccess.classList.add("hidden");
+    showForgotStep("forgot-step-email");
+    if (forgotEmailError) { forgotEmailError.classList.add("hidden"); forgotEmailError.textContent = ""; }
+    if (forgotOtpError) { forgotOtpError.classList.add("hidden"); forgotOtpError.textContent = ""; }
+    if (forgotPasswordError) { forgotPasswordError.classList.add("hidden"); forgotPasswordError.textContent = ""; }
     if (inputForgotEmail) inputForgotEmail.value = prefillEmail || "";
+    if (inputForgotOtp) inputForgotOtp.value = "";
+    if (inputResetNewPassword) inputResetNewPassword.value = "";
+    if (inputResetConfirmPassword) inputResetConfirmPassword.value = "";
   }
 }
 
@@ -218,13 +240,14 @@ if (linkForgotFromExists) {
   });
 }
 
-// Forgot modal close buttons
+// Forgot modal — close button
 if (closeForgotModalBtn) {
   closeForgotModalBtn.addEventListener("click", () => {
     if (forgotModal) forgotModal.classList.remove("active");
   });
 }
 
+// Forgot modal — "Back to Sign In" from Step 1
 if (linkBackToSignin) {
   linkBackToSignin.addEventListener("click", (e) => {
     e.preventDefault();
@@ -232,37 +255,141 @@ if (linkBackToSignin) {
   });
 }
 
-// Forgot Password Form submission
-if (formForgotPassword) {
-  formForgotPassword.addEventListener("submit", async (e) => {
+// Forgot modal — "Back" button from Step 2
+const btnForgotBackToEmail = document.getElementById("btn-forgot-back-to-email");
+if (btnForgotBackToEmail) {
+  btnForgotBackToEmail.addEventListener("click", () => {
+    showForgotStep("forgot-step-email");
+  });
+}
+
+// ---- Forgot Step 1: Send OTP ----
+let forgotPendingEmail = "";
+
+if (formForgotEmail) {
+  formForgotEmail.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (forgotError) { forgotError.classList.add("hidden"); forgotError.textContent = ""; }
-    if (forgotSuccess) { forgotSuccess.classList.add("hidden"); forgotSuccess.textContent = ""; }
+    if (forgotEmailError) { forgotEmailError.classList.add("hidden"); forgotEmailError.textContent = ""; }
 
     const email = inputForgotEmail ? inputForgotEmail.value.trim() : "";
     if (!email) return;
 
-    const btnSendReset = document.getElementById("btn-send-reset");
-    const originalText = btnSendReset ? btnSendReset.textContent : "Send Reset Link";
-    if (btnSendReset) { btnSendReset.textContent = "Sending..."; btnSendReset.style.pointerEvents = "none"; }
+    const btn = document.getElementById("btn-send-reset-otp");
+    const orig = btn ? btn.textContent : "Send Verification Code";
+    if (btn) { btn.textContent = "Sending..."; btn.style.pointerEvents = "none"; }
 
     try {
-      await sendPasswordResetEmail(email);
-      if (forgotSuccess) {
-        forgotSuccess.textContent = "Reset link sent! Check your inbox.";
-        forgotSuccess.classList.remove("hidden");
-      }
+      await sendPasswordResetOtp(email);
+      forgotPendingEmail = email;
+      if (forgotSentEmailLabel) forgotSentEmailLabel.textContent = email;
+      if (inputForgotOtp) inputForgotOtp.value = "";
+      showForgotStep("forgot-step-otp");
     } catch (err) {
       console.error(err);
-      if (forgotError) {
-        forgotError.textContent = err.message || "Failed to send reset email. Please try again.";
-        forgotError.classList.remove("hidden");
+      // "User not found" type errors — give a neutral message to not leak account existence
+      if (forgotEmailError) {
+        const msg = err.message || "";
+        if (msg.toLowerCase().includes("user") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("signup disabled")) {
+          forgotEmailError.textContent = "If this email is registered, you'll receive a code shortly.";
+        } else {
+          forgotEmailError.textContent = msg || "Failed to send code. Please try again.";
+        }
+        forgotEmailError.classList.remove("hidden");
       }
     } finally {
-      if (btnSendReset) { btnSendReset.textContent = originalText; btnSendReset.style.pointerEvents = "all"; }
+      if (btn) { btn.textContent = orig; btn.style.pointerEvents = "all"; }
     }
   });
 }
+
+// ---- Forgot Step 2: Verify OTP ----
+if (formForgotOtp) {
+  if (inputForgotOtp) {
+    inputForgotOtp.addEventListener("input", () => {
+      if (forgotOtpError) { forgotOtpError.classList.add("hidden"); forgotOtpError.textContent = ""; }
+    });
+  }
+
+  formForgotOtp.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (forgotOtpError) { forgotOtpError.classList.add("hidden"); forgotOtpError.textContent = ""; }
+
+    const code = inputForgotOtp ? inputForgotOtp.value.trim() : "";
+    if (!code) return;
+
+    const btn = document.getElementById("btn-verify-reset-otp");
+    const orig = btn ? btn.textContent : "Verify Code";
+    if (btn) { btn.textContent = "Verifying..."; btn.style.pointerEvents = "none"; }
+
+    try {
+      await verifyPasswordResetOtp(forgotPendingEmail, code);
+      // OTP verified — session is now active, move to set-password step
+      if (inputResetNewPassword) inputResetNewPassword.value = "";
+      if (inputResetConfirmPassword) inputResetConfirmPassword.value = "";
+      if (forgotPasswordError) { forgotPasswordError.classList.add("hidden"); forgotPasswordError.textContent = ""; }
+      showForgotStep("forgot-step-password");
+    } catch (err) {
+      console.error(err);
+      if (forgotOtpError) {
+        forgotOtpError.textContent = "Invalid or expired code. Please try again.";
+        forgotOtpError.classList.remove("hidden");
+      }
+    } finally {
+      if (btn) { btn.textContent = orig; btn.style.pointerEvents = "all"; }
+    }
+  });
+}
+
+// ---- Forgot Step 3: Set New Password ----
+if (formForgotNewPassword) {
+  [inputResetNewPassword, inputResetConfirmPassword].forEach(input => {
+    if (input) {
+      input.addEventListener("input", () => {
+        if (forgotPasswordError) { forgotPasswordError.classList.add("hidden"); forgotPasswordError.textContent = ""; }
+      });
+    }
+  });
+
+  formForgotNewPassword.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (forgotPasswordError) { forgotPasswordError.classList.add("hidden"); forgotPasswordError.textContent = ""; }
+
+    const password = inputResetNewPassword ? inputResetNewPassword.value : "";
+    const confirm  = inputResetConfirmPassword ? inputResetConfirmPassword.value : "";
+
+    if (!password || !confirm) {
+      if (forgotPasswordError) { forgotPasswordError.textContent = "Please fill in both fields."; forgotPasswordError.classList.remove("hidden"); }
+      return;
+    }
+    if (password.length < 6) {
+      if (forgotPasswordError) { forgotPasswordError.textContent = "Password must be at least 6 characters."; forgotPasswordError.classList.remove("hidden"); }
+      return;
+    }
+    if (password !== confirm) {
+      if (forgotPasswordError) { forgotPasswordError.textContent = "Passwords don't match."; forgotPasswordError.classList.remove("hidden"); }
+      return;
+    }
+
+    const btn = document.getElementById("btn-set-new-password");
+    const orig = btn ? btn.textContent : "Update Password & Sign In";
+    if (btn) { btn.textContent = "Updating..."; btn.style.pointerEvents = "none"; }
+
+    try {
+      await updateUserPassword(password);
+      sessionStorage.removeItem('password_setup_pending');
+      // Session is already active from OTP verification — go straight to dashboard
+      window.location.href = "dashboard.html";
+    } catch (err) {
+      console.error(err);
+      if (forgotPasswordError) {
+        forgotPasswordError.textContent = err.message || "Failed to update password. Please try again.";
+        forgotPasswordError.classList.remove("hidden");
+      }
+      if (btn) { btn.textContent = orig; btn.style.pointerEvents = "all"; }
+    }
+  });
+}
+
 
 if (formSignin) {
   formSignin.addEventListener("submit", async (e) => {
