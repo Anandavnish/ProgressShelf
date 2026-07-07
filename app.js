@@ -6528,9 +6528,21 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.0 (Latest)",
-    date: "July 2, 2026",
+    version: "v4.1 (Latest)",
+    date: "July 7, 2026",
     isLatest: true,
+    title: "Demo Card Rendering Fixes",
+    content: `
+### Bug Fixes
+* Fixed drain-border elapsed time calculation for demo cards by ensuring createdAt is backdated correctly
+* Fixed Quick Notes text overlap on demo cards by deferring syncRowHeights until fonts are ready
+* Improved drain-border fallback logic to use correctly backdated timestamps
+`
+  },
+  {
+    version: "v4.0",
+    date: "July 2, 2026",
+    isLatest: false,
     title: "Supabase Integration, FMC Sync & Controls Dashboard",
     content: `
 ### Backend Migration
@@ -6657,6 +6669,7 @@ function closeTerracePage(isPopState = false) {
 // ==========================================
 
 async function generateDemoCards() {
+  await document.fonts.ready;
   const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
   const now = Date.now();
 
@@ -6685,6 +6698,7 @@ async function generateDemoCards() {
       targetSmallest: 450,
       currentSmallest: 180, // ~40% progress
       completed: false,
+      createdAt: dsaCreated,
       deadlineAt: dsaDeadline,
       deadlineSetAt: dsaCreated,
       notifyAt: dsaNotifyAt,
@@ -6702,6 +6716,7 @@ async function generateDemoCards() {
         { text: "Revise before quiz", done: false }
       ],
       completed: false,
+      createdAt: weeklyCreated,
       deadlineAt: weeklyDeadline,
       deadlineSetAt: weeklyCreated
     },
@@ -6716,6 +6731,7 @@ async function generateDemoCards() {
         { text: "Try solo travel once", done: false }
       ],
       completed: false,
+      createdAt: bucketCreated,
       deadlineAt: bucketDeadline,
       deadlineSetAt: bucketCreated
     },
@@ -6723,7 +6739,6 @@ async function generateDemoCards() {
       title: "Placement Prep Thoughts",
       type: "note",
       text: `Feeling a bit all over the place with placement prep lately. Some days I feel ready, some days not at all.
-
 Things that are actually working:
 - Solving *one* new problem daily > cramming
 - Talking through concepts out loud with roommates
