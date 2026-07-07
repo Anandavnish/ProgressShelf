@@ -1306,6 +1306,8 @@ function updateCardElement(card, bar) {
           if (editModeActive) {
             e.preventDefault();
             e.target.checked = !e.target.checked; // Revert the checkbox
+            // Manually trigger card selection since stopPropagation prevents bubble-up
+            toggleCardSelection(card);
             return;
           }
           
@@ -1848,8 +1850,11 @@ function createCardElement(bar) {
   if (showMoreBtn) {
     showMoreBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      // STRICT EDIT MODE: Block expand/collapse in edit mode - only select/deselect allowed
-      if (editModeActive) return;
+      // STRICT EDIT MODE: Block expand/collapse in edit mode - trigger selection instead
+      if (editModeActive) {
+        toggleCardSelection(card);
+        return;
+      }
       const currentBar = card._barData;
       expandCard(card, currentBar);
     });
@@ -1860,8 +1865,11 @@ function createCardElement(bar) {
   if (showLessBtn) {
     showLessBtn.addEventListener("click", (e) => {
       e.stopPropagation(); // Stop click from bubbling up to the card
-      // STRICT EDIT MODE: Block expand/collapse in edit mode - only select/deselect allowed
-      if (editModeActive) return;
+      // STRICT EDIT MODE: Block expand/collapse in edit mode - trigger selection instead
+      if (editModeActive) {
+        toggleCardSelection(card);
+        return;
+      }
       collapseCard(card);
     });
   }
@@ -6545,9 +6553,25 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.1 (Latest)",
+    version: "v4.2 (Latest)",
     date: "July 7, 2026",
     isLatest: true,
+    title: "Edit Mode UX & SW Cache Fix",
+    content: `
+### Bug Fixes
+* Fixed click propagation in edit mode - tapping checkboxes/expand buttons now triggers card selection
+* Fixed service worker cache serving old version - bumped version to force SW refresh
+* Improved edit mode interaction - sensitive areas now properly select/deselect cards instead of being blocked
+
+### UX Improvements
+* Edit mode now responds to all touch/click areas on cards for selection
+* Prevents accidental card modifications while in batch delete mode
+`
+  },
+  {
+    version: "v4.1",
+    date: "July 7, 2026",
+    isLatest: false,
     title: "Demo Card Rendering Fixes",
     content: `
 ### Bug Fixes

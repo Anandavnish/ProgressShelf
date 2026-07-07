@@ -7,7 +7,7 @@
   &nbsp;•&nbsp;
   <a href="https://github.com/Anandavnish/ProgressShelf">GitHub Repo</a>
   &nbsp;•&nbsp;
-  <img src="https://img.shields.io/badge/version-v4.1-38BDF8?style=flat-square" alt="v4.1"/>
+  <img src="https://img.shields.io/badge/version-v4.2-38BDF8?style=flat-square" alt="v4.2"/>
   &nbsp;•&nbsp;
   <img src="https://img.shields.io/badge/license-MIT-4ADE80?style=flat-square" alt="MIT"/>
 </p>
