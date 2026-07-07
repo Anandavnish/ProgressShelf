@@ -1,6 +1,6 @@
 // login.js
 import { isConfigured } from "./supabase-config.js";
-import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp } from "./auth.js";
+import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp, isGuestMode } from "./auth.js";
 
 const configBanner = document.getElementById("config-banner");
 const googleLoginBtn = document.getElementById("btn-google-login");
@@ -9,10 +9,24 @@ const errorMsg = document.getElementById("error-message");
 
 // Initialize Auth listener to redirect if user is already logged in
 if (isConfigured) {
-  initAuthProtection();
+  initAuthProtection().then((user) => {
+    const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
+    if (!user && !isGuestMode()) {
+      document.body.classList.remove("auth-checking");
+      const logo = document.querySelector(".logo-svg-large");
+      if (logo) logo.classList.remove("logo-loading");
+    } else if (user && isPasswordSetupPending) {
+      document.body.classList.remove("auth-checking");
+      const logo = document.querySelector(".logo-svg-large");
+      if (logo) logo.classList.remove("logo-loading");
+    }
+  });
 } else {
   // Show setup warning if configuration file is missing/dummy
   configBanner.classList.remove("hidden");
+  document.body.classList.remove("auth-checking");
+  const logo = document.querySelector(".logo-svg-large");
+  if (logo) logo.classList.remove("logo-loading");
 }
 
 // Display any redirect errors

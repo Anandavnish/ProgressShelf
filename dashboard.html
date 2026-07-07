@@ -137,6 +137,7 @@
         <!-- User Profile Dropdown Container -->
         <div class="profile-menu-container">
           <button id="btn-profile-badge" class="profile-badge-btn" title="Account Menu">
+            <span id="profile-name" class="profile-name">Guest</span>
             <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
           </button>
         </div>
@@ -297,6 +298,18 @@
           </button>
         </div>
       </div>
+      
+      <div id="demo-banner" class="guest-banner demo-banner hidden" style="margin-top: 15px; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer; flex-grow: 1;" id="btn-trigger-demo-banner">
+          <span>👋 Start with a demo</span>
+        </div>
+        <button id="btn-dismiss-demo-banner" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: inline-flex; align-items: center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
 
       <!-- Grid Container -->
       <div id="cards-grid" class="cards-grid">
@@ -427,6 +440,7 @@
                       <ul>
                         <li>**text** / __text__ — bold</li>
                         <li>*text* / _text_ — italic</li>
+                        <li>~~text~~ — strikethrough</li>
                         <li>`code` — inline code</li>
                         <li>``` (on new line) — code block</li>
                         <li># Title / ## / ### — headers</li>
@@ -630,6 +644,7 @@
                       <ul>
                         <li>**text** / __text__ — bold</li>
                         <li>*text* / _text_ — italic</li>
+                        <li>~~text~~ — strikethrough</li>
                         <li>`code` — inline code</li>
                         <li>``` (on new line) — code block</li>
                         <li># Title / ## / ### — headers</li>
@@ -797,6 +812,7 @@
                     <ul>
                       <li>**text** / __text__ — bold</li>
                       <li>*text* / _text_ — italic</li>
+                      <li>~~text~~ — strikethrough</li>
                       <li>`code` — inline code</li>
                       <li>``` (on new line) — code block</li>
                       <li># Title / ## / ### — headers</li>
@@ -902,6 +918,13 @@
       What's New (Terrace)
     </button>
     <div class="dropdown-divider"></div>
+    <button id="btn-profile-try-demo" class="dropdown-item btn-try-demo hidden">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+      </svg>
+      Try the demo
+    </button>
+    <div id="profile-try-demo-divider" class="dropdown-divider hidden"></div>
     <button id="btn-logout" class="dropdown-item btn-logout">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">

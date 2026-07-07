@@ -1,5 +1,5 @@
 /* index.css */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
   --bg-color: #0D1117;
@@ -234,6 +234,11 @@ body {
   color: var(--text-muted);
   font-size: 1.1rem;
   margin-bottom: 40px;
+}
+
+/* Auth checking state to hide login options on load */
+.auth-checking .auth-options {
+  display: none !important;
 }
 
 /* Google Sign-In Button */
@@ -571,26 +576,38 @@ body {
 }
 
 .profile-badge-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
+  background-color: #0b0d10;
+  border: 1px solid #3d4145;
+  padding: 2px 2px 2px 12px;
   cursor: pointer;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
+  border-radius: 9999px;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  height: 32px;
 }
 
 .profile-badge-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.03);
+  border-color: var(--accent);
+  background-color: rgba(74, 144, 217, 0.05);
+}
+
+.profile-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-family: var(--font-family);
+  white-space: nowrap;
 }
 
 .user-avatar {
-  width: 38px;
-  height: 38px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  border: 2px solid var(--card-border);
+  border: 1px solid transparent;
   background-color: #1F242C;
   object-fit: cover;
   transition: border-color var(--transition-speed) ease;
@@ -598,6 +615,25 @@ body {
 
 .profile-badge-btn:hover .user-avatar {
   border-color: var(--accent);
+}
+
+/* Mobile responsive styling for the profile badge */
+@media (max-width: 600px) {
+  .profile-badge-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    height: auto !important;
+  }
+  .profile-name {
+    display: none !important;
+  }
+  .user-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    border: 2px solid var(--card-border) !important;
+  }
 }
 
 .profile-dropdown {
@@ -1884,6 +1920,21 @@ body {
   padding: 12px 24px;
 }
 
+.demo-banner {
+  background: var(--bg-card, #161b22) !important;
+  border: 1px solid var(--card-border, #30363d) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary, #fff) !important;
+  font-weight: 500 !important;
+  padding: 12px 16px !important;
+  margin-top: 12px !important;
+  margin-bottom: 16px !important;
+  box-sizing: border-box !important;
+}
+.demo-banner span:hover {
+  text-decoration: underline !important;
+}
+
 /* --- Card Actions (Edit / Delete) --- */
 .card-actions {
   position: absolute;
@@ -2809,6 +2860,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* --- Card Note styles --- */
 .card-note-text {
+  font-family: 'Lora', Georgia, serif !important;
   font-size: 0.92rem;
   line-height: 1.38;
   color: #c9d1d9;
@@ -2825,6 +2877,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   /* 4 lines approx */
   transition: max-height 0.35s ease;
   flex-grow: 1;
+}
+
+.card-note-text a {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+.card-note-text a:hover {
+  filter: brightness(1.2);
 }
 
 .card-progress.expanded .card-note-text {
@@ -3673,7 +3735,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   height: 405px !important;
   min-height: 405px !important;
   max-height: 405px !important;
-  font-family: var(--font-family) !important;
+  font-family: 'Lora', Georgia, serif !important;
   font-size: 0.95rem !important;
   line-height: 1.6 !important;
   padding: 10px 14px !important;
@@ -3787,6 +3849,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   padding: 2px 4px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+}
+
+/* Strikethrough style inside Editor */
+.note-editor-contenteditable .note-strikethrough {
+  text-decoration: line-through;
 }
 
 .note-editor-contenteditable .note-code-block {

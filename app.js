@@ -208,6 +208,141 @@ function hasActiveNotification(bar) {
   return false;
 }
 
+// ==========================================
+// Notification Health Status System
+// ==========================================
+
+/**
+ * Async notification health check.
+ * Returns: { status: 'healthy'|'red', reason: null|'guest'|'perm'|'token' }
+ * Guest check always short-circuits — never proceeds to perm or token checks.
+ * Only called at: load, visibilitychange, and 3-min interval.
+ * @param {string|null} uid
+ */
+async function getNotificationHealthStatus(uid) {
+  // Step 1: Guest mode — short-circuit, no further checks ever run for guests
+  if (isGuestMode()) {
+    return { status: 'red', reason: 'guest' };
+  }
+  // Step 2: Browser permission (synchronous — free)
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    return { status: 'red', reason: 'perm' };
+  }
+  // Step 3: Token validity via Supabase (async)
+  const localToken = localStorage.getItem('ps_fcm_token');
+  if (!localToken) {
+    return { status: 'red', reason: 'token' };
+  }
+  const tokenValid = await checkFCMTokenExists(uid, localToken);
+  if (!tokenValid) {
+    return { status: 'red', reason: 'token' };
+  }
+  // All checks passed
+  return { status: 'healthy', reason: null };
+}
+
+/**
+ * Applies bell health state to a single bell element.
+ * Handles color, title, cursor, and click handler attachment.
+ * @param {Element} bell - The .active-notification-bell element
+ * @param {{ status: string, reason: string|null }|null} health
+ */
+function applyBellHealth(bell, health) {
+  if (!bell) return;
+  const isHealthy = !health || health.status === 'healthy';
+  bell.style.color = isHealthy ? 'var(--warning)' : 'var(--error, #f85149)';
+  bell.title = isHealthy
+    ? 'Notification active'
+    : (health.reason === 'guest'
+        ? 'Sign in to receive notifications'
+        : health.reason === 'perm'
+          ? 'Notifications are blocked — tap to enable'
+          : 'Notification setup issue — tap to retry');
+  bell.style.cursor = isHealthy ? 'help' : 'pointer';
+
+  // Clone to remove any previous click listener, then re-attach if unhealthy
+  const fresh = bell.cloneNode(true);
+  bell.parentNode.replaceChild(fresh, bell);
+  if (!isHealthy) {
+    fresh.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleBellRedClick(health.reason);
+    });
+  }
+  return fresh;
+}
+
+/**
+ * Updates ALL active-notification-bell elements in the DOM
+ * to reflect the given health state. Safe to call with null (leaves bells yellow).
+ * @param {{ status: string, reason: string|null }|null} health
+ */
+function refreshAllBellStates(health) {
+  document.querySelectorAll('.active-notification-bell').forEach(bell => {
+    applyBellHealth(bell, health);
+  });
+}
+
+/**
+ * Handles click on a red bell based on the failure reason.
+ * @param {'guest'|'perm'|'token'} reason
+ */
+function handleBellRedClick(reason) {
+  if (reason === 'guest') {
+    showToast("Sign in to receive notifications — guest sessions can't receive push alerts.", 'info', 6000);
+    const guestBannerBtn = document.querySelector('.btn-banner-login');
+    if (guestBannerBtn) guestBannerBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (reason === 'perm') {
+    showToast('Enable notifications in your browser to get alerts for this deadline.', 'info', 5000);
+    Notification.requestPermission().then(async (result) => {
+      if (result === 'granted' && currentUser && currentUser.uid) {
+        await handleFCMSession(currentUser.uid);
+      }
+      if (currentUser && currentUser.uid) {
+        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+        refreshAllBellStates(cachedBellHealth);
+      }
+    });
+  } else if (reason === 'token') {
+    showToast("Something's off with your notification setup — retrying…", 'info', 3000);
+    if (currentUser && currentUser.uid) {
+      silentFCMReregister(currentUser.uid).then(async (success) => {
+        if (!success) {
+          showToast('Could not re-register for notifications. Try again later.', 'error');
+        }
+        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+        refreshAllBellStates(cachedBellHealth);
+      });
+    }
+  }
+}
+
+/**
+ * Silently obtains a new FCM token and saves it.
+ * Does NOT call Notification.requestPermission().
+ * Only call when permission is already 'granted'.
+ * @param {string} uid
+ * @returns {Promise<boolean>} true if re-registration succeeded.
+ */
+async function silentFCMReregister(uid) {
+  try {
+    if (!messaging) return false;
+    const registration = await navigator.serviceWorker.ready;
+    const token = await getToken(messaging, {
+      vapidKey: FCM_VAPID_KEY,
+      serviceWorkerRegistration: registration
+    });
+    if (token) {
+      await saveFCMToken(uid, token);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('[Bell] Silent FCM re-registration failed:', err);
+    return false;
+  }
+}
+
 function applyDeadlineTick(barEl) {
   const deadlineMs = Number(barEl.dataset.deadlineMs);
   const deadlineSetMs = Number(barEl.dataset.deadlineSetMs);
@@ -325,6 +460,9 @@ let isSearchActiveHistoryPushed = false;
 let deferredPrompt = null;
 let isPopStateExit = false;
 let lastInteractionCardId = null;
+// Cached result of the last async notification health check.
+// null = check hasn't run yet (bells default to yellow/neutral).
+let cachedBellHealth = null;
 
 // Tracks bar IDs with an in-flight local write, so our own realtime echo
 // doesn't trigger a redundant full checklist rebuild mid-interaction.
@@ -435,7 +573,14 @@ function parseMarkdown(text) {
     // Escape standard line
     let parsedLine = escapeHtml(line);
     
+    // Auto-link URLs starting with http://, https://, or www. (preceded by line start or whitespace)
+    parsedLine = parsedLine.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
+      const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
+    });
+    
     // Formatting: Bold, Italic, Inline Code
+    parsedLine = parsedLine.replace(/~~(.*?)~~/g, '<del>$1</del>');
     parsedLine = parsedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     parsedLine = parsedLine.replace(/__(.*?)__/g, '<strong>$1</strong>');
     parsedLine = parsedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -471,6 +616,11 @@ function parseMarkdown(text) {
         inList = 'ul';
       }
       let content = escapeHtml(bulletMatch[2]);
+      content = content.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
+        const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
+      });
+      content = content.replace(/~~(.*?)~~/g, '<del>$1</del>');
       content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -490,6 +640,11 @@ function parseMarkdown(text) {
         inList = 'ol';
       }
       let content = escapeHtml(numberMatch[3]);
+      content = content.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
+        const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
+      });
+      content = content.replace(/~~(.*?)~~/g, '<del>$1</del>');
       content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -1704,6 +1859,18 @@ function createCardElement(bar) {
     attachDeadlineBorder(card, bar);
   }
 
+  // Apply current notification health state to this card's bell immediately.
+  // createCard() returns the card before it's appended to the DOM, so we
+  // target card.querySelector directly (not document.querySelectorAll).
+  // If cachedBellHealth is null (check hasn't resolved yet), skip —
+  // the bell stays yellow until the first scheduled check finishes.
+  if (cachedBellHealth) {
+    const bell = card.querySelector('.active-notification-bell');
+    if (bell) {
+      applyBellHealth(bell, cachedBellHealth);
+    }
+  }
+
   return card;
 }
 
@@ -1847,6 +2014,7 @@ function renderDashboard(bars) {
 
   syncRowHeights();
   syncFabVisibility();
+  evaluateDemoBannerAndDropdownState();
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes
@@ -1928,6 +2096,12 @@ setInterval(() => {
               </svg>
             `;
             labelEl.appendChild(bellSpan);
+            // Apply current health state immediately after creation — avoids
+            // waiting up to 3 min for the next scheduled check.
+            // If cachedBellHealth is null (check hasn't run yet), leave yellow.
+            if (cachedBellHealth) {
+              applyBellHealth(bellSpan, cachedBellHealth);
+            }
           }
         } else {
           bellSpan?.remove();
@@ -3960,18 +4134,34 @@ async function migrateGuestBarsToSupabase(uid) {
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
       failCount++;
+      bar._migrationRetryCount = (bar._migrationRetryCount || 0) + 1;
       failedBars.push(bar);
     }
   }
 
   if (failCount > 0) {
-    // Restore failed bars to localStorage
-    localStorage.setItem('progress_shelf_bars', JSON.stringify(failedBars));
-    sessionStorage.setItem('guest_mode', 'true');
-    showToast(
-      `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
-      "error"
-    );
+    const finalFailures = failedBars.filter(b => b._migrationRetryCount >= 3);
+    const retryableFailures = failedBars.filter(b => b._migrationRetryCount < 3);
+
+    // Persist all failures to failed key
+    localStorage.setItem('progress_shelf_failed_migration_bars', JSON.stringify(failedBars));
+
+    if (retryableFailures.length > 0) {
+      const titles = retryableFailures.map(b => `"${b.title}"`).join(', ');
+      showToast(
+        `Failed to sync: ${titles}. Local data is preserved. Will retry on next load.`,
+        "error",
+        8000
+      );
+    }
+    if (finalFailures.length > 0) {
+      const titles = finalFailures.map(b => `"${b.title}"`).join(', ');
+      showToast(
+        `Sync failed after multiple attempts: ${titles}. Manual attention or re-login needed.`,
+        "error",
+        10000
+      );
+    }
   }
 
   migrationInProgress = false;
@@ -4440,6 +4630,34 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
+  // Silent auto-migration if guest logs in or has local bars
+  const failedMigrationBars = (() => {
+    try {
+      const data = localStorage.getItem('progress_shelf_failed_migration_bars');
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
+  })();
+  if (failedMigrationBars.length > 0) {
+    const toRetry = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) < 3);
+    const toKeepInBackup = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) >= 3);
+
+    if (toRetry.length > 0) {
+      // Put retryable cards back into the active migration queue
+      const currentLocal = getLocalBars();
+      const combined = [...currentLocal, ...toRetry];
+      localStorage.setItem('progress_shelf_bars', JSON.stringify(combined));
+      
+      // Update failed key to only hold the ones we aren't retrying
+      if (toKeepInBackup.length > 0) {
+        localStorage.setItem('progress_shelf_failed_migration_bars', JSON.stringify(toKeepInBackup));
+      } else {
+        localStorage.removeItem('progress_shelf_failed_migration_bars');
+      }
+    }
+  }
+
   const localBars = getLocalBars();
   const hasLocalBars = localBars && localBars.length > 0;
 
@@ -4471,28 +4689,44 @@ initAuthProtection(async (user) => {
             await handleFCMSession(user.uid);
           }
         }
+        // Run full bell health check after token verification resolves
+        cachedBellHealth = await getNotificationHealthStatus(user.uid);
+        refreshAllBellStates(cachedBellHealth);
       }).catch(err => console.error("Error verifying FCM token on load:", err));
     } else {
       if (Notification.permission === "granted") {
         console.log("No FCM token found locally, but permission is granted. Registering fresh token...");
         handleFCMSession(user.uid);
       }
+      // Run full bell health check even when no local token was found
+      cachedBellHealth = await getNotificationHealthStatus(user.uid);
+      refreshAllBellStates(cachedBellHealth);
     }
 
-    // Periodically re-sync FCM token every 3 minutes while app is active
+    // Periodically re-sync FCM token and bell health every 3 minutes
     setInterval(async () => {
       if (currentUser && currentUser.uid && !isGuestMode() && Notification.permission === 'granted') {
         await handleFCMSession(currentUser.uid);
       }
+      if (currentUser && currentUser.uid) {
+        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+        refreshAllBellStates(cachedBellHealth);
+      }
     }, 3 * 60 * 1000);
+  } else if (isGuestMode()) {
+    // Guest users: immediately set red health so bells render correctly on load
+    cachedBellHealth = { status: 'red', reason: 'guest' };
+    refreshAllBellStates(cachedBellHealth);
   }
 
-  // Token re-sync on app foreground
+  // Token re-sync and bell health check on tab/PWA foreground
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser && currentUser.uid && !isGuestMode()) {
       if (Notification.permission === 'granted') {
         await handleFCMSession(currentUser.uid);
       }
+      cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+      refreshAllBellStates(cachedBellHealth);
     }
   });
 
@@ -4533,6 +4767,8 @@ initAuthProtection(async (user) => {
   }
 
   // Render profile info
+  const profileName = document.getElementById("profile-name");
+  let firstName = "Guest";
   if (isGuestMode()) {
     userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = "Guest User";
@@ -4540,7 +4776,13 @@ initAuthProtection(async (user) => {
   } else {
     userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = user.displayName || "Tracker User";
+    if (user.displayName) {
+      firstName = user.displayName.trim().split(/\s+/)[0];
+    }
     if (userStatus) userStatus.textContent = "Signed In (Cloud)";
+  }
+  if (profileName) {
+    profileName.textContent = firstName;
   }
 
   // Show application content, hide splash screen
@@ -5147,6 +5389,9 @@ function formatInlineStyles(text) {
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="note-bold"><span class="markdown-syntax">**</span>$1<span class="markdown-syntax">**</span></strong>');
   html = html.replace(/__(.*?)__/g, '<strong class="note-bold"><span class="markdown-syntax">__</span>$1<span class="markdown-syntax">__</span></strong>');
   
+  // Strikethrough: ~~text~~
+  html = html.replace(/~~(.*?)~~/g, '<del class="note-strikethrough"><span class="markdown-syntax">~~</span>$1<span class="markdown-syntax">~~</span></del>');
+  
   // Italic: *text* or _text_
   html = html.replace(/\*(.*?)\*/g, '<em class="note-italic"><span class="markdown-syntax">*</span>$1<span class="markdown-syntax">*</span></em>');
   html = html.replace(/_(.*?)_/g, '<em class="note-italic"><span class="markdown-syntax">_</span>$1<span class="markdown-syntax">_</span></em>');
@@ -5573,6 +5818,31 @@ function setupContenteditableEditor(editor, counterId) {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
+
+    const hasNewline = text.includes('\n') || text.includes('\r');
+    if (!hasNewline) {
+      // Inline paste: insert text node at current caret position without displacing active blocks
+      range.deleteContents();
+      const textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+
+      // Move caret directly after the pasted content
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      // Apply live formatting to the active line node
+      let node = textNode.parentNode;
+      while (node && node.parentElement !== editor) {
+        node = node.parentNode;
+      }
+      if (node && node.nodeType === Node.ELEMENT_NODE) {
+        formatLineNode(node, editor);
+      }
+      updateCounter();
+      return;
+    }
 
     const lines = text.split('\n');
     const fragment = document.createDocumentFragment();
@@ -6381,6 +6651,167 @@ function closeTerracePage(isPopState = false) {
     window.history.back();
   }
 }
+
+// ==========================================
+// Demo Cards Banner & Recovery System
+// ==========================================
+
+async function generateDemoCards() {
+  const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+  const now = Date.now();
+
+  const dsaDuration = 60 * 24 * 60 * 60 * 1000; // 60 days
+  const dsaElapsed = 0.75;
+  const dsaCreated = now - (dsaElapsed * dsaDuration);
+  const dsaDeadline = dsaCreated + dsaDuration;
+  const dsaNotifyAt = dsaCreated + (0.80 * dsaDuration); // Remind at 20% remaining
+
+  const weeklyDuration = 30 * 24 * 60 * 60 * 1000; // 30 days
+  const weeklyElapsed = 0.50;
+  const weeklyCreated = now - (weeklyElapsed * weeklyDuration);
+  const weeklyDeadline = weeklyCreated + weeklyDuration;
+
+  const bucketDuration = 30 * 24 * 60 * 60 * 1000;
+  const bucketElapsed = 0.50;
+  const bucketCreated = now - (bucketElapsed * bucketDuration);
+  const bucketDeadline = bucketCreated + bucketDuration;
+
+  const demoTrackers = [
+    {
+      title: "DSA Sheet — 450 Qns",
+      type: "goal",
+      preset: "Problems",
+      levels: [{ name: "Problems", conversionToNext: null }],
+      targetSmallest: 450,
+      currentSmallest: 180, // ~40% progress
+      completed: false,
+      deadlineAt: dsaDeadline,
+      deadlineSetAt: dsaCreated,
+      notifyAt: dsaNotifyAt,
+      notifyPercent: 20,
+      alertAtDeadline: true
+    },
+    {
+      title: "Weekly Study Tasks",
+      type: "checklist",
+      items: [
+        { text: "Read assigned chapters", done: true },
+        { text: "Solve practice problems", done: true },
+        { text: "Attend doubt-clearing session", done: false },
+        { text: "Submit assignment", done: false },
+        { text: "Revise before quiz", done: false }
+      ],
+      completed: false,
+      deadlineAt: weeklyDeadline,
+      deadlineSetAt: weeklyCreated
+    },
+    {
+      title: "Bucket List",
+      type: "checklist",
+      items: [
+        { text: "Learn to swim", done: false },
+        { text: "Visit a hill station", done: false },
+        { text: "Read 12 books this year", done: true },
+        { text: "Learn basic guitar chords", done: false },
+        { text: "Try solo travel once", done: false }
+      ],
+      completed: false,
+      deadlineAt: bucketDeadline,
+      deadlineSetAt: bucketCreated
+    },
+    {
+      title: "Placement Prep Thoughts",
+      type: "note",
+      text: `Feeling a bit all over the place with placement prep lately. Some days I feel ready, some days not at all.
+
+Things that are actually working:
+- Solving *one* new problem daily > cramming
+- Talking through concepts out loud with roommates
+- Not comparing my pace with others' — **easier said than done**
+
+Saw a good breakdown of company-wise patterns here: www.geeksforgeeks.org — need to revisit this before mocks.
+
+Reminder to future me: you're doing more than you think you are.`,
+      completed: false
+    }
+  ];
+
+  showToast("Generating demo trackers...", "info");
+  for (const tracker of demoTrackers) {
+    try {
+      await createBar(uid, tracker);
+    } catch (err) {
+      console.error("Failed to create demo card:", err);
+    }
+  }
+  showToast("Demo trackers added successfully!", "success");
+  
+  localStorage.setItem("ps_demo_banner_dismissed", "true");
+  localStorage.setItem("ps_demo_used", "true");
+  evaluateDemoBannerAndDropdownState();
+}
+
+function evaluateDemoBannerAndDropdownState() {
+  const count = currentBars ? currentBars.length : 0;
+  const dismissed = localStorage.getItem("ps_demo_banner_dismissed") === "true";
+  const used = localStorage.getItem("ps_demo_used") === "true";
+
+  const demoBanner = document.getElementById("demo-banner");
+  const tryDemoBtn = document.getElementById("btn-profile-try-demo");
+  const tryDemoDiv = document.getElementById("profile-try-demo-divider");
+
+  // Banner visibility: visible if not dismissed, not used, and 0 cards
+  if (demoBanner) {
+    if (!dismissed && !used && count === 0) {
+      demoBanner.classList.remove("hidden");
+    } else {
+      demoBanner.classList.add("hidden");
+    }
+  }
+
+  // Profile option visibility: visible if dismissed, not used, and 0 cards
+  if (tryDemoBtn && tryDemoDiv) {
+    if (dismissed && !used && count === 0) {
+      tryDemoBtn.classList.remove("hidden");
+      tryDemoDiv.classList.remove("hidden");
+    } else {
+      tryDemoBtn.classList.add("hidden");
+      tryDemoDiv.classList.add("hidden");
+    }
+  }
+}
+
+// Bind demo banner & profile menu handlers
+const setupDemoHandlers = () => {
+  const btnTrigger = document.getElementById("btn-trigger-demo-banner");
+  const btnDismiss = document.getElementById("btn-dismiss-demo-banner");
+  const btnProfileTry = document.getElementById("btn-profile-try-demo");
+
+  if (btnTrigger) {
+    btnTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      generateDemoCards();
+    });
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", (e) => {
+      e.stopPropagation();
+      localStorage.setItem("ps_demo_banner_dismissed", "true");
+      evaluateDemoBannerAndDropdownState();
+      showToast("Demo banner dismissed. You can try the demo anytime from the profile dropdown menu.", "info", 5000);
+    });
+  }
+
+  if (btnProfileTry) {
+    btnProfileTry.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (profileDropdown) profileDropdown.classList.remove("active");
+      generateDemoCards();
+    });
+  }
+};
+setupDemoHandlers();
 
 // Bind Terrace event triggers
 const setupTerracePage = () => {

@@ -244,16 +244,21 @@ export function initAuthProtection(onUserActive) {
         window.location.href = "index.html";
       }
     }
-    return;
+    return Promise.resolve(null);
   }
 
   // Check initial session state
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  return supabase.auth.getSession().then(({ data: { session } }) => {
     const user = session ? mapSupabaseUser(session.user) : null;
     const isGuest = isGuestMode();
     const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
     if (user) {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then((granted) => {
+          console.log('[Auth] Persistent storage granted:', granted);
+        });
+      }
       if (!isDashboard && !isPasswordSetupPending) {
         window.location.href = "dashboard.html";
       } else if (onUserActive) {
@@ -285,6 +290,11 @@ export function initAuthProtection(onUserActive) {
           window.location.href = "index.html";
         }
       } else if (event === 'SIGNED_IN') {
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persist().then((granted) => {
+            console.log('[Auth] Persistent storage granted:', granted);
+          });
+        }
         if (!isDashboard && !isPasswordSetupPending) {
           window.location.href = "dashboard.html";
         } else if (onUserActive && user) {
@@ -292,6 +302,8 @@ export function initAuthProtection(onUserActive) {
         }
       }
     });
+
+    return user;
   });
 }
 
