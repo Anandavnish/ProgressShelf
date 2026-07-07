@@ -250,7 +250,7 @@ async function getNotificationHealthStatus(uid) {
 function applyBellHealth(bell, health) {
   if (!bell) return;
   const isHealthy = !health || health.status === 'healthy';
-  bell.style.color = isHealthy ? 'var(--warning)' : 'var(--error, #f85149)';
+  bell.style.color = isHealthy ? 'var(--warning)' : 'var(--error, var(--deadline-overdue-color))';
   bell.title = isHealthy
     ? 'Notification active'
     : (health.reason === 'guest'
@@ -359,7 +359,7 @@ function applyDeadlineTick(barEl) {
   barEl.setAttribute('stroke-dashoffset', perimeter - (perimeter * percentLeft / 100));
 
   if (timeLeft <= 0) {
-    barEl.setAttribute('stroke', '#E74C3C');
+    barEl.setAttribute('stroke', 'var(--deadline-overdue-color)');
     barEl.classList.add('deadline-overdue');
   } else {
     barEl.setAttribute('stroke', `hsl(${percentLeft * 1.2}, 90%, 48%)`);
@@ -401,7 +401,7 @@ function resizeDeadlineSVG(card, barEl, trackEl) {
     el.setAttribute('fill', 'none');
   });
 
-  trackEl.setAttribute('stroke', 'rgba(255,255,255,0.07)');
+  trackEl.setAttribute('stroke', 'var(--deadline-track-color)');
   trackEl.setAttribute('stroke-width', strokeWidth);
   barEl.setAttribute('stroke-width', strokeWidth);
   barEl.setAttribute('stroke-linecap', 'round');
@@ -4777,7 +4777,7 @@ initAuthProtection(async (user) => {
       const banner = document.createElement("div");
       banner.id = "sandbox-banner";
       banner.className = "config-warning-banner";
-      banner.style.backgroundColor = "rgba(74, 144, 217, 0.1)";
+      banner.style.backgroundColor = "var(--sandbox-banner-bg)";
       banner.style.color = "var(--accent)";
       banner.style.borderBottom = "1px solid var(--card-border)";
       banner.innerHTML = `<span>ℹ️ <strong>Sandbox Mode:</strong> Running locally. Update <code>supabase-config.js</code> with your project credentials to connect Supabase.</span>`;
