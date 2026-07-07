@@ -1302,6 +1302,13 @@ function updateCardElement(card, bar) {
           });
 
           checkbox.addEventListener("change", async (e) => {
+          // STRICT EDIT MODE: Prevent checklist updates when in edit mode - only select/deselect allowed
+          if (editModeActive) {
+            e.preventDefault();
+            e.target.checked = !e.target.checked; // Revert the checkbox
+            return;
+          }
+          
           const isChecked = e.target.checked;
           const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
           const originalItemsBackup = JSON.parse(JSON.stringify(bar.items || []));
@@ -1841,6 +1848,8 @@ function createCardElement(bar) {
   if (showMoreBtn) {
     showMoreBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      // STRICT EDIT MODE: Block expand/collapse in edit mode - only select/deselect allowed
+      if (editModeActive) return;
       const currentBar = card._barData;
       expandCard(card, currentBar);
     });
@@ -1851,6 +1860,8 @@ function createCardElement(bar) {
   if (showLessBtn) {
     showLessBtn.addEventListener("click", (e) => {
       e.stopPropagation(); // Stop click from bubbling up to the card
+      // STRICT EDIT MODE: Block expand/collapse in edit mode - only select/deselect allowed
+      if (editModeActive) return;
       collapseCard(card);
     });
   }
@@ -6026,7 +6037,13 @@ function toggleCardSelection(card) {
 function updateDeleteSelectedButton() {
   const btn = document.getElementById("btn-delete-selected");
   if (btn) {
-    btn.textContent = `Delete Selected (${selectedBarIds.size})`;
+    if (selectedBarIds.size === 0) {
+      btn.textContent = "Tap to select";
+      btn.classList.add("disabled");
+    } else {
+      btn.textContent = `Delete Selected (${selectedBarIds.size})`;
+      btn.classList.remove("disabled");
+    }
     btn.classList.add("hidden");
   }
 
@@ -6049,7 +6066,7 @@ function updateDeleteSelectedButton() {
     }
 
     if (selectedBarIds.size === 0) {
-      editContainer.innerHTML = `<span class="select-del-title">Select the card to del</span>`;
+      editContainer.innerHTML = `<span class="select-del-title">Tap to select</span>`;
       sortContainer.style.cursor = "default";
       sortContainer.onclick = null;
       sortContainer.classList.remove("danger-active");

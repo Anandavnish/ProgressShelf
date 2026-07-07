@@ -3444,6 +3444,21 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   transform: translateY(0);
 }
 
+.btn-delete-selected.disabled {
+  background-color: rgba(248, 81, 73, 0.08);
+  color: rgba(255, 123, 114, 0.5);
+  border-color: rgba(248, 81, 73, 0.15);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-delete-selected.disabled:hover {
+  background-color: rgba(248, 81, 73, 0.08);
+  color: rgba(255, 123, 114, 0.5);
+  border-color: rgba(248, 81, 73, 0.15);
+  transform: none;
+}
+
 /* Swap Sort selector with Bulk Delete button in Edit Mode */
 .dashboard-controls.edit-active .sort-container {
   display: none !important;
