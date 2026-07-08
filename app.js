@@ -889,17 +889,20 @@ function formatCardLabel(current, target, levels) {
 // Dashboard Stats Bar Calculation
 // ==========================================
 function isTrackerCompleted(bar) {
-  if (bar.completed !== undefined && bar.completed !== null) {
-    return !!bar.completed;
-  }
   const barType = bar.type || "goal";
-  if (barType === "goal") {
-    const percent = bar.targetSmallest > 0 ? (bar.currentSmallest / bar.targetSmallest) * 100 : 0;
-    return percent >= 100;
-  }
+  // Checklists: always derive live from items — the stored flag can be stale
+  // after a local checkbox toggle before the realtime echo arrives.
   if (barType === "checklist") {
     const items = bar.items || [];
     return items.length > 0 && items.every(item => item.done);
+  }
+  // Goals and notes: use the stored flag, then fall back to percent
+  if (bar.completed !== undefined && bar.completed !== null) {
+    return !!bar.completed;
+  }
+  if (barType === "goal") {
+    const percent = bar.targetSmallest > 0 ? (bar.currentSmallest / bar.targetSmallest) * 100 : 0;
+    return percent >= 100;
   }
   return false;
 }
@@ -1161,6 +1164,45 @@ function getHighlightedTitle(title, tokens) {
   });
 }
 
+// Patches only the completed-badge section of a checklist card DOM in-place.
+// Called by checkbox handlers so the local device sees the badge immediately,
+// without invoking updateCardElement (which rebuilds all checklist HTML and
+// re-attaches listeners, causing duplicate handlers and destroying the active node).
+function updateChecklistBadgeDom(card, isCompleted) {
+  let divider = card.querySelector(".card-divider");
+  let labelEl = card.querySelector(".card-deadline-label");
+
+  if (isCompleted) {
+    if (!divider) {
+      divider = document.createElement("hr");
+      divider.className = "card-divider";
+      card.appendChild(divider);
+    }
+    if (!labelEl) {
+      labelEl = document.createElement("div");
+      labelEl.className = "card-deadline-label";
+      labelEl.style.marginTop = "10px";
+      labelEl.style.fontSize = "0.8rem";
+      labelEl.style.color = "var(--text-muted)";
+      card.appendChild(labelEl);
+    }
+    labelEl.setAttribute("data-completed", "true");
+    labelEl.classList.remove("overdue");
+    labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
+  } else if (labelEl) {
+    // Un-completing: if no deadline exists, remove badge elements entirely;
+    // if a deadline exists, the next renderDashboard cycle will restore the timer.
+    const dMs = card._barData ? getDeadlineMs(card._barData) : null;
+    if (!dMs) {
+      divider?.remove();
+      labelEl.remove();
+    } else {
+      labelEl.setAttribute("data-completed", "false");
+      labelEl.querySelector(".badge-completed")?.remove();
+    }
+  }
+}
+
 function updateCardElement(card, bar) {
   card._barData = bar;
   const barType = bar.type || "goal";
@@ -1349,6 +1391,8 @@ function updateCardElement(card, bar) {
 
           // Update local memory and trigger immediate row height + visibility recalculation
           bar.items = updatedItems;
+          bar.completed = completed; // Keep stats/filter in sync; badge uses isTrackerCompleted(bar.items)
+          updateChecklistBadgeDom(card, completed);
           syncRowHeights();
 
           pendingLocalWrites.set(bar.id, (pendingLocalWrites.get(bar.id) || 0) + 1);
@@ -1764,6 +1808,8 @@ function createCardElement(bar) {
 
         // Update local memory and trigger immediate row height + visibility recalculation
         currentBar.items = updatedItems;
+        currentBar.completed = completed; // Keep stats/filter in sync; badge uses isTrackerCompleted(bar.items)
+        updateChecklistBadgeDom(card, completed);
         syncRowHeights();
 
         pendingLocalWrites.set(currentBar.id, (pendingLocalWrites.get(currentBar.id) || 0) + 1);
