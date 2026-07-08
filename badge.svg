@@ -1,0 +1,42 @@
+<svg viewBox="30 12 175 114" xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+  <!-- No background rect to keep it completely transparent -->
+  
+  <defs>
+    <!-- Mask definition to cut out the exclamation mark and checkmark symbols -->
+    <mask id="badgeMask">
+      <!-- Everything white is kept -->
+      <rect x="0" y="0" width="300" height="300" fill="#FFFFFF" />
+      
+      <!-- Cut out exclamation mark in red badge -->
+      <g transform="translate(116, 40)">
+        <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+      </g>
+      
+      <!-- Cut out checkmark in green badge -->
+      <g transform="translate(140, 20)">
+        <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7"
+              stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>
+    </mask>
+  </defs>
+
+  <!-- Shelf Base -->
+  <rect x="36" y="108" width="168" height="7" rx="3.5" fill="#FFFFFF"/>
+  <rect x="40" y="109" width="160" height="2"  rx="1"   fill="#FFFFFF" opacity="0.3"/>
+
+  <!-- Bars -->
+  <rect x="60"  y="90" width="16" height="16" rx="3" fill="#FFFFFF"/>
+  <rect x="84"  y="70" width="16" height="36" rx="3" fill="#FFFFFF"/>
+  <rect x="108" y="50" width="16" height="56" rx="3" fill="#FFFFFF"/>
+  <rect x="132" y="30" width="16" height="76" rx="3" fill="#FFFFFF"/>
+
+  <!-- Plus icon -->
+  <path d="M 166 90 v 14 m -7 -7 h 14"
+        stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round"/>
+
+  <!-- Apply mask to the badges to create transparent cutouts -->
+  <g mask="url(#badgeMask)">
+    <circle cx="116" cy="40" r="12" fill="#FFFFFF"/>
+    <circle cx="140" cy="20" r="14" fill="#FFFFFF"/>
+  </g>
+</svg>

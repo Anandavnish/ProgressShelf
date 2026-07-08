@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v150';
+const CACHE_NAME = 'progressshelf-cache-v151';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -13,6 +13,7 @@ const ASSETS_TO_CACHE = [
   'supabase-config.js',
   'favicon.svg',
   'logo.svg',
+  'badge.svg',
   'icon-192.png',
   'icon-512.png',
   'manifest.json'
@@ -125,12 +126,17 @@ self.addEventListener('push', event => {
       if (json.notification) {
         data.title = json.notification.title || data.title;
         data.body = json.notification.body || data.body;
-      } else if (json.data && json.data.title) {
-        data.title = json.data.title || data.title;
-        data.body = json.data.body || data.body;
-      } else if (json.title) {
+        data.icon = json.notification.icon || data.icon;
+      }
+      if (json.data) {
+        if (json.data.title) data.title = json.data.title;
+        if (json.data.body) data.body = json.data.body;
+        if (json.data.icon) data.icon = json.data.icon;
+      }
+      if (json.title) {
         data.title = json.title || data.title;
         data.body = json.body || data.body;
+        data.icon = json.icon || data.icon;
       }
       
       const tagVal = (json.data && json.data.tag) || json.tag;
@@ -141,8 +147,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/ProgressShelf/icon-192.png',
-      badge: '/ProgressShelf/favicon.svg',
+      icon: data.icon || '/ProgressShelf/icon-192.png',
+      badge: '/ProgressShelf/badge.svg',
       tag: data.tag || 'progressshelf-alert',
       renotify: true,
       requireInteraction: false,

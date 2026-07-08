@@ -130,6 +130,18 @@ Deno.serve(async (req) => {
 
       console.log(`Found ${tokenRows.length} registered tokens for user ${tracker.user_id}`);
 
+      // Fetch user profile picture
+      let userAvatarUrl = '';
+      try {
+        const { data: userData, error: userError } = await supabase.auth.admin.getUser(tracker.user_id);
+        if (!userError && userData && userData.user) {
+          const userMeta = userData.user.user_metadata || {};
+          userAvatarUrl = userMeta.avatar_url || userMeta.picture || '';
+        }
+      } catch (err) {
+        console.error(`Error fetching user profile for user ${tracker.user_id}:`, err);
+      }
+
       const dispatches = [];
       if (sendNotify) dispatches.push({ type: 'warning' });
       if (sendDeadline) dispatches.push({ type: 'deadline' });
@@ -194,7 +206,8 @@ Deno.serve(async (req) => {
                 title: titleText,
                 body: bodyText,
                 tag: `tracker-${tracker.id}`,
-                url: 'https://anandavnish.github.io/ProgressShelf/dashboard.html'
+                url: 'https://anandavnish.github.io/ProgressShelf/dashboard.html',
+                icon: userAvatarUrl || ''
               },
               android: {
                 priority: 'high'
