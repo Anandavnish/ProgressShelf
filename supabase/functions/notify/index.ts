@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
       // Fetch user profile picture
       let userAvatarUrl = '';
       try {
-        const { data: userData, error: userError } = await supabase.auth.admin.getUser(tracker.user_id);
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(tracker.user_id);
         if (!userError && userData && userData.user) {
           const userMeta = userData.user.user_metadata || {};
           userAvatarUrl = userMeta.avatar_url || userMeta.picture || '';

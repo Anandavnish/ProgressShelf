@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v151';
+const CACHE_NAME = 'progressshelf-cache-v152';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -13,7 +13,7 @@ const ASSETS_TO_CACHE = [
   'supabase-config.js',
   'favicon.svg',
   'logo.svg',
-  'badge.svg',
+  'badge.png',
   'icon-192.png',
   'icon-512.png',
   'manifest.json'
@@ -147,12 +147,12 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/ProgressShelf/icon-192.png',
-      badge: '/ProgressShelf/badge.svg',
+      icon: data.icon || 'icon-192.png',
+      badge: 'badge.png',
       tag: data.tag || 'progressshelf-alert',
       renotify: true,
       requireInteraction: false,
-      data: { url: '/ProgressShelf/dashboard.html' }
+      data: { url: 'dashboard.html' }
     })
   );
 });
