@@ -7123,6 +7123,10 @@ function initTheme() {
     }
     document.documentElement.classList.add(effectiveTheme === 'dark' ? 'dark-theme' : 'light-theme');
     updateToggleIcon(theme);
+    // Apply or clear accent color depending on effective theme
+    if (typeof window.applyAccentToTheme === 'function') {
+      window.applyAccentToTheme(effectiveTheme);
+    }
   };
 
   const updateToggleIcon = (theme) => {
@@ -7210,3 +7214,112 @@ function initTheme() {
 
 // Start Theme switcher
 initTheme();
+
+// ============================================================
+// Accent Color Picker  (light-mode only)
+// ============================================================
+function initAccentColor() {
+  const STORAGE_KEY = 'app-accent-color';
+
+  // Palette — name, value, derived glow color
+  const COLORS = [
+    { name: 'Forest Green',  value: '#048b15', glow: 'rgba(4,139,21,0.18)',    hover: '#036610' },
+    { name: 'Sky Blue',      value: '#1A73E8', glow: 'rgba(26,115,232,0.18)',  hover: '#1557B0' },
+    { name: 'Deep Purple',   value: '#7B1FA2', glow: 'rgba(123,31,162,0.18)', hover: '#6A1B8A' },
+    { name: 'Crimson',       value: '#C62828', glow: 'rgba(198,40,40,0.18)',   hover: '#B71C1C' },
+    { name: 'Teal',          value: '#00897B', glow: 'rgba(0,137,123,0.18)',   hover: '#00796B' },
+    { name: 'Amber',         value: '#E65100', glow: 'rgba(230,81,0,0.18)',    hover: '#BF360C' },
+    { name: 'Indigo',        value: '#3949AB', glow: 'rgba(57,73,171,0.18)',   hover: '#283593' },
+    { name: 'Rose',          value: '#C2185B', glow: 'rgba(194,24,91,0.18)',   hover: '#AD1457' },
+  ];
+
+  const DEFAULT_COLOR = COLORS[0]; // Forest Green
+
+  /**
+   * Resolve the effective light/dark state from the current HTML class.
+   */
+  function isLightActive() {
+    return document.documentElement.classList.contains('light-theme');
+  }
+
+  /**
+   * Apply a palette entry's color vars to :root inline styles.
+   * Only active in light mode — dark mode uses CSS defaults.
+   */
+  function applyAccent(colorEntry) {
+    const root = document.documentElement;
+    root.style.setProperty('--accent',                colorEntry.value);
+    root.style.setProperty('--accent-hover',          colorEntry.hover);
+    root.style.setProperty('--accent-glow',           colorEntry.glow);
+    root.style.setProperty('--accent-hover-bg',       colorEntry.glow.replace('0.18)', '0.06)'));
+    root.style.setProperty('--accent-hover-bg-strong',colorEntry.glow.replace('0.18)', '0.12)'));
+    root.style.setProperty('--btn-primary-hover-bg',  colorEntry.hover);
+    root.style.setProperty('--btn-primary-hover-glow',colorEntry.glow);
+    root.style.setProperty('--logo-gradient-start',   colorEntry.value);
+    root.style.setProperty('--logo-gradient-end',     colorEntry.hover);
+  }
+
+  /**
+   * Remove all inline accent overrides — lets CSS defaults take over (dark theme).
+   */
+  function clearAccent() {
+    const root = document.documentElement;
+    [
+      '--accent', '--accent-hover', '--accent-glow',
+      '--accent-hover-bg', '--accent-hover-bg-strong',
+      '--btn-primary-hover-bg', '--btn-primary-hover-glow',
+      '--logo-gradient-start', '--logo-gradient-end',
+    ].forEach(p => root.style.removeProperty(p));
+  }
+
+  /**
+   * Called by applyThemeClass on every theme switch.
+   * Exposed on window so initTheme can call it.
+   */
+  window.applyAccentToTheme = function(effectiveTheme) {
+    if (effectiveTheme === 'light') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const entry = COLORS.find(c => c.value === saved) || DEFAULT_COLOR;
+      applyAccent(entry);
+      renderSwatches(entry.value);
+    } else {
+      clearAccent();
+    }
+  };
+
+  /**
+   * Render swatch buttons into the palette container.
+   */
+  function renderSwatches(activeValue) {
+    const palette = document.getElementById('accent-palette');
+    if (!palette) return;
+    palette.innerHTML = '';
+
+    COLORS.forEach(color => {
+      const btn = document.createElement('button');
+      btn.className = 'accent-swatch' + (color.value === activeValue ? ' active' : '');
+      btn.style.backgroundColor = color.value;
+      btn.title = color.name;
+      btn.setAttribute('aria-label', color.name);
+      btn.addEventListener('click', () => {
+        localStorage.setItem(STORAGE_KEY, color.value);
+        applyAccent(color);
+        renderSwatches(color.value);
+      });
+      palette.appendChild(btn);
+    });
+  }
+
+  // Boot: apply saved or default color if light is already active
+  const savedColor = localStorage.getItem(STORAGE_KEY);
+  if (!savedColor) {
+    localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
+  }
+  if (isLightActive()) {
+    const entry = COLORS.find(c => c.value === (savedColor || DEFAULT_COLOR.value)) || DEFAULT_COLOR;
+    applyAccent(entry);
+    renderSwatches(entry.value);
+  }
+}
+
+initAccentColor();

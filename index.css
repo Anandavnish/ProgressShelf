@@ -503,15 +503,15 @@ html.light-theme .card-add:hover {
   border-color: var(--accent);
 }
 
-/* --- Checklist checkbox accent: true green --- */
+/* --- Checklist checkbox accent: theme color --- */
 html.light-theme .card-checklist-item input[type="checkbox"] {
-  accent-color: #048b15;
+  accent-color: var(--accent);
 }
 
-/* --- Badge completed: dark green text, solid bg, no border --- */
+/* --- Badge completed: dark text, solid bg, no border --- */
 html.light-theme .badge-completed {
-  color: #034d22;
-  background-color: rgba(4, 139, 21, 0.15);
+  color: color-mix(in srgb, var(--accent) 80%, black);
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px solid transparent;
 }
 
@@ -542,15 +542,15 @@ html.light-theme .tracker-type-selector label.type-tab:hover {
   color: var(--text-primary);
 }
 
-/* --- Primary action buttons (Create Bar / Save): green theme --- */
+/* --- Primary action buttons (Create Bar / Save): theme accent --- */
 html.light-theme .btn-primary {
-  background-color: #048b15;
+  background-color: var(--accent);
   color: #FFFFFF;
 }
 
 html.light-theme .btn-primary:hover {
-  background-color: #036610;
-  box-shadow: 0 0 12px rgba(4, 139, 21, 0.25);
+  background-color: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* --- Deadline collapsible box --- */
@@ -595,7 +595,7 @@ html.light-theme .navbar .nav-download-btn:hover {
 
 /* --- Progress bar fill: override per-card inline --bar-color in light mode --- */
 html.light-theme .progressbar-fill {
-  background-color: rgb(16, 144, 70) !important;
+  background-color: var(--accent) !important;
 }
 
 /* --- Card percentage text: true black --- */
@@ -608,17 +608,17 @@ html.light-theme .modal-title {
   color: #000000;
 }
 
-/* --- Card-add hover: use theme accent, not hardcoded blue --- */
+/* --- Card-add hover: use accent color --- */
 html.light-theme .card-add:hover {
-  border-color: #048b15;
-  background-color: rgba(4, 139, 21, 0.03);
+  border-color: var(--accent);
+  background-color: var(--accent-hover-bg);
 }
 
-/* --- Tracker type selector active tab: green theme instead of blue --- */
+/* --- Tracker type selector active tab: accent theme --- */
 html.light-theme .tracker-type-selector input[type="radio"]:checked + label.type-tab {
-  background: #048b15;
+  background: var(--accent);
   color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(4, 139, 21, 0.25);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 /* --- Form-row grouped inputs: light surface, no dark hsl bg --- */
@@ -626,11 +626,7 @@ html.light-theme .form-row {
   background: rgba(0, 0, 0, 0.04);
 }
 
-/* --- Toggle switch: green when checked --- */
-html.light-theme .toggle-switch input:checked + .toggle-slider {
-  background-color: #048b15;
-  border-color: #048b15;
-}
+/* Toggle inherits var(--accent) which is set dynamically by the color picker in light mode */
 
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
@@ -3770,7 +3766,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #21262d;
+  background-color: var(--toggle-bg);
   border: 1px solid var(--border);
   transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 24px;
@@ -3792,13 +3788,69 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.toggle-switch input:checked+.toggle-slider {
+.toggle-switch input:checked + .toggle-slider {
   background-color: var(--accent);
   border-color: var(--accent);
 }
 
-.toggle-switch input:checked+.toggle-slider:before {
+.toggle-switch input:checked + .toggle-slider:before {
   transform: translateY(-50%) translateX(20px);
+}
+
+/* --- Dropdown: Theme Color Palette Section --- */
+.dropdown-theme-section {
+  padding: 10px 14px 8px;
+}
+
+.dropdown-section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.accent-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.accent-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.accent-swatch.active {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.accent-swatch.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='20 6 9 17 4 12'%3e%3c/polyline%3e%3c/svg%3e") center/14px no-repeat;
+}
+
+/* Hide the palette section in dark mode — dark uses its own fixed accent */
+html.dark-theme .dropdown-theme-section {
+  display: none;
 }
 
 /* Collapsible Settings Content */
