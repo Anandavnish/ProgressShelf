@@ -17,103 +17,6 @@ if (isConfigured) {
   }
 }
 
-// Global Date/Time Input Value Setter Override to add .has-value class
-const originalValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-Object.defineProperty(HTMLInputElement.prototype, 'value', {
-  set: function(val) {
-    originalValueSetter.call(this, val);
-    if (this.type === 'date' || this.type === 'time') {
-      if (val) {
-        this.classList.add('has-value');
-      } else {
-        this.classList.remove('has-value');
-      }
-    }
-  },
-  configurable: true
-});
-
-function updateDateTimeHasValueClass(input) {
-  if (input.value) {
-    input.classList.add('has-value');
-  } else {
-    input.classList.remove('has-value');
-  }
-}
-
-document.addEventListener('input', (e) => {
-  if (e.target && (e.target.type === 'date' || e.target.type === 'time')) {
-    updateDateTimeHasValueClass(e.target);
-  }
-});
-document.addEventListener('change', (e) => {
-  if (e.target && (e.target.type === 'date' || e.target.type === 'time')) {
-    updateDateTimeHasValueClass(e.target);
-  }
-});
-
-// Ensure single-line textareas behave exactly like text inputs (no linebreaks)
-document.addEventListener('keydown', (e) => {
-  if (e.target && e.target.classList.contains('form-input-single-line')) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (!e.target.classList.contains('add-item-input')) {
-        e.target.blur();
-      }
-    }
-  }
-});
-
-document.addEventListener('paste', (e) => {
-  if (e.target && e.target.classList.contains('form-input-single-line')) {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    const cleanText = text.replace(/[\r\n]+/g, ' ');
-    const start = e.target.selectionStart;
-    const end = e.target.selectionEnd;
-    const val = e.target.value;
-    e.target.value = val.substring(0, start) + cleanText + val.substring(end);
-    e.target.selectionStart = e.target.selectionEnd = start + cleanText.length;
-    e.target.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-});
-
-// Auto-scroll focused modal fields into view when keyboard opens
-let activeFocusedModalInput = null;
-
-function scrollFocusedInputIntoView() {
-  if (activeFocusedModalInput) {
-    activeFocusedModalInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }
-}
-
-document.addEventListener('focusin', (e) => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-    if (e.target.closest('.modal-body')) {
-      activeFocusedModalInput = e.target;
-      setTimeout(scrollFocusedInputIntoView, 300);
-    }
-  }
-});
-
-document.addEventListener('focusout', (e) => {
-  if (e.target === activeFocusedModalInput) {
-    activeFocusedModalInput = null;
-  }
-});
-
-if (window.visualViewport) {
-  let prevViewportHeight = window.visualViewport.height;
-  window.visualViewport.addEventListener('resize', () => {
-    const currentHeight = window.visualViewport.height;
-    // If viewport height decreased significantly, keyboard probably opened
-    if (currentHeight < prevViewportHeight - 50) {
-      setTimeout(scrollFocusedInputIntoView, 100);
-    }
-    prevViewportHeight = currentHeight;
-  });
-}
-
 // Page elements
 const navLogoSvg = document.getElementById("nav-logo-svg");
 const appContent = document.getElementById("app-content");
@@ -184,163 +87,6 @@ function getDeadlineMs(bar) {
   return typeof bar.deadlineAt.toDate === 'function'
     ? bar.deadlineAt.toDate().getTime()
     : Number(bar.deadlineAt);
-}
-
-// Determines whether the bar has a scheduled notification that has not fired yet
-function hasActiveNotification(bar) {
-  if (!bar) return false;
-  if (isTrackerCompleted(bar)) return false;
-  
-  const now = Date.now();
-  
-  // 1. Check relative/percent/pre-deadline notification
-  if (bar.notifyAt) {
-    const notifyAtMs = Number(bar.notifyAt);
-    if (!isNaN(notifyAtMs) && notifyAtMs > now) return true;
-  }
-  
-  // 2. Check at-deadline notification
-  if (bar.alertAtDeadline) {
-    const deadlineMs = getDeadlineMs(bar);
-    if (deadlineMs && deadlineMs > now) return true;
-  }
-  
-  return false;
-}
-
-// ==========================================
-// Notification Health Status System
-// ==========================================
-
-/**
- * Async notification health check.
- * Returns: { status: 'healthy'|'red', reason: null|'guest'|'perm'|'token' }
- * Guest check always short-circuits — never proceeds to perm or token checks.
- * Only called at: load, visibilitychange, and 3-min interval.
- * @param {string|null} uid
- */
-async function getNotificationHealthStatus(uid) {
-  // Step 1: Guest mode — short-circuit, no further checks ever run for guests
-  if (isGuestMode()) {
-    return { status: 'red', reason: 'guest' };
-  }
-  // Step 2: Browser permission (synchronous — free)
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-    return { status: 'red', reason: 'perm' };
-  }
-  // Step 3: Token validity via Supabase (async)
-  const localToken = localStorage.getItem('ps_fcm_token');
-  if (!localToken) {
-    return { status: 'red', reason: 'token' };
-  }
-  const tokenValid = await checkFCMTokenExists(uid, localToken);
-  if (!tokenValid) {
-    return { status: 'red', reason: 'token' };
-  }
-  // All checks passed
-  return { status: 'healthy', reason: null };
-}
-
-/**
- * Applies bell health state to a single bell element.
- * Handles color, title, cursor, and click handler attachment.
- * @param {Element} bell - The .active-notification-bell element
- * @param {{ status: string, reason: string|null }|null} health
- */
-function applyBellHealth(bell, health) {
-  if (!bell) return;
-  const isHealthy = !health || health.status === 'healthy';
-  bell.style.color = isHealthy ? 'var(--warning)' : 'var(--error, #f85149)';
-  bell.title = isHealthy
-    ? 'Notification active'
-    : (health.reason === 'guest'
-        ? 'Sign in to receive notifications'
-        : health.reason === 'perm'
-          ? 'Notifications are blocked — tap to enable'
-          : 'Notification setup issue — tap to retry');
-  bell.style.cursor = isHealthy ? 'help' : 'pointer';
-
-  // Clone to remove any previous click listener, then re-attach if unhealthy
-  const fresh = bell.cloneNode(true);
-  bell.parentNode.replaceChild(fresh, bell);
-  if (!isHealthy) {
-    fresh.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleBellRedClick(health.reason);
-    });
-  }
-  return fresh;
-}
-
-/**
- * Updates ALL active-notification-bell elements in the DOM
- * to reflect the given health state. Safe to call with null (leaves bells yellow).
- * @param {{ status: string, reason: string|null }|null} health
- */
-function refreshAllBellStates(health) {
-  document.querySelectorAll('.active-notification-bell').forEach(bell => {
-    applyBellHealth(bell, health);
-  });
-}
-
-/**
- * Handles click on a red bell based on the failure reason.
- * @param {'guest'|'perm'|'token'} reason
- */
-function handleBellRedClick(reason) {
-  if (reason === 'guest') {
-    showToast("Sign in to receive notifications — guest sessions can't receive push alerts.", 'info', 6000);
-    const guestBannerBtn = document.querySelector('.btn-banner-login');
-    if (guestBannerBtn) guestBannerBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } else if (reason === 'perm') {
-    showToast('Enable notifications in your browser to get alerts for this deadline.', 'info', 5000);
-    Notification.requestPermission().then(async (result) => {
-      if (result === 'granted' && currentUser && currentUser.uid) {
-        await handleFCMSession(currentUser.uid);
-      }
-      if (currentUser && currentUser.uid) {
-        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-        refreshAllBellStates(cachedBellHealth);
-      }
-    });
-  } else if (reason === 'token') {
-    showToast("Something's off with your notification setup — retrying…", 'info', 3000);
-    if (currentUser && currentUser.uid) {
-      silentFCMReregister(currentUser.uid).then(async (success) => {
-        if (!success) {
-          showToast('Could not re-register for notifications. Try again later.', 'error');
-        }
-        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-        refreshAllBellStates(cachedBellHealth);
-      });
-    }
-  }
-}
-
-/**
- * Silently obtains a new FCM token and saves it.
- * Does NOT call Notification.requestPermission().
- * Only call when permission is already 'granted'.
- * @param {string} uid
- * @returns {Promise<boolean>} true if re-registration succeeded.
- */
-async function silentFCMReregister(uid) {
-  try {
-    if (!messaging) return false;
-    const registration = await navigator.serviceWorker.ready;
-    const token = await getToken(messaging, {
-      vapidKey: FCM_VAPID_KEY,
-      serviceWorkerRegistration: registration
-    });
-    if (token) {
-      await saveFCMToken(uid, token);
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.error('[Bell] Silent FCM re-registration failed:', err);
-    return false;
-  }
 }
 
 function applyDeadlineTick(barEl) {
@@ -453,20 +199,12 @@ let authInitialized = false;
 let currentFilter = "all";
 let currentSort = localStorage.getItem("ps_sort_order") || "created-desc";
 const expandedCardIds = new Set();
-let lastInteractionY = null;
 let searchClosedViaPopState = false;
 let closedViaPopState = false;
 let isSearchActiveHistoryPushed = false;
 let deferredPrompt = null;
 let isPopStateExit = false;
 let lastInteractionCardId = null;
-// Cached result of the last async notification health check.
-// null = check hasn't run yet (bells default to yellow/neutral).
-let cachedBellHealth = null;
-
-// Tracks bar IDs with an in-flight local write, so our own realtime echo
-// doesn't trigger a redundant full checklist rebuild mid-interaction.
-const pendingLocalWrites = new Map();
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -573,14 +311,7 @@ function parseMarkdown(text) {
     // Escape standard line
     let parsedLine = escapeHtml(line);
     
-    // Auto-link URLs starting with http://, https://, or www. (preceded by line start or whitespace)
-    parsedLine = parsedLine.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
-      const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
-    });
-    
     // Formatting: Bold, Italic, Inline Code
-    parsedLine = parsedLine.replace(/~~(.*?)~~/g, '<del>$1</del>');
     parsedLine = parsedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     parsedLine = parsedLine.replace(/__(.*?)__/g, '<strong>$1</strong>');
     parsedLine = parsedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -616,11 +347,6 @@ function parseMarkdown(text) {
         inList = 'ul';
       }
       let content = escapeHtml(bulletMatch[2]);
-      content = content.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
-        const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
-      });
-      content = content.replace(/~~(.*?)~~/g, '<del>$1</del>');
       content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -631,20 +357,14 @@ function parseMarkdown(text) {
     }
     
     // Numbered lists (1. or 2. etc.)
-    const numberMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    const numberMatch = line.match(/^(\s*)(?:\d+)\.\s+(.*)$/);
     if (numberMatch) {
       if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
       if (inList !== 'ol') {
-        const startVal = parseInt(numberMatch[2]);
-        htmlLines.push(`<ol class="note-ol" start="${startVal}">`);
+        htmlLines.push("<ol class=\"note-ol\">");
         inList = 'ol';
       }
-      let content = escapeHtml(numberMatch[3]);
-      content = content.replace(/(https?:\/\/[^\s<>\(\)]+?|(?:^|(?<=\s))www\.[^\s<>\(\)]+?|(?:^|(?<=\s))[a-zA-Z0-9][-a-zA-Z0-9.]*\.(?:com|org|net|io|co|dev|app|gg|in|edu|gov)(?:\/[^\s<>\(\)]*?)?)(?=[.,;:!?"']?(?:\s|$|\)))/g, (match) => {
-        const url = (match.startsWith('www.') || (!match.includes('://') && !match.startsWith('http'))) ? 'https://' + match : match;
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${match}</a>`;
-      });
-      content = content.replace(/~~(.*?)~~/g, '<del>$1</del>');
+      let content = escapeHtml(numberMatch[2]);
       content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       content = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
@@ -663,21 +383,9 @@ function parseMarkdown(text) {
     }
     
     // Normal line
-    if ((inList === 'ul' || inList === 'ol') && /^\s+/.test(line)) {
-      const lastItemIdx = htmlLines.length - 1;
-      if (lastItemIdx >= 0 && htmlLines[lastItemIdx].endsWith("</li>")) {
-        const popped = htmlLines[lastItemIdx];
-        const stripped = popped.substring(0, popped.length - 5); // remove "</li>"
-        const cleanLine = escapeHtml(line.trimStart());
-        htmlLines[lastItemIdx] = stripped + "<br>" + cleanLine + "</li>";
-      } else {
-        htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
-      }
-    } else {
-      if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
-      if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
-      htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
-    }
+    if (inList === 'ul') { htmlLines.push("</ul>"); inList = null; }
+    if (inList === 'ol') { htmlLines.push("</ol>"); inList = null; }
+    htmlLines.push(`<div class="note-p">${parsedLine}</div>`);
   }
   
   // Clean up unclosed tags
@@ -687,8 +395,6 @@ function parseMarkdown(text) {
   
   return htmlLines.join("");
 }
-
-// Lightweight Markdown-to-HTML parser for editor sync backdrop (retains exact character count and spacing)
 
 function formatNumber(value) {
   // Returns integer string if whole number, else up to 2 decimal places
@@ -889,20 +595,17 @@ function formatCardLabel(current, target, levels) {
 // Dashboard Stats Bar Calculation
 // ==========================================
 function isTrackerCompleted(bar) {
-  const barType = bar.type || "goal";
-  // Checklists: always derive live from items — the stored flag can be stale
-  // after a local checkbox toggle before the realtime echo arrives.
-  if (barType === "checklist") {
-    const items = bar.items || [];
-    return items.length > 0 && items.every(item => item.done);
-  }
-  // Goals and notes: use the stored flag, then fall back to percent
   if (bar.completed !== undefined && bar.completed !== null) {
     return !!bar.completed;
   }
+  const barType = bar.type || "goal";
   if (barType === "goal") {
     const percent = bar.targetSmallest > 0 ? (bar.currentSmallest / bar.targetSmallest) * 100 : 0;
     return percent >= 100;
+  }
+  if (barType === "checklist") {
+    const items = bar.items || [];
+    return items.length > 0 && items.every(item => item.done);
   }
   return false;
 }
@@ -1013,10 +716,11 @@ function updateOverallStats(bars) {
 
 function filterBars(bars) {
   const now = Date.now();
-  const tokens = getCurrentSearchTokens();
+  const searchInput = document.getElementById("global-search");
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
 
   return bars.filter(bar => {
-    if (tokens.length > 0 && !matchBarSearch(bar, tokens)) {
+    if (query && !bar.title.toLowerCase().includes(query)) {
       return false;
     }
 
@@ -1051,156 +755,6 @@ function filterBars(bars) {
 
     return true;
   });
-}
-
-// Determines which indices of the items array should be visible when the card is collapsed.
-// - Splits into pending and completed, keeping relative order.
-// - Fits visibleCount items total.
-// - If both categories exist, guarantees at least one completed item is shown.
-function getCollapsedVisibleIndices(items, visibleCount) {
-  const pending = [];
-  const completed = [];
-  
-  items.forEach((item, index) => {
-    const entry = { item, index };
-    if (item.done) {
-      completed.push(entry);
-    } else {
-      pending.push(entry);
-    }
-  });
-
-  const selectedIndices = new Set();
-
-  if (pending.length === 0) {
-    completed.slice(0, visibleCount).forEach(e => selectedIndices.add(e.index));
-  } else if (completed.length === 0) {
-    pending.slice(0, visibleCount).forEach(e => selectedIndices.add(e.index));
-  } else {
-    const pendingToTake = Math.min(pending.length, Math.max(0, visibleCount - 1));
-    const completedToTake = Math.min(completed.length, visibleCount - pendingToTake);
-    
-    pending.slice(0, pendingToTake).forEach(e => selectedIndices.add(e.index));
-    completed.slice(0, completedToTake).forEach(e => selectedIndices.add(e.index));
-  }
-  
-  return selectedIndices;
-}
-
-// Retrieves the current search query tokens split on whitespace
-function getCurrentSearchTokens() {
-  const searchInput = document.getElementById("global-search");
-  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
-  return query.split(/\s+/).filter(Boolean);
-}
-
-// Helper that extracts normalized text fields from a card separately
-function getBarSearchFields(bar) {
-  const titleText = (bar.title || "").toLowerCase();
-  const otherParts = [];
-  const barType = bar.type || "goal";
-  
-  if (barType === "note" && bar.text) {
-    otherParts.push(bar.text);
-  } else if (barType === "checklist" && bar.items) {
-    bar.items.forEach(item => {
-      if (item && item.text) {
-        otherParts.push(item.text);
-      }
-    });
-  }
-  const otherText = otherParts.join(" ").toLowerCase();
-  return { titleText, otherText };
-}
-
-// Builds a combined lowercase searchable string for a bar (card)
-function getBarSearchableText(bar) {
-  const { titleText, otherText } = getBarSearchFields(bar);
-  return titleText + " " + otherText;
-}
-
-// Determines if a bar matches any of the search tokens
-function matchBarSearch(bar, tokens) {
-  if (tokens.length === 0) return true;
-  const combinedText = getBarSearchableText(bar);
-  return tokens.some(token => combinedText.includes(token));
-}
-
-// Calculates a match score for relevance sorting (count of unique matching tokens, title weighted higher)
-function getBarSearchScore(bar, tokens) {
-  if (tokens.length === 0) return 0;
-  const { titleText, otherText } = getBarSearchFields(bar);
-  
-  let score = 0;
-  tokens.forEach(token => {
-    if (titleText.includes(token)) {
-      score += 10;
-    } else if (otherText.includes(token)) {
-      score += 1;
-    }
-  });
-  return score;
-}
-
-// Safely highlights search query tokens in the HTML-escaped card title
-function getHighlightedTitle(title, tokens) {
-  const escapedTitle = escapeHtml(title);
-  if (tokens.length === 0) return escapedTitle;
-
-  // Escape regex characters and sort by length descending to match longer tokens first
-  const escapedTokens = tokens
-    .map(token => escapeHtml(token).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
-    .sort((a, b) => b.length - a.length);
-
-  const tokenPattern = escapedTokens.join('|');
-  if (!tokenPattern) return escapedTitle;
-
-  // Regex matches HTML entities first to avoid highlighting inside them
-  const regex = new RegExp(`(&[a-zA-Z0-9#]+;)|(${tokenPattern})`, 'gi');
-
-  return escapedTitle.replace(regex, (match, entity, term) => {
-    if (entity) return entity;
-    return `<span class="search-highlight">${term}</span>`;
-  });
-}
-
-// Patches only the completed-badge section of a checklist card DOM in-place.
-// Called by checkbox handlers so the local device sees the badge immediately,
-// without invoking updateCardElement (which rebuilds all checklist HTML and
-// re-attaches listeners, causing duplicate handlers and destroying the active node).
-function updateChecklistBadgeDom(card, isCompleted) {
-  let divider = card.querySelector(".card-divider");
-  let labelEl = card.querySelector(".card-deadline-label");
-
-  if (isCompleted) {
-    if (!divider) {
-      divider = document.createElement("hr");
-      divider.className = "card-divider";
-      card.appendChild(divider);
-    }
-    if (!labelEl) {
-      labelEl = document.createElement("div");
-      labelEl.className = "card-deadline-label";
-      labelEl.style.marginTop = "10px";
-      labelEl.style.fontSize = "0.8rem";
-      labelEl.style.color = "var(--text-muted)";
-      card.appendChild(labelEl);
-    }
-    labelEl.setAttribute("data-completed", "true");
-    labelEl.classList.remove("overdue");
-    labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
-  } else if (labelEl) {
-    // Un-completing: if no deadline exists, remove badge elements entirely;
-    // if a deadline exists, the next renderDashboard cycle will restore the timer.
-    const dMs = card._barData ? getDeadlineMs(card._barData) : null;
-    if (!dMs) {
-      divider?.remove();
-      labelEl.remove();
-    } else {
-      labelEl.setAttribute("data-completed", "false");
-      labelEl.querySelector(".badge-completed")?.remove();
-    }
-  }
 }
 
 function updateCardElement(card, bar) {
@@ -1240,13 +794,11 @@ function updateCardElement(card, bar) {
   // Update title
   const titleTextEl = card.querySelector(".card-title-text");
   if (titleTextEl) {
-    const tokens = getCurrentSearchTokens();
-    titleTextEl.innerHTML = getHighlightedTitle(bar.title, tokens);
+    titleTextEl.textContent = bar.title;
   } else {
     const titleEl = card.querySelector(".card-title");
     if (titleEl) {
-      const tokens = getCurrentSearchTokens();
-      titleEl.innerHTML = getHighlightedTitle(bar.title, tokens);
+      titleEl.textContent = bar.title;
     }
   }
   const titleEl = card.querySelector(".card-title");
@@ -1307,11 +859,9 @@ function updateCardElement(card, bar) {
     const container = card.querySelector(".card-checklist-container");
     if (container) {
       const isExpanded = expandedCardIds.has(bar.id);
-      const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
       const itemsHtml = items.map((item, index) => {
-        const isCollapsedVisible = collapsedVisibleSet.has(index);
-        const collapsibleClass = isCollapsedVisible ? "" : " collapsible-item";
-        const inlineStyle = isCollapsedVisible ? '' : (isExpanded ? ' style="display: flex;"' : ' style="display: none;"');
+        const collapsibleClass = index >= 3 ? " collapsible-item" : "";
+        const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
         return `
           <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
             <input type="checkbox" ${item.done ? "checked" : ""}>
@@ -1344,18 +894,8 @@ function updateCardElement(card, bar) {
           });
 
           checkbox.addEventListener("change", async (e) => {
-          // STRICT EDIT MODE: Prevent checklist updates when in edit mode - only select/deselect allowed
-          if (editModeActive) {
-            e.preventDefault();
-            e.target.checked = !e.target.checked; // Revert the checkbox
-            // Manually trigger card selection since stopPropagation prevents bubble-up
-            toggleCardSelection(card);
-            return;
-          }
-          
           const isChecked = e.target.checked;
           const updatedItems = JSON.parse(JSON.stringify(bar.items || []));
-          const originalItemsBackup = JSON.parse(JSON.stringify(bar.items || []));
           if (updatedItems[idx]) {
             updatedItems[idx].done = isChecked;
           }
@@ -1389,13 +929,6 @@ function updateCardElement(card, bar) {
             summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
           }
 
-          // Update local memory and trigger immediate row height + visibility recalculation
-          bar.items = updatedItems;
-          bar.completed = completed; // Keep stats/filter in sync; badge uses isTrackerCompleted(bar.items)
-          updateChecklistBadgeDom(card, completed);
-          syncRowHeights();
-
-          pendingLocalWrites.set(bar.id, (pendingLocalWrites.get(bar.id) || 0) + 1);
           try {
             await editBar(isGuestMode() ? null : currentUser.uid, bar.id, {
               title: bar.title,
@@ -1405,22 +938,7 @@ function updateCardElement(card, bar) {
               completed,
               updateDeadline: false
             });
-            setTimeout(() => {
-              const count = pendingLocalWrites.get(bar.id) || 0;
-              if (count <= 1) {
-                pendingLocalWrites.delete(bar.id);
-              } else {
-                pendingLocalWrites.set(bar.id, count - 1);
-              }
-            }, 800);
           } catch (error) {
-            bar.items = originalItemsBackup;
-            const count = pendingLocalWrites.get(bar.id) || 0;
-            if (count <= 1) {
-              pendingLocalWrites.delete(bar.id);
-            } else {
-              pendingLocalWrites.set(bar.id, count - 1);
-            }
             showToast("Failed to update checklist progress.", "error");
             renderDashboard(currentBars);
           }
@@ -1479,20 +997,7 @@ function updateCardElement(card, bar) {
       labelEl.setAttribute("data-completed", "false");
       labelEl.setAttribute("data-deadline-ms", dMs);
       labelEl.setAttribute("data-percent", percent);
-      
-      labelEl.style.display = "flex";
-      labelEl.style.justifyContent = "space-between";
-      labelEl.style.alignItems = "center";
-
-      const bellHtml = hasActiveNotification(bar) ? `
-        <span class="active-notification-bell" title="active notification" style="display: inline-flex; align-items: center; color: var(--warning); cursor: help;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
-          </svg>
-        </span>
-      ` : '';
-
-      labelEl.innerHTML = `<span class="deadline-text-val">⏱ ${label}</span>${bellHtml}`;
+      labelEl.innerHTML = `<span class="deadline-text-val">⏱ ${label}</span>`;
       if (isOverdue) {
         labelEl.classList.add("overdue");
       } else {
@@ -1594,11 +1099,9 @@ function createCardElement(bar) {
 
     const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-    const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
     const itemsHtml = items.map((item, index) => {
-      const isCollapsedVisible = collapsedVisibleSet.has(index);
-      const collapsibleClass = isCollapsedVisible ? "" : " collapsible-item";
-      const inlineStyle = isCollapsedVisible ? '' : (isExpanded ? ' style="display: flex;"' : ' style="display: none;"');
+      const collapsibleClass = index >= 3 ? " collapsible-item" : "";
+      const inlineStyle = index >= 3 ? (isExpanded ? ' style="display: flex;"' : ' style="display: none;"') : '';
       return `
         <label class="card-checklist-item${item.done ? " done" : ""}${collapsibleClass}"${inlineStyle}>
           <input type="checkbox" ${item.done ? "checked" : ""}>
@@ -1672,7 +1175,7 @@ function createCardElement(bar) {
           </svg>
         </span>
       </span>
-      <span class="card-title-text">${getHighlightedTitle(bar.title, getCurrentSearchTokens())}</span>
+      <span class="card-title-text">${escapeHtml(bar.title)}</span>
     </h3>
     ${bodyHtml}
     ${(isCompleted || getDeadlineMs(bar)) ? (() => {
@@ -1687,18 +1190,10 @@ function createCardElement(bar) {
       } else {
         const { label, isOverdue } = formatTimeLeft(dMs);
         const overdueClass = isOverdue ? ' overdue' : '';
-        const bellHtml = hasActiveNotification(bar) ? `
-          <span class="active-notification-bell" title="active notification" style="display: inline-flex; align-items: center; color: var(--warning); cursor: help;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
-            </svg>
-          </span>
-        ` : '';
         return `
           <hr class="card-divider">
-          <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+          <div class="card-deadline-label${overdueClass}" data-completed="false" data-deadline-ms="${dMs}" data-percent="${percent}" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
             <span class="deadline-text-val">⏱ ${label}</span>
-            ${bellHtml}
           </div>
         `;
       }
@@ -1770,7 +1265,6 @@ function createCardElement(bar) {
         const currentBar = card._barData;
         const isChecked = e.target.checked;
         const updatedItems = JSON.parse(JSON.stringify(currentBar.items || []));
-        const originalItemsBackup = JSON.parse(JSON.stringify(currentBar.items || []));
         if (updatedItems[idx]) {
           updatedItems[idx].done = isChecked;
         }
@@ -1806,13 +1300,6 @@ function createCardElement(bar) {
           summaryEl.innerHTML = `<span>✓</span> ${currentSmallest} / ${targetSmallest} done`;
         }
 
-        // Update local memory and trigger immediate row height + visibility recalculation
-        currentBar.items = updatedItems;
-        currentBar.completed = completed; // Keep stats/filter in sync; badge uses isTrackerCompleted(bar.items)
-        updateChecklistBadgeDom(card, completed);
-        syncRowHeights();
-
-        pendingLocalWrites.set(currentBar.id, (pendingLocalWrites.get(currentBar.id) || 0) + 1);
         try {
           await editBar(isGuestMode() ? null : currentUser.uid, currentBar.id, {
             title: currentBar.title,
@@ -1822,22 +1309,7 @@ function createCardElement(bar) {
             completed,
             updateDeadline: false
           });
-          setTimeout(() => {
-            const count = pendingLocalWrites.get(currentBar.id) || 0;
-            if (count <= 1) {
-              pendingLocalWrites.delete(currentBar.id);
-            } else {
-              pendingLocalWrites.set(currentBar.id, count - 1);
-            }
-          }, 800);
         } catch (error) {
-          currentBar.items = originalItemsBackup;
-          const count = pendingLocalWrites.get(currentBar.id) || 0;
-          if (count <= 1) {
-            pendingLocalWrites.delete(currentBar.id);
-          } else {
-            pendingLocalWrites.set(currentBar.id, count - 1);
-          }
           showToast("Failed to update checklist progress.", "error");
           renderDashboard(currentBars); // Revert to database state on error
         }
@@ -1878,11 +1350,15 @@ function createCardElement(bar) {
 
     if (barType === "checklist") {
       if (isTruncatable && !card.classList.contains("expanded")) {
-        expandCard(card, currentBar);
+        card.classList.add("expanded");
+        expandedCardIds.add(currentBar.id);
+        syncRowHeights();
       }
     } else if (barType === "note") {
       if (isTruncatable && !card.classList.contains("expanded")) {
-        expandCard(card, currentBar);
+        card.classList.add("expanded");
+        expandedCardIds.add(currentBar.id);
+        syncRowHeights();
       } else {
         openUpdateModal(currentBar);
       }
@@ -1896,13 +1372,10 @@ function createCardElement(bar) {
   if (showMoreBtn) {
     showMoreBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      // STRICT EDIT MODE: Block expand/collapse in edit mode - trigger selection instead
-      if (editModeActive) {
-        toggleCardSelection(card);
-        return;
-      }
       const currentBar = card._barData;
-      expandCard(card, currentBar);
+      card.classList.add("expanded");
+      expandedCardIds.add(currentBar.id);
+      syncRowHeights();
     });
   }
 
@@ -1911,29 +1384,12 @@ function createCardElement(bar) {
   if (showLessBtn) {
     showLessBtn.addEventListener("click", (e) => {
       e.stopPropagation(); // Stop click from bubbling up to the card
-      // STRICT EDIT MODE: Block expand/collapse in edit mode - trigger selection instead
-      if (editModeActive) {
-        toggleCardSelection(card);
-        return;
-      }
       collapseCard(card);
     });
   }
 
   if (getDeadlineMs(bar)) {
     attachDeadlineBorder(card, bar);
-  }
-
-  // Apply current notification health state to this card's bell immediately.
-  // createCard() returns the card before it's appended to the DOM, so we
-  // target card.querySelector directly (not document.querySelectorAll).
-  // If cachedBellHealth is null (check hasn't resolved yet), skip —
-  // the bell stays yellow until the first scheduled check finishes.
-  if (cachedBellHealth) {
-    const bell = card.querySelector('.active-notification-bell');
-    if (bell) {
-      applyBellHealth(bell, cachedBellHealth);
-    }
   }
 
   return card;
@@ -1974,22 +1430,7 @@ function renderDashboard(bars) {
   }
 
   const sortedBars = sortBars(bars);
-  let filtered = filterBars([...sortedBars]);
-
-  // Sort by search relevance score descending when search is active
-  const searchTokens = getCurrentSearchTokens();
-  if (searchTokens.length > 0) {
-    const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
-    scored.sort((a, b) => {
-      // Invert comparator order because of .reverse() in the reconciliation loop!
-      if (a.score !== b.score) {
-        return a.score - b.score;
-      }
-      return b.index - a.index; // Stable sort fallback (preserve original dashboard sort order)
-    });
-    filtered = scored.map(item => item.bar);
-  }
-
+  const filtered = filterBars([...sortedBars]);
   updateOverallStats(bars);
 
   // Update search helper text for matches in other categories
@@ -1998,8 +1439,7 @@ function renderDashboard(bars) {
   const searchHelper = document.getElementById("search-helper");
   if (searchHelper) {
     if (query && currentFilter !== "all") {
-      const tokens = getCurrentSearchTokens();
-      const totalQueryMatches = bars.filter(bar => matchBarSearch(bar, tokens)).length;
+      const totalQueryMatches = bars.filter(bar => bar.title.toLowerCase().includes(query)).length;
       const currentCategoryMatches = filtered.length;
       const diff = totalQueryMatches - currentCategoryMatches;
       if (diff > 0) {
@@ -2043,18 +1483,13 @@ function renderDashboard(bars) {
   filtered.reverse().forEach((bar) => {
     const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
     if (oldCard) {
-      if ((pendingLocalWrites.get(bar.id) || 0) > 0) {
-        // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
+      const updated = updateCardElement(oldCard, bar);
+      if (updated) {
         expectedElements.push(oldCard);
       } else {
-        const updated = updateCardElement(oldCard, bar);
-        if (updated) {
-          expectedElements.push(oldCard);
-        } else {
-          const newCard = createCardElement(bar);
-          oldCard.replaceWith(newCard);
-          expectedElements.push(newCard);
-        }
+        const newCard = createCardElement(bar);
+        oldCard.replaceWith(newCard);
+        expectedElements.push(newCard);
       }
     } else {
       const newCard = createCardElement(bar);
@@ -2078,43 +1513,6 @@ function renderDashboard(bars) {
   });
 
   syncRowHeights();
-  syncFabVisibility();
-  evaluateDemoBannerAndDropdownState();
-
-  // Scroll to and highlight card if 'id' parameter is set in the URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetId = urlParams.get('id');
-  if (targetId) {
-    setTimeout(() => {
-      highlightAndScrollToCard(targetId);
-    }, 400);
-  }
-}
-
-function highlightAndScrollToCard(targetId) {
-  if (!targetId) return;
-  const cardsGrid = document.getElementById("cards-grid");
-  if (!cardsGrid) return;
-  const card = cardsGrid.querySelector(`[data-bar-id="${targetId}"]`);
-  if (card) {
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    card.classList.add('card-highlight-flash');
-    setTimeout(() => {
-      card.classList.remove('card-highlight-flash');
-    }, 3000);
-  }
-}
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'highlight-tracker') {
-      const targetId = event.data.id;
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', targetId);
-      window.history.pushState(null, '', url.toString());
-      highlightAndScrollToCard(targetId);
-    }
-  });
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes
@@ -2152,10 +1550,6 @@ setInterval(() => {
           labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
         }
       } else {
-        labelEl.style.display = "flex";
-        labelEl.style.justifyContent = "space-between";
-        labelEl.style.alignItems = "center";
-
         // Remove completed badge if present (e.g. if user edited progress back below 100%)
         const completedBadge = labelEl.querySelector('.badge-completed');
         if (completedBadge) {
@@ -2175,37 +1569,6 @@ setInterval(() => {
         } else {
           labelEl.classList.remove("overdue");
         }
-
-        // Dynamically update/verify active notification bell icon
-        const card = labelEl.closest('.card-progress');
-        const bar = card ? card._barData : null;
-        let bellSpan = labelEl.querySelector('.active-notification-bell');
-
-        if (bar && hasActiveNotification(bar)) {
-          if (!bellSpan) {
-            bellSpan = document.createElement("span");
-            bellSpan.className = "active-notification-bell";
-            bellSpan.title = "active notification";
-            bellSpan.style.display = "inline-flex";
-            bellSpan.style.alignItems = "center";
-            bellSpan.style.color = "var(--warning)";
-            bellSpan.style.cursor = "help";
-            bellSpan.innerHTML = `
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"></path>
-              </svg>
-            `;
-            labelEl.appendChild(bellSpan);
-            // Apply current health state immediately after creation — avoids
-            // waiting up to 3 min for the next scheduled check.
-            // If cachedBellHealth is null (check hasn't run yet), leave yellow.
-            if (cachedBellHealth) {
-              applyBellHealth(bellSpan, cachedBellHealth);
-            }
-          }
-        } else {
-          bellSpan?.remove();
-        }
       }
     }
   });
@@ -2216,13 +1579,7 @@ setInterval(() => {
 // Modal Controllers & Form Interactions
 // ==========================================
 
-let modalScrollY = 0;
-
 function openModal(modal) {
-  modalScrollY = window.scrollY;
-  document.body.style.position = 'fixed';
-  document.body.style.top = `-${modalScrollY}px`;
-  document.body.style.width = '100%';
   modal.classList.add("active");
   // Push a state to browser history stack to intercept back button
   history.pushState({ modalId: modal.id }, "");
@@ -2231,11 +1588,6 @@ function openModal(modal) {
 function closeModal(modal, isPopState = false) {
   if (!modal.classList.contains("active")) return;
   modal.classList.remove("active");
-
-  document.body.style.position = '';
-  document.body.style.top = '';
-  document.body.style.width = '';
-  window.scrollTo(0, modalScrollY);
 
   if (!isPopState) {
     closedViaPopState = true;
@@ -2346,17 +1698,15 @@ window.addEventListener("click", (e) => {
   }
 });
 
-// Track card interaction origin and Y position for collapse/expand decisions
+// Track card interaction origin to prevent collapse during scroll/swipe
 window.addEventListener("mousedown", (e) => {
   const card = e.target.closest('.card-progress');
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
-  lastInteractionY = e.clientY;
 }, { passive: true });
 
 window.addEventListener("touchstart", (e) => {
   const card = e.target.closest('.card-progress');
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
-  lastInteractionY = e.touches[0] ? e.touches[0].clientY : null;
 }, { passive: true });
 
 window.addEventListener("wheel", (e) => {
@@ -2364,15 +1714,36 @@ window.addEventListener("wheel", (e) => {
   lastInteractionCardId = card ? card.getAttribute('data-bar-id') : null;
 }, { passive: true });
 
+// Close expanded checklist cards on scroll only if scroll originated outside the card
+window.addEventListener("scroll", () => {
+  syncFabVisibility();
+
+  if (document.querySelector(".modal-overlay.active")) return;
+  document.querySelectorAll(".card-progress.expanded").forEach(card => {
+    const cardBarId = card.getAttribute('data-bar-id');
+    if (cardBarId !== lastInteractionCardId) {
+      collapseCard(card);
+    }
+  });
+}, { passive: true });
+
+function collapseCard(card) {
+  const barId = card.getAttribute("data-bar-id");
+  if (barId) {
+    expandedCardIds.delete(barId);
+  }
+  card.classList.remove("expanded");
+  syncRowHeights();
+}
+
 // Sync floating action button (FAB) visibility based on "Add New Tracker" card scrolling
 function syncFabVisibility() {
-  const addCard = document.getElementById("btn-add-card");
+  const addCard = document.querySelector(".card-add");
   const fab = document.getElementById("btn-fab");
   if (addCard && fab) {
     const rect = addCard.getBoundingClientRect();
-    const navbarHeight = document.querySelector(".navbar")?.offsetHeight || 57;
     // Show FAB when the bottom of "Add New Tracker" has scrolled above the navbar
-    if (rect.bottom < navbarHeight) {
+    if (rect.bottom < 57) {
       fab.classList.add("visible");
     } else {
       fab.classList.remove("visible");
@@ -2382,103 +1753,6 @@ function syncFabVisibility() {
 
 // Bind FAB click event
 document.getElementById("btn-fab")?.addEventListener("click", () => openCreateModal());
-
-// Close expanded checklist cards on scroll only if scroll originated outside the card
-let scrollEndCollapseTimeout = null;
-window.addEventListener("scroll", () => {
-  // Close profile dropdown on scroll if active
-  const profileDropdown = document.getElementById("profile-dropdown");
-  if (profileDropdown && profileDropdown.classList.contains("active")) {
-    profileDropdown.classList.remove("active");
-    if (history.state && history.state.profileDropdown) {
-      profileClosedViaPopState = true;
-      history.back();
-    }
-  }
-
-  // Update FAB visibility
-  syncFabVisibility();
-
-  // Debounce the collapse-check: only collapse after scroll has settled for 150ms
-  if (scrollEndCollapseTimeout) clearTimeout(scrollEndCollapseTimeout);
-  scrollEndCollapseTimeout = setTimeout(() => {
-    scrollEndCollapseTimeout = null;
-    if (document.querySelector(".modal-overlay.active")) return;
-    document.querySelectorAll(".card-progress.expanded").forEach(card => {
-      const cardBarId = card.getAttribute('data-bar-id');
-      if (cardBarId !== lastInteractionCardId) {
-        collapseCard(card, true);
-      }
-    });
-  }, 150);
-}, { passive: true });
-
-// Measure the actual bottom edge of the sticky nav bar stack.
-// This varies dynamically as the nav bars translate off-screen on scroll.
-function getStickyTopOffset() {
-  const controls = document.querySelector(".dashboard-controls");
-  if (controls) return controls.getBoundingClientRect().bottom;
-  const stats = document.getElementById("stats-banner");
-  if (stats && !stats.classList.contains("hidden")) return stats.getBoundingClientRect().bottom;
-  const navbar = document.querySelector(".navbar");
-  if (navbar) return navbar.getBoundingClientRect().bottom;
-  return 0;
-}
-
-// Expand a card with scroll-into-view: ensures the card's top is always visible
-// below the sticky nav bars, scrolling just enough to reveal the bottom without
-// pushing the top above the nav bar edge.
-function expandCard(card, barData) {
-  card.classList.add("expanded");
-  expandedCardIds.add(barData.id);
-  syncRowHeights();
-}
-
-// Collapse a card with scroll compensation.
-// - If triggered by scroll (isScrollTriggered = true): scroll compensation is calculated
-//   to keep the viewport content below the card in the exact same relative position.
-// - If triggered by user interaction (click collapse/outside): if the card's top is
-//   partially/fully off-screen, scroll up to bring its top flush with the sticky nav bars.
-function collapseCard(card, isScrollTriggered = false) {
-  const barId = card.getAttribute("data-bar-id");
-  if (barId) {
-    expandedCardIds.delete(barId);
-  }
-
-  if (isScrollTriggered) {
-    card.style.transition = 'none';
-    const beforeTop = card.getBoundingClientRect().top;
-    const beforeHeight = card.getBoundingClientRect().height;
-    const beforeScrollY = window.scrollY;
-    const topOffset = getStickyTopOffset();
-
-    card.classList.remove("expanded");
-    syncRowHeights();
-    document.body.offsetHeight; // Force layout reflow and browser scroll clamping
-
-    const afterHeight = card.getBoundingClientRect().height;
-    const afterScrollY = window.scrollY;
-    const autoScrolled = beforeScrollY - afterScrollY;
-
-    // Keep content at/below the viewport top from jumping by calculating the height
-    // difference of the collapsing card that was above the top offset.
-    const distAbove = Math.max(0, topOffset - beforeTop);
-    const amtBefore = Math.min(beforeHeight, distAbove);
-    const amtAfter = Math.min(afterHeight, distAbove);
-    const shift = amtBefore - amtAfter;
-
-    const remainingShift = shift - autoScrolled;
-    if (remainingShift > 0) {
-      window.scrollBy(0, -remainingShift);
-    }
-
-    // Restore transition after deferred syncRowHeights pass (360ms)
-    setTimeout(() => { card.style.transition = ''; }, 400);
-  } else {
-    card.classList.remove("expanded");
-    syncRowHeights();
-  }
-}
 
 let syncRowHeightsTimeout = null;
 
@@ -2519,11 +1793,12 @@ function syncRowHeights() {
           container.style.maxHeight = "";
         }
         const isExpanded = card.classList.contains("expanded");
-        const items = bar.items || [];
-        const collapsedVisibleSet = getCollapsedVisibleIndices(items, 3);
         card.querySelectorAll(".card-checklist-item").forEach((item, index) => {
-          const isCollapsedVisible = collapsedVisibleSet.has(index);
-          item.style.display = isExpanded || isCollapsedVisible ? "flex" : "none";
+          if (index >= 3) {
+            item.style.display = isExpanded ? "flex" : "none";
+          } else {
+            item.style.display = "flex";
+          }
         });
       }
 
@@ -2613,7 +1888,6 @@ function syncRowHeights() {
             if (isExpanded) {
               if (showLessBtn) showLessBtn.style.display = "inline-block";
               if (showMoreBtn) showMoreBtn.style.display = "none";
-              textEl.style.maxHeight = `${textEl.scrollHeight}px`;
             } else {
               // Clamp to the exact number of lines that fit within maxAvailableHeight
               const linesCount = Math.max(4, Math.floor(maxAvailableHeight / lineHeight));
@@ -2648,14 +1922,6 @@ function syncRowHeights() {
           } else {
             if (isExpanded) {
               if (showLessBtn) showLessBtn.style.display = "inline-block";
-              // Calculate full height of all checklist items
-              const items = Array.from(card.querySelectorAll(".card-checklist-item"));
-              let fullHeight = 0;
-              items.forEach((item, index) => {
-                const itemSpacing = index === 0 ? item.offsetHeight : item.offsetHeight + 8;
-                fullHeight += itemSpacing;
-              });
-              container.style.maxHeight = `${fullHeight}px`;
             } else {
               // First, make all items display: flex so we can measure their offsets and heights
               const items = Array.from(card.querySelectorAll(".card-checklist-item"));
@@ -2695,12 +1961,9 @@ function syncRowHeights() {
                 }
               });
 
-              const barItems = bar.items || [];
-              const collapsedVisibleSet = getCollapsedVisibleIndices(barItems, visibleCount);
-
               // Set final display state based on which items fit
               items.forEach((item, index) => {
-                if (collapsedVisibleSet.has(index)) {
+                if (index < visibleCount) {
                   item.style.display = "flex";
                 } else {
                   item.style.display = "none";
@@ -2740,14 +2003,6 @@ function syncRowHeights() {
 }
 
 window.addEventListener("resize", syncRowHeights);
-
-window.addEventListener('offline', () => {
-  showToast("You're offline. Changes won't be saved until you're back online.", "error");
-});
-
-window.addEventListener('online', () => {
-  showToast("Back online. Your changes will now sync.", "success");
-});
 
 // Close active modals and dropdowns on Escape key press
 document.addEventListener("keydown", (e) => {
@@ -2885,7 +2140,7 @@ function renderCreateChecklist() {
     const li = document.createElement("li");
     li.className = "checklist-builder-item";
     li.innerHTML = `
-      <textarea class="form-input form-input-single-line item-text-input" rows="1" data-index="${index}">${escapeHtml(item.text)}</textarea>
+      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
       <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
           <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
@@ -2952,8 +2207,8 @@ function openCreateModal() {
   formCreate.reset();
   const dateInput = document.getElementById('deadline-date');
   const timeInput = document.getElementById('deadline-time');
-  if (dateInput) dateInput.value = "";
-  if (timeInput) timeInput.value = "";
+  if (dateInput) dateInput.type = 'text';
+  if (timeInput) timeInput.type = 'text';
   document.getElementById("create-type-goal").checked = true;
   createChecklistItems = [];
   renderCreateChecklist();
@@ -2971,13 +2226,6 @@ function openCreateModal() {
   if (endAlertToggle) endAlertToggle.checked = false;
 
   updateNotificationPreview("");
-
-  const createNoteText = document.getElementById("create-note-text");
-  if (createNoteText) {
-    initializeNoteEditor(createNoteText, "");
-    const counter = document.getElementById("create-note-char-count");
-    if (counter) counter.textContent = "0 / 1600";
-  }
 
   openModal(modalCreate);
 }
@@ -3021,45 +2269,45 @@ function rebuildCustomConfigFields() {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Books" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required>
       </div>
     `;
   } else if (count === 2) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Chapters" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Chapters" required>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Smallest)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l2-name" placeholder="e.g. Sections" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Sections" required>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Sections per Chapter?</label>
-        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l2-ratio" required>10</textarea>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required>
       </div>
     `;
   } else if (count === 3) {
     container.innerHTML = `
       <div class="custom-level-row">
         <label class="form-label">Level 1 Unit Name (Largest)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l1-name" placeholder="e.g. Books" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l1-name" placeholder="e.g. Books" required>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 2 Unit Name (Middle)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l2-name" placeholder="e.g. Chapters" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l2-name" placeholder="e.g. Chapters" required>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l2">
         <label class="form-label" id="label-ratio-l2">How many Chapters per Book?</label>
-        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l2-ratio" required>10</textarea>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l2-ratio" value="10" min="2" required>
       </div>
       <div class="custom-level-row">
         <label class="form-label">Level 3 Unit Name (Smallest)</label>
-        <textarea class="form-input form-input-single-line custom-level-name-input" rows="1" id="custom-l3-name" placeholder="e.g. Pages" required></textarea>
+        <input class="form-input custom-level-name-input" type="text" id="custom-l3-name" placeholder="e.g. Pages" required>
       </div>
       <div class="form-group custom-ratio-group hidden" id="ratio-group-l3">
         <label class="form-label" id="label-ratio-l3">How many Pages per Chapter?</label>
-        <textarea class="form-input form-input-single-line custom-level-ratio-input" rows="1" inputmode="numeric" id="custom-l3-ratio" required>10</textarea>
+        <input class="form-input custom-level-ratio-input" type="number" id="custom-l3-ratio" value="10" min="2" required>
       </div>
     `;
   }
@@ -3196,14 +2444,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+      <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createTargetDynamic.appendChild(targetCol);
 
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+      <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -3351,7 +2599,7 @@ function openUpdateModal(bar) {
     const textVal = bar.text || "";
     const updateTextEl = document.getElementById("update-note-text");
     if (updateTextEl) {
-      initializeNoteEditor(updateTextEl, textVal);
+      updateTextEl.value = textVal;
       const counter = document.getElementById("update-note-char-count");
       if (counter) counter.textContent = `${textVal.length} / 1600`;
     }
@@ -3454,7 +2702,7 @@ function renderEditChecklist() {
     const li = document.createElement("li");
     li.className = "checklist-builder-item";
     li.innerHTML = `
-      <textarea class="form-input form-input-single-line item-text-input" rows="1" data-index="${index}">${escapeHtml(item.text)}</textarea>
+      <input type="text" class="item-text-input" value="${escapeHtml(item.text)}" data-index="${index}">
       <button type="button" class="btn-reorder-item" data-index="${index}" title="Drag to rearrange">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
           <circle cx="9" cy="5" r="1.5" fill="currentColor"></circle>
@@ -3545,7 +2793,7 @@ function openEditModal(bar) {
       const targetCol = document.createElement("div");
       targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+        <input class="form-input target-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
       `;
       editTargetDynamic.appendChild(targetCol);
 
@@ -3553,7 +2801,7 @@ function openEditModal(bar) {
         const currentCol = document.createElement("div");
         currentCol.innerHTML = `
           <label class="form-row-label">${escapeHtml(level.name)}</label>
-          <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+          <input class="form-input current-val-input" type="number" step="${stepVal}" data-level-name="${escapeHtml(level.name)}" min="0" placeholder="0">
         `;
         editCurrentDynamic.appendChild(currentCol);
       }
@@ -3581,7 +2829,7 @@ function openEditModal(bar) {
     const textVal = bar.text || "";
     const editTextEl = document.getElementById("edit-note-text");
     if (editTextEl) {
-      initializeNoteEditor(editTextEl, textVal);
+      editTextEl.value = textVal;
       const counter = document.getElementById("edit-note-char-count");
       if (counter) counter.textContent = `${textVal.length} / 1600`;
     }
@@ -3595,9 +2843,11 @@ function openEditModal(bar) {
   const editDateInput = document.getElementById('edit-deadline-date');
   const editTimeInput = document.getElementById('edit-deadline-time');
   if (editDateInput) {
+    editDateInput.type = 'text';
     editDateInput.value = "";
   }
   if (editTimeInput) {
+    editTimeInput.type = 'text';
     editTimeInput.value = "";
   }
 
@@ -3616,9 +2866,11 @@ function openEditModal(bar) {
       const dateInput = document.getElementById('edit-deadline-date');
       const timeInput = document.getElementById('edit-deadline-time');
       if (dateInput) {
+        dateInput.type = 'date';
         dateInput.value = dateStr;
       }
       if (timeInput) {
+        timeInput.type = 'time';
         timeInput.value = `${hrsStr}:${minsStr}`;
       }
 
@@ -3784,7 +3036,7 @@ formCreate.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (type === "note") {
-    text = serializeNoteEditor("create-note-text");
+    text = document.getElementById("create-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -3818,9 +3070,9 @@ formCreate.addEventListener("submit", async (e) => {
     }
   }
 
-  if (currentBars.length >= 85) {
+  if (currentBars.length >= 50) {
     showToast(
-      "You've reached the maximum of 85 progress bars. Delete one to create a new one.",
+      "You've reached the maximum of 50 progress bars. Delete one to create a new one.",
       "error"
     );
     return;
@@ -3946,7 +3198,7 @@ formEdit.addEventListener("submit", async (e) => {
     targetSmallest = items.length;
     currentSmallest = items.filter(item => item.done).length;
   } else if (barType === "note") {
-    text = serializeNoteEditor("edit-note-text");
+    text = document.getElementById("edit-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -4141,7 +3393,7 @@ formUpdate.addEventListener("submit", async (e) => {
       showToast("Failed to update checklist progress.", "error");
     }
   } else if (barType === "note") {
-    const text = serializeNoteEditor("update-note-text");
+    const text = document.getElementById("update-note-text").value.substring(0, 1600);
     if (!text.trim()) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -4234,34 +3486,18 @@ async function migrateGuestBarsToSupabase(uid) {
     } catch (e) {
       console.error('Migration failed for bar:', bar.title, e);
       failCount++;
-      bar._migrationRetryCount = (bar._migrationRetryCount || 0) + 1;
       failedBars.push(bar);
     }
   }
 
   if (failCount > 0) {
-    const finalFailures = failedBars.filter(b => b._migrationRetryCount >= 3);
-    const retryableFailures = failedBars.filter(b => b._migrationRetryCount < 3);
-
-    // Persist all failures to failed key
-    localStorage.setItem('progress_shelf_failed_migration_bars', JSON.stringify(failedBars));
-
-    if (retryableFailures.length > 0) {
-      const titles = retryableFailures.map(b => `"${b.title}"`).join(', ');
-      showToast(
-        `Failed to sync: ${titles}. Local data is preserved. Will retry on next load.`,
-        "error",
-        8000
-      );
-    }
-    if (finalFailures.length > 0) {
-      const titles = finalFailures.map(b => `"${b.title}"`).join(', ');
-      showToast(
-        `Sync failed after multiple attempts: ${titles}. Manual attention or re-login needed.`,
-        "error",
-        10000
-      );
-    }
+    // Restore failed bars to localStorage
+    localStorage.setItem('progress_shelf_bars', JSON.stringify(failedBars));
+    sessionStorage.setItem('guest_mode', 'true');
+    showToast(
+      `${failCount} bar(s) failed to sync. Your local data is preserved. Try signing in again.`,
+      "error"
+    );
   }
 
   migrationInProgress = false;
@@ -4378,70 +3614,71 @@ function adjustSearchLayout() {
 
   if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar || !subbarEl || !subbarContainer) return;
 
-  // Always keep search container in pill mode (always expanded)
-  searchContainer.classList.add("search-pill-mode");
-  searchContainer.classList.remove("expanded");
+  const btnRefresh = document.getElementById("btn-refresh");
+  const btnDownload = document.getElementById("btn-download-apk");
+  const githubLink = document.querySelector(".nav-github-link");
+  const versionSelector = document.querySelector(".version-selector");
 
-  // Dynamically gather all transferable elements from both potential containers
-  const transferItems = [];
-  // Gather from toolbar
-  Array.from(toolbar.children).forEach(child => {
-    if (!child.classList.contains("profile-menu-container") && !transferItems.includes(child)) {
-      transferItems.push(child);
-    }
-  });
-  // Gather from subbarContainer
-  Array.from(subbarContainer.children).forEach(child => {
-    if (!transferItems.includes(child)) {
-      transferItems.push(child);
-    }
-  });
-
-  const isCurrentlyInMobileDOM = transferItems.length > 0 && transferItems[0].parentElement === subbarContainer;
+  // Mobile layout threshold at 494px wide
+  const isMobileSize = window.innerWidth < 494;
+  const isCurrentlyInMobileDOM = btnRefresh && btnRefresh.parentElement === subbarContainer;
 
   // Cache toolbar width when in desktop mode so we don't do layout thrashing on resize
   if (!isCurrentlyInMobileDOM && toolbar.clientWidth > 0) {
     cachedToolbarWidth = toolbar.getBoundingClientRect().width;
   }
 
-  // Fallback if not cached yet: calculate based on active transfer items (approx 40px per item)
-  const toolbarWidth = cachedToolbarWidth || (transferItems.length * 40);
+  // Fallback if not cached yet
+  const toolbarWidth = cachedToolbarWidth || 180;
 
-  // Calculate dynamic spacing
-  const navWidth = navContainer.clientWidth;
-  const logoWidth = logo.getBoundingClientRect().width || 170;
-  const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-  const searchMinWidth = 160;
-
-  // Total required width: Logo + Min Search Pill Width + Profile Badge + Toolbar width + 50px buffer
-  const totalRequiredWidth = logoWidth + searchMinWidth + profileWidth + toolbarWidth + 50;
-  const shouldMoveToSubbar = navWidth < totalRequiredWidth;
-
-  if (shouldMoveToSubbar) {
+  if (isMobileSize) {
     if (!isCurrentlyInMobileDOM) {
       // Mobile layout: move elements to mobile subbar
-      transferItems.forEach(item => {
-        if (item.parentElement !== subbarContainer) {
-          subbarContainer.appendChild(item);
-        }
-      });
-      subbarEl.style.display = "flex"; // Show subbar
+      if (btnDownload) subbarContainer.appendChild(btnDownload);
+      if (btnRefresh) subbarContainer.appendChild(btnRefresh);
+      if (githubLink) subbarContainer.appendChild(githubLink);
+      if (versionSelector) subbarContainer.appendChild(versionSelector);
+
+      subbarEl.style.display = ""; // Show subbar
+      searchContainer.classList.add("search-pill-mode");
+      searchContainer.classList.remove("expanded");
+
+      // Update sticky offsets since heights changed
       window.updateStickyOffsets?.();
     }
   } else {
     if (isCurrentlyInMobileDOM) {
       // Desktop layout: move elements back to navbar (before profile badge)
-      transferItems.forEach(item => {
-        if (item.parentElement !== toolbar) {
-          if (profileBadge) {
-            toolbar.insertBefore(item, profileBadge);
-          } else {
-            toolbar.appendChild(item);
-          }
-        }
-      });
+      if (profileBadge) {
+        if (btnDownload) toolbar.insertBefore(btnDownload, profileBadge);
+        if (btnRefresh) toolbar.insertBefore(btnRefresh, profileBadge);
+        if (githubLink) toolbar.insertBefore(githubLink, profileBadge);
+        if (versionSelector) toolbar.insertBefore(versionSelector, profileBadge);
+      } else {
+        if (btnDownload) toolbar.appendChild(btnDownload);
+        if (btnRefresh) toolbar.appendChild(btnRefresh);
+        if (githubLink) toolbar.appendChild(githubLink);
+        if (versionSelector) toolbar.appendChild(versionSelector);
+      }
+
       subbarEl.style.display = "none"; // Hide subbar
+
+      // Update sticky offsets since heights changed
       window.updateStickyOffsets?.();
+    }
+
+    // Check if search bar should be pill mode or icon-only on desktop
+    const navWidth = navContainer.clientWidth;
+    const logoWidth = logo.getBoundingClientRect().width;
+    const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
+    
+    const minRequiredWidth = getPlaceholderWidth(searchInput) + 64;
+    const availableWidthWithDesktopToolbar = navWidth - logoWidth - profileWidth - toolbarWidth - 48;
+
+    if (searchInput.value.trim() !== "" || availableWidthWithDesktopToolbar >= minRequiredWidth) {
+      searchContainer.classList.add("search-pill-mode");
+    } else {
+      searchContainer.classList.remove("search-pill-mode");
     }
   }
 }
@@ -4492,18 +3729,6 @@ const setupGlobalSearchListener = () => {
   const searchContainer = document.querySelector(".nav-search-container");
   const clearBtn = document.getElementById("btn-clear-search");
 
-  const updateSearchPlaceholder = () => {
-    if (!searchInput) return;
-    const isLargeScreen = window.innerWidth >= 1024;
-    if (isLargeScreen) {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const shortcutText = isMac ? "⌘F" : "Ctrl+F";
-      searchInput.placeholder = `Global Search [${shortcutText}]`;
-    } else {
-      searchInput.placeholder = "Global Search";
-    }
-  };
-
   const toggleClearBtn = () => {
     if (searchInput && searchInput.value) {
       clearBtn?.classList.remove("hidden");
@@ -4525,25 +3750,6 @@ const setupGlobalSearchListener = () => {
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         searchInput.blur(); // Collapse virtual keyboard on mobile / enter on desktop
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        deactivateSearch(false);
-      }
-    });
-
-    // Intercept CTRL+F / CMD+F to focus global search (skip if Terrace is open)
-    window.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
-        if (typeof isTerraceOpen !== "undefined" && isTerraceOpen) {
-          return;
-        }
-        e.preventDefault();
-        const searchContainer = document.querySelector(".nav-search-container");
-        if (searchContainer && !searchContainer.classList.contains("search-pill-mode")) {
-          searchContainer.classList.add("expanded");
-        }
-        searchInput.focus();
-        activateSearch();
       }
     });
   }
@@ -4578,21 +3784,14 @@ const setupGlobalSearchListener = () => {
     });
   }
 
-  window.addEventListener("resize", () => {
-    adjustSearchLayout();
-    updateSearchPlaceholder();
-  });
+  window.addEventListener("resize", adjustSearchLayout);
 
   if (document.fonts) {
-    document.fonts.ready.then(() => {
-      adjustSearchLayout();
-      updateSearchPlaceholder();
-    });
+    document.fonts.ready.then(adjustSearchLayout);
   }
 
   // Run initial layout check
   adjustSearchLayout();
-  updateSearchPlaceholder();
 };
 setupGlobalSearchListener();
 
@@ -4604,11 +3803,6 @@ btnProfileBadge?.addEventListener("click", (e) => {
   if (profileDropdown) {
     const wasActive = profileDropdown.classList.contains("active");
     if (!wasActive) {
-      // Position dropdown dynamically relative to the badge to avoid nested backdrop-filter bug
-      const rect = btnProfileBadge.getBoundingClientRect();
-      profileDropdown.style.top = `${rect.bottom + window.scrollY + 12}px`;
-      profileDropdown.style.left = `${rect.right + window.scrollX - 220}px`;
-
       profileDropdown.classList.add("active");
       history.pushState({ profileDropdown: true }, "");
     } else {
@@ -4733,34 +3927,6 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
-  // Silent auto-migration if guest logs in or has local bars
-  const failedMigrationBars = (() => {
-    try {
-      const data = localStorage.getItem('progress_shelf_failed_migration_bars');
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
-  })();
-  if (failedMigrationBars.length > 0) {
-    const toRetry = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) < 3);
-    const toKeepInBackup = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) >= 3);
-
-    if (toRetry.length > 0) {
-      // Put retryable cards back into the active migration queue
-      const currentLocal = getLocalBars();
-      const combined = [...currentLocal, ...toRetry];
-      localStorage.setItem('progress_shelf_bars', JSON.stringify(combined));
-      
-      // Update failed key to only hold the ones we aren't retrying
-      if (toKeepInBackup.length > 0) {
-        localStorage.setItem('progress_shelf_failed_migration_bars', JSON.stringify(toKeepInBackup));
-      } else {
-        localStorage.removeItem('progress_shelf_failed_migration_bars');
-      }
-    }
-  }
-
   const localBars = getLocalBars();
   const hasLocalBars = localBars && localBars.length > 0;
 
@@ -4792,44 +3958,28 @@ initAuthProtection(async (user) => {
             await handleFCMSession(user.uid);
           }
         }
-        // Run full bell health check after token verification resolves
-        cachedBellHealth = await getNotificationHealthStatus(user.uid);
-        refreshAllBellStates(cachedBellHealth);
       }).catch(err => console.error("Error verifying FCM token on load:", err));
     } else {
       if (Notification.permission === "granted") {
         console.log("No FCM token found locally, but permission is granted. Registering fresh token...");
         handleFCMSession(user.uid);
       }
-      // Run full bell health check even when no local token was found
-      cachedBellHealth = await getNotificationHealthStatus(user.uid);
-      refreshAllBellStates(cachedBellHealth);
     }
 
-    // Periodically re-sync FCM token and bell health every 3 minutes
+    // Periodically re-sync FCM token every 3 minutes while app is active
     setInterval(async () => {
       if (currentUser && currentUser.uid && !isGuestMode() && Notification.permission === 'granted') {
         await handleFCMSession(currentUser.uid);
       }
-      if (currentUser && currentUser.uid) {
-        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-        refreshAllBellStates(cachedBellHealth);
-      }
     }, 3 * 60 * 1000);
-  } else if (isGuestMode()) {
-    // Guest users: immediately set red health so bells render correctly on load
-    cachedBellHealth = { status: 'red', reason: 'guest' };
-    refreshAllBellStates(cachedBellHealth);
   }
 
-  // Token re-sync and bell health check on tab/PWA foreground
+  // Token re-sync on app foreground
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser && currentUser.uid && !isGuestMode()) {
       if (Notification.permission === 'granted') {
         await handleFCMSession(currentUser.uid);
       }
-      cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-      refreshAllBellStates(cachedBellHealth);
     }
   });
 
@@ -4870,8 +4020,6 @@ initAuthProtection(async (user) => {
   }
 
   // Render profile info
-  const profileName = document.getElementById("profile-name");
-  let firstName = "Guest";
   if (isGuestMode()) {
     userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = "Guest User";
@@ -4879,13 +4027,7 @@ initAuthProtection(async (user) => {
   } else {
     userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
     userName.textContent = user.displayName || "Tracker User";
-    if (user.displayName) {
-      firstName = user.displayName.trim().split(/\s+/)[0];
-    }
     if (userStatus) userStatus.textContent = "Signed In (Cloud)";
-  }
-  if (profileName) {
-    profileName.textContent = firstName;
   }
 
   // Show application content, hide splash screen
@@ -4904,11 +4046,12 @@ initAuthProtection(async (user) => {
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
+      syncFabVisibility();
       
       // Dynamic Notification Permission Banner check (Rule 3)
       if (user && user.uid && Notification.permission === "default") {
-        const hasUpcomingNotifications = (bars || []).some(bar => hasActiveNotification(bar));
-        if (hasUpcomingNotifications) {
+        const hasNotifyAt = (bars || []).some(bar => bar.notifyAt);
+        if (hasNotifyAt) {
           showNotificationBanner(user.uid);
         } else {
           document.getElementById("notification-banner")?.remove();
@@ -5329,23 +4472,8 @@ function setupNotificationListeners(prefix = "") {
   }
 
   // Toggle switch listeners
-  const handleToggleClick = (e) => {
-    if (isGuestMode()) {
-      e.preventDefault();
-      e.currentTarget.checked = false;
-      showToast("Notifications cannot be enabled in guest mode. Please sign in with an account to enable tracker alerts.", "error");
-      runUpdate();
-    }
-  };
-
-  if (toggle) {
-    toggle.addEventListener('click', handleToggleClick);
-    toggle.addEventListener('change', runUpdate);
-  }
-  if (endAlertToggle) {
-    endAlertToggle.addEventListener('click', handleToggleClick);
-    endAlertToggle.addEventListener('change', runUpdate);
-  }
+  toggle?.addEventListener('change', runUpdate);
+  endAlertToggle?.addEventListener('change', runUpdate);
 
   // Auto-clearing input triggers
   const onFixedType = () => {
@@ -5389,723 +4517,198 @@ function setupNotificationListeners(prefix = "") {
 setupNotificationListeners("");
 setupNotificationListeners("edit-");
 
-function getListContinuationIndent(line) {
-  const bulletMatch = line.match(/^(\s*)([-*•●])(\s+)/);
-  if (bulletMatch) {
-    return bulletMatch[1] + ' '.repeat(bulletMatch[2].length + bulletMatch[3].length);
-  }
-  const numMatch = line.match(/^(\s*)(\d+)([.)])(\s+)/);
-  if (numMatch) {
-    return numMatch[1] + ' '.repeat(numMatch[2].length + numMatch[3].length + numMatch[4].length);
-  }
-  const alphaMatch = line.match(/^(\s*)([a-zA-Z])([.)])(\s+)/);
-  if (alphaMatch) {
-    return alphaMatch[1] + ' '.repeat(alphaMatch[2].length + alphaMatch[3].length + alphaMatch[4].length);
-  }
-  const romanMatch = line.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])(\s+)/i);
-  if (romanMatch) {
-    return romanMatch[1] + ' '.repeat(romanMatch[2].length + romanMatch[3].length + romanMatch[4].length);
-  }
-  return null;
-}
-
-function updateListNumbers(editor) {
-  let currentNumber = 1;
-  let inNumberSequence = false;
-  const children = editor.children;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    if (child.getAttribute('data-type') === 'number') {
-      if (!inNumberSequence) {
-        inNumberSequence = true;
-        currentNumber = 1;
-      }
-      child.setAttribute('data-number', currentNumber);
-      currentNumber++;
-    } else {
-      inNumberSequence = false;
-    }
-  }
-}
-
-function getCaretCharacterOffsetWithin(element) {
-  try {
-    let caretOffset = 0;
-    const doc = element.ownerDocument || document;
-    const win = doc.defaultView || window;
-    const sel = win.getSelection();
-    if (sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      const preCaretRange = range.cloneRange();
-      preCaretRange.selectNodeContents(element);
-      preCaretRange.setEnd(range.startContainer, range.startOffset);
-      caretOffset = preCaretRange.toString().length;
-    }
-    return caretOffset;
-  } catch (e) {
-    console.warn("Error getting caret offset:", e);
-    return 0;
-  }
-}
-
-function setCaretCharacterOffsetWithin(element, offset) {
-  try {
-    const doc = element.ownerDocument || document;
-    const win = doc.defaultView || window;
-    const sel = win.getSelection();
-    const range = doc.createRange();
-    
-    let currentOffset = 0;
-    let found = false;
-
-    function traverse(node) {
-      if (found) return;
-      if (node.nodeType === Node.TEXT_NODE) {
-        if (currentOffset + node.length >= offset) {
-          range.setStart(node, offset - currentOffset);
-          range.collapse(true);
-          found = true;
-        } else {
-          currentOffset += node.length;
-        }
-      } else {
-        for (let i = 0; i < node.childNodes.length; i++) {
-          traverse(node.childNodes[i]);
-          if (found) break;
-        }
-      }
-    }
-
-    traverse(element);
-    if (!found) {
-      const targetNode = element.firstChild || element;
-      range.setStart(targetNode, 0);
-      range.collapse(true);
-    }
-    
-    sel.removeAllRanges();
-    sel.addRange(range);
-  } catch (e) {
-    console.warn("Error setting caret offset:", e);
-  }
-}
-
-function formatInlineStyles(text) {
-  if (!text) return "<br>";
-  let html = escapeHtml(text);
-  
-  // Wrap headers:
-  if (text.startsWith("### ")) {
-    html = '<span class="markdown-syntax">### </span>' + html.substring(4);
-  } else if (text.startsWith("## ")) {
-    html = '<span class="markdown-syntax">## </span>' + html.substring(3);
-  } else if (text.startsWith("# ")) {
-    html = '<span class="markdown-syntax"># </span>' + html.substring(2);
-  }
-  
-  // Bold: **text** or __text__
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="note-bold"><span class="markdown-syntax">**</span>$1<span class="markdown-syntax">**</span></strong>');
-  html = html.replace(/__(.*?)__/g, '<strong class="note-bold"><span class="markdown-syntax">__</span>$1<span class="markdown-syntax">__</span></strong>');
-  
-  // Strikethrough: ~~text~~
-  html = html.replace(/~~(.*?)~~/g, '<del class="note-strikethrough"><span class="markdown-syntax">~~</span>$1<span class="markdown-syntax">~~</span></del>');
-  
-  // Italic: *text* or _text_
-  html = html.replace(/\*(.*?)\*/g, '<em class="note-italic"><span class="markdown-syntax">*</span>$1<span class="markdown-syntax">*</span></em>');
-  html = html.replace(/_(.*?)_/g, '<em class="note-italic"><span class="markdown-syntax">_</span>$1<span class="markdown-syntax">_</span></em>');
-  
-  // Inline Code: `code`
-  html = html.replace(/`(.*?)`/g, '<code class="note-code"><span class="markdown-syntax">`</span>$1<span class="markdown-syntax">`</span></code>');
-  
-  // Code block start/end on the line
-  if (text.trim().startsWith("```")) {
-    html = `<span class="markdown-syntax">` + html + `</span>`;
-  }
-  
-  return html;
-}
-
-function isLineInCodeBlock(node, editor) {
-  let inCodeBlock = false;
-  const children = editor.children;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    if (child === node) {
-      return inCodeBlock;
-    }
-    if (child.textContent.trim().startsWith("```")) {
-      inCodeBlock = !inCodeBlock;
-    }
-  }
-  return false;
-}
-
-function formatLineNode(node, editor) {
-  if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
-  const text = node.textContent;
-  const currentType = node.getAttribute("data-type");
-
-  // 1. Bullet formatting: ^([-*])\s
-  const bulletMatch = text.match(/^([-*])\s(.*)$/);
-  if (bulletMatch) {
-    const marker = bulletMatch[1];
-    const rest = bulletMatch[2];
-
-    const selection = window.getSelection();
-    let offset = 0;
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      offset = range.startOffset;
-    }
-
-    node.className = "note-line-bullet";
-    node.setAttribute("data-type", "bullet");
-    node.setAttribute("data-marker", marker);
-    node.removeAttribute("data-number");
-
-    if (rest === "") {
-      node.innerHTML = "<br>";
-    } else {
-      node.innerHTML = formatInlineStyles(rest);
-    }
-
-    // Restore caret position
-    const newOffset = Math.max(0, offset - 2);
-    setCaretCharacterOffsetWithin(node, newOffset);
-    return true;
-  }
-
-  // 2. Numbered formatting: ^(\d+)\.\s
-  const numMatch = text.match(/^(\d+)\.\s(.*)$/);
-  if (numMatch) {
-    const num = numMatch[1];
-    const rest = numMatch[2];
-    const prefixLen = num.length + 2;
-
-    const selection = window.getSelection();
-    let offset = 0;
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      offset = range.startOffset;
-    }
-
-    node.className = "note-line-number";
-    node.setAttribute("data-type", "number");
-    node.setAttribute("data-number", num);
-
-    if (rest === "") {
-      node.innerHTML = "<br>";
-    } else {
-      node.innerHTML = formatInlineStyles(rest);
-    }
-
-    // Restore caret position
-    const newOffset = Math.max(0, offset - prefixLen);
-    setCaretCharacterOffsetWithin(node, newOffset);
-
-    updateListNumbers(editor);
-    return true;
-  }
-
-  // 3. Headers: H1 (# ), H2 (## ), H3 (### ) - prefix is NOT stripped!
-  if (text.startsWith("### ")) {
-    node.className = "note-h3";
-    node.setAttribute("data-type", "h3");
-    node.removeAttribute("data-number");
-    const offset = getCaretCharacterOffsetWithin(node);
-    node.innerHTML = formatInlineStyles(text);
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  if (text.startsWith("## ")) {
-    node.className = "note-h2";
-    node.setAttribute("data-type", "h2");
-    node.removeAttribute("data-number");
-    const offset = getCaretCharacterOffsetWithin(node);
-    node.innerHTML = formatInlineStyles(text);
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  if (text.startsWith("# ")) {
-    node.className = "note-h1";
-    node.setAttribute("data-type", "h1");
-    node.removeAttribute("data-number");
-    const offset = getCaretCharacterOffsetWithin(node);
-    node.innerHTML = formatInlineStyles(text);
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  // 4. Preserve existing formatting if already activated (only for lists and code blocks)
-  if (currentType === "bullet") {
-    node.className = "note-line-bullet";
-    const offset = getCaretCharacterOffsetWithin(node);
-    node.innerHTML = text === "" ? "<br>" : formatInlineStyles(text);
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  if (currentType === "number") {
-    node.className = "note-line-number";
-    const offset = getCaretCharacterOffsetWithin(node);
-    node.innerHTML = text === "" ? "<br>" : formatInlineStyles(text);
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  // 5. Code Block
-  const isCode = text.trim().startsWith("```") || isLineInCodeBlock(node, editor);
-  if (isCode) {
-    node.className = "note-code-block";
-    node.setAttribute("data-type", text.trim().startsWith("```") ? "code-block-boundary" : "code-block-content");
-    node.removeAttribute("data-number");
-
-    const offset = getCaretCharacterOffsetWithin(node);
-    if (text === "") {
-      node.innerHTML = "<br>";
-    } else {
-      node.innerHTML = formatInlineStyles(text);
-    }
-    setCaretCharacterOffsetWithin(node, offset);
-    return true;
-  }
-
-  // 6. Plain text
-  node.className = "note-p";
-  node.removeAttribute("data-type");
-  node.removeAttribute("data-number");
-
-  const offset = getCaretCharacterOffsetWithin(node);
-  if (text === "") {
-    node.innerHTML = "<br>";
-  } else {
-    node.innerHTML = formatInlineStyles(text);
-  }
-  setCaretCharacterOffsetWithin(node, offset);
-  return true;
-}
-
-function initializeNoteEditor(editor, rawText) {
-  if (typeof editor === 'string') {
-    editor = document.getElementById(editor);
-  }
-  if (!editor) return;
-
-  editor.innerHTML = "";
-  if (!rawText) {
-    const div = document.createElement("div");
-    div.className = "note-p";
-    div.innerHTML = "<br>";
-    editor.appendChild(div);
-    return;
-  }
-
-  let inCodeBlock = false;
-  const lines = rawText.split("\n");
-  lines.forEach(line => {
-    const div = document.createElement("div");
-    const bulletMatch = line.match(/^(\s*)([-*•●])\s+(.*)$/);
-    const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-    
-    if (line.trim().startsWith("```")) {
-      div.className = "note-code-block";
-      div.setAttribute("data-type", "code-block-boundary");
-      div.innerHTML = formatInlineStyles(line);
-      inCodeBlock = !inCodeBlock;
-    } else if (inCodeBlock) {
-      div.className = "note-code-block";
-      div.setAttribute("data-type", "code-block-content");
-      div.innerHTML = formatInlineStyles(line);
-    } else if (bulletMatch) {
-      div.className = "note-line-bullet";
-      div.setAttribute("data-type", "bullet");
-      div.setAttribute("data-marker", bulletMatch[2]);
-      div.innerHTML = formatInlineStyles(bulletMatch[3]);
-    } else if (numMatch) {
-      div.className = "note-line-number";
-      div.setAttribute("data-type", "number");
-      div.setAttribute("data-number", numMatch[2]);
-      div.innerHTML = formatInlineStyles(numMatch[3]);
-    } else if (line.startsWith("### ")) {
-      div.className = "note-h3";
-      div.setAttribute("data-type", "h3");
-      div.innerHTML = formatInlineStyles(line);
-    } else if (line.startsWith("## ")) {
-      div.className = "note-h2";
-      div.setAttribute("data-type", "h2");
-      div.innerHTML = formatInlineStyles(line);
-    } else if (line.startsWith("# ")) {
-      div.className = "note-h1";
-      div.setAttribute("data-type", "h1");
-      div.innerHTML = formatInlineStyles(line);
-    } else {
-      div.className = "note-p";
-      if (line === "") {
-        div.innerHTML = "<br>";
-      } else {
-        div.innerHTML = formatInlineStyles(line);
-      }
-    }
-    editor.appendChild(div);
-  });
-  updateListNumbers(editor);
-}
-
-function serializeNoteEditor(editor) {
-  if (typeof editor === 'string') {
-    editor = document.getElementById(editor);
-  }
-  if (!editor) return "";
-
-  const lines = [];
-  const children = editor.children;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    const type = child.getAttribute("data-type");
-    const text = child.textContent;
-    if (type === "bullet") {
-      lines.push("- " + text);
-    } else if (type === "number") {
-      const num = child.getAttribute("data-number") || "1";
-      lines.push(num + ". " + text);
-    } else {
-      lines.push(text);
-    }
-  }
-  return lines.join("\n");
-}
-
-function setupContenteditableEditor(editor, counterId) {
-  const counter = document.getElementById(counterId);
-
-  function updateCounter() {
-    const text = serializeNoteEditor(editor);
-    if (counter) counter.textContent = `${text.length} / 1600`;
-  }
-
-  editor.addEventListener('input', (e) => {
-    // Character limit enforcement
-    const serialized = serializeNoteEditor(editor);
-    if (serialized.length > 1600) {
-      const selection = window.getSelection();
-      let offset = 0;
-      let textNode = null;
-      if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        textNode = range.startContainer;
-        offset = range.startOffset;
-      }
-      const overAmount = serialized.length - 1600;
-      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-        const val = textNode.nodeValue;
-        textNode.nodeValue = val.substring(0, Math.max(0, val.length - overAmount));
-        // Restore caret
-        const newRange = document.createRange();
-        newRange.setStart(textNode, Math.min(offset, textNode.length));
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      }
-      showToast("Character limit of 1600 reached.", "warning");
-      updateCounter();
-      return;
-    }
-
-    // Ensure editor always contains at least one line element
-    if (editor.children.length === 0) {
-      const div = document.createElement("div");
-      div.className = "note-p";
-      div.innerHTML = "<br>";
-      editor.appendChild(div);
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.setStart(div, 0);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-
-    // Check formatting on active line
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      let node = range.startContainer;
-      while (node && node.parentElement !== editor) {
-        node = node.parentElement;
-      }
-      if (node && node.nodeType === Node.ELEMENT_NODE) {
-        formatLineNode(node, editor);
-      }
-    }
-    updateCounter();
-  });
-
-  editor.addEventListener('keydown', (e) => {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
-    let node = range.startContainer;
-    while (node && node.parentElement !== editor) {
-      node = node.parentElement;
-    }
-    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-
-    if (e.key === 'Enter') {
-      const type = node.getAttribute("data-type");
-      const contentText = node.textContent.trim();
-
-      if (type === 'h1' || type === 'h2' || type === 'h3') {
-        e.preventDefault();
-        const offset = getCaretCharacterOffsetWithin(node);
-        const text = node.textContent;
-        const currentLineText = text.substring(0, offset);
-        const newLineText = text.substring(offset);
-        
-        // Update current header line text content
-        node.innerHTML = currentLineText === "" ? "<br>" : formatInlineStyles(currentLineText);
-        
-        // Create new plain line below it
-        const newDiv = document.createElement("div");
-        newDiv.className = "note-p";
-        newDiv.innerHTML = newLineText === "" ? "<br>" : formatInlineStyles(newLineText);
-        
-        node.parentNode.insertBefore(newDiv, node.nextSibling);
-        setCaretCharacterOffsetWithin(newDiv, 0);
-        updateCounter();
-        return;
-      }
-
-      if ((type === 'bullet' || type === 'number') && contentText === '') {
-        // Hitting Enter on empty list item -> breakout to plain paragraph
-        e.preventDefault();
-        node.className = "note-p";
-        node.removeAttribute("data-type");
-        node.removeAttribute("data-number");
-        node.innerHTML = "<br>";
-        
-        const newRange = document.createRange();
-        newRange.setStart(node, 0);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        
-        updateListNumbers(editor);
-        updateCounter();
-        return;
-      }
-
-      if (type === 'number') {
-        setTimeout(() => {
-          updateListNumbers(editor);
-          updateCounter();
-        }, 10);
-      }
-    }
-
-    if (e.key === 'Backspace') {
-      const type = node.getAttribute("data-type");
-      const offset = range.startOffset;
-      if ((type === 'bullet' || type === 'number') && offset === 0) {
-        // Caret is at the start of list item node -> convert back to plain paragraph
-        e.preventDefault();
-        node.className = "note-p";
-        node.removeAttribute("data-type");
-        node.removeAttribute("data-number");
-        
-        const textNode = node.firstChild || node;
-        const newRange = document.createRange();
-        newRange.setStart(textNode, 0);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        
-        updateListNumbers(editor);
-        updateCounter();
-        return;
-      }
-    }
-  });
-
-  editor.addEventListener('paste', (e) => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    if (!text) return;
-
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
-
-    const hasNewline = text.includes('\n') || text.includes('\r');
-    if (!hasNewline) {
-      // Inline paste: insert text node at current caret position without displacing active blocks
-      range.deleteContents();
-      const textNode = document.createTextNode(text);
-      range.insertNode(textNode);
-
-      // Move caret directly after the pasted content
-      range.setStartAfter(textNode);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-
-      // Apply live formatting to the active line node
-      let node = textNode.parentNode;
-      while (node && node.parentElement !== editor) {
-        node = node.parentNode;
-      }
-      if (node && node.nodeType === Node.ELEMENT_NODE) {
-        formatLineNode(node, editor);
-      }
-      updateCounter();
-      return;
-    }
-
-    const lines = text.split('\n');
-    const fragment = document.createDocumentFragment();
-    lines.forEach(line => {
-      const div = document.createElement('div');
-      const bulletMatch = line.match(/^(\s*)([-*•●])\s+(.*)$/);
-      const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-      if (bulletMatch) {
-        div.className = "note-line-bullet";
-        div.setAttribute("data-type", "bullet");
-        div.setAttribute("data-marker", bulletMatch[2]);
-        div.textContent = bulletMatch[3];
-      } else if (numMatch) {
-        div.className = "note-line-number";
-        div.setAttribute("data-type", "number");
-        div.setAttribute("data-number", numMatch[2]);
-        div.textContent = numMatch[3];
-      } else {
-        div.className = "note-p";
-        if (line === "") {
-          div.innerHTML = "<br>";
-        } else {
-          div.textContent = line;
-        }
-      }
-      fragment.appendChild(div);
-    });
-
-    range.deleteContents();
-    
-    let node = range.startContainer;
-    while (node && node.parentElement !== editor) {
-      node = node.parentElement;
-    }
-    
-    if (node) {
-      const parent = node.parentElement;
-      const lastInserted = fragment.lastChild;
-      const isEmptyNode = node.textContent === "" && node.innerHTML === "<br>";
-      if (isEmptyNode) {
-        parent.replaceChild(fragment, node);
-      } else {
-        parent.insertBefore(fragment, node.nextSibling);
-      }
-
-      if (lastInserted) {
-        const newRange = document.createRange();
-        const textNode = lastInserted.lastChild || lastInserted;
-        newRange.setStart(textNode, textNode.nodeType === Node.TEXT_NODE ? textNode.length : 0);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      }
-    } else {
-      editor.appendChild(fragment);
-    }
-
-    updateListNumbers(editor);
-    updateCounter();
-  });
-}
-
 function setupNoteCharCounters() {
-  const editors = [
+  const textareas = [
     { id: 'create-note-text', counterId: 'create-note-char-count' },
     { id: 'edit-note-text',   counterId: 'edit-note-char-count'   },
     { id: 'update-note-text', counterId: 'update-note-char-count' }
   ];
 
-  editors.forEach(({ id, counterId }) => {
+  textareas.forEach(({ id, counterId }) => {
     const el = document.getElementById(id);
+    const counter = document.getElementById(counterId);
     if (!el) return;
-    setupContenteditableEditor(el, counterId);
+
+    // Update char counter
+    function updateCounter() {
+      if (counter) counter.textContent = `${el.value.length} / 1600`;
+    }
+
+    el.addEventListener('input', (e) => {
+      updateCounter();
+
+      const start = el.selectionStart;
+      const val = el.value;
+      const beforeCursor = val.substring(0, start);
+      const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+      const currentLine = beforeCursor.substring(lineStart);
+
+      // ── Smart Space: convert - or * at line start to bullet instantly on mobile/desktop ────
+      if (currentLine.endsWith(' ')) {
+        const lineWithoutTrailingSpace = currentLine.slice(0, -1);
+
+        // Match "- " or "* " with optional leading whitespace
+        const bulletTyped = lineWithoutTrailingSpace.match(/^(\s*)([-*])$/);
+        if (bulletTyped) {
+          const indent = bulletTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + '● ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 2;
+          updateCounter();
+          return;
+        }
+
+        // Match numbered list prefix (e.g. "1." or "1)") with optional leading whitespace
+        const numTyped = lineWithoutTrailingSpace.match(/^(\s*)(\d+)([.)])$/);
+        if (numTyped) {
+          const indent = numTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + numTyped[2] + numTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + numTyped[2].length + numTyped[3].length + 1;
+          updateCounter();
+          return;
+        }
+
+        // Match alphabetical list prefix (e.g. "a." or "a)") with optional leading whitespace
+        const alphaTyped = lineWithoutTrailingSpace.match(/^(\s*)([a-zA-Z])([.)])$/);
+        if (alphaTyped) {
+          const indent = alphaTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + alphaTyped[2] + alphaTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + 3;
+          updateCounter();
+          return;
+        }
+
+        // Match Roman numeral list prefix (e.g. "i." or "i)") with optional leading whitespace
+        const romanTyped = lineWithoutTrailingSpace.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)])$/i);
+        if (romanTyped) {
+          const indent = romanTyped[1] || '    '; // Default to 4 spaces
+          const newVal = val.substring(0, lineStart) + indent + romanTyped[2] + romanTyped[3] + ' ' + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart + indent.length + romanTyped[2].length + 2;
+          updateCounter();
+          return;
+        }
+      }
+    });
+
+    el.addEventListener('keydown', (e) => {
+      const start = el.selectionStart;
+      const val = el.value;
+      const beforeCursor = val.substring(0, start);
+      const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+      const currentLine = beforeCursor.substring(lineStart);
+
+      // ── Smart Backspace: exit list formatting in one click ──────────────────
+      if (e.key === 'Backspace') {
+        // If the line consists strictly of optional spaces + a list prefix + a trailing space
+        // and the cursor is at the end of the line, we delete the entire prefix and spaces.
+        // Matches e.g. "    ● ", "    • ", "    1. ", "    a) "
+        const emptyListRegex = /^(\s*)([•●]|\d+[.)]|[a-zA-Z][.)]|(i{1,3}|iv|vi{0,3}|ix|x)[.)])\s$/i;
+        if (emptyListRegex.test(currentLine)) {
+          e.preventDefault();
+          const newVal = val.substring(0, lineStart) + val.substring(start);
+          el.value = newVal;
+          el.selectionStart = el.selectionEnd = lineStart;
+          updateCounter();
+          return;
+        }
+      }
+
+      // ── Smart Enter: continue or exit list ───────────────────────────────
+      if (e.key === 'Enter') {
+
+        // Bullet: - or * or • or ● (allowing optional leading whitespace)
+        const bulletMatch = currentLine.match(/^(\s*)([-*•●]) (.*)$/);
+        if (bulletMatch) {
+          e.preventDefault();
+          const indent = bulletMatch[1];
+          const content = bulletMatch[3].trim();
+          if (content === '') {
+            // Empty bullet → exit list, delete the bullet prefix and spaces
+            const newVal = val.substring(0, lineStart) + val.substring(start);
+            el.value = newVal;
+            el.selectionStart = el.selectionEnd = lineStart;
+          } else {
+            const insert = `\n${indent}${bulletMatch[2]} `;
+            el.value = val.substring(0, start) + insert + val.substring(start);
+            el.selectionStart = el.selectionEnd = start + insert.length;
+          }
+          updateCounter();
+          return;
+        }
+
+        // Numbered: 1. or 1) (allowing optional leading whitespace)
+        const numMatch = currentLine.match(/^(\s*)(\d+)([.)]) (.*)$/);
+        if (numMatch) {
+          e.preventDefault();
+          const indent = numMatch[1];
+          const content = numMatch[4].trim();
+          if (content === '') {
+            const newVal = val.substring(0, lineStart) + val.substring(start);
+            el.value = newVal;
+            el.selectionStart = el.selectionEnd = lineStart;
+          } else {
+            const next = parseInt(numMatch[2]) + 1;
+            const insert = `\n${indent}${next}${numMatch[3]} `;
+            el.value = val.substring(0, start) + insert + val.substring(start);
+            el.selectionStart = el.selectionEnd = start + insert.length;
+          }
+          updateCounter();
+          return;
+        }
+
+        // Alphabetical: a. or a) (allowing optional leading whitespace)
+        const alphaMatch = currentLine.match(/^(\s*)([a-zA-Z])([.)]) (.*)$/);
+        if (alphaMatch) {
+          e.preventDefault();
+          const indent = alphaMatch[1];
+          const content = alphaMatch[4].trim();
+          if (content === '') {
+            const newVal = val.substring(0, lineStart) + val.substring(start);
+            el.value = newVal;
+            el.selectionStart = el.selectionEnd = lineStart;
+          } else {
+            const next = String.fromCharCode(alphaMatch[2].charCodeAt(0) + 1);
+            const insert = `\n${indent}${next}${alphaMatch[3]} `;
+            el.value = val.substring(0, start) + insert + val.substring(start);
+            el.selectionStart = el.selectionEnd = start + insert.length;
+          }
+          updateCounter();
+          return;
+        }
+
+        // Roman numerals (allowing optional leading whitespace)
+        const romanMatch = currentLine.match(/^(\s*)(i{1,3}|iv|vi{0,3}|ix|x)([.)]) (.*)$/i);
+        if (romanMatch) {
+          e.preventDefault();
+          const indent = romanMatch[1];
+          const content = romanMatch[4].trim();
+          const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x'];
+          const idx = romans.indexOf(romanMatch[2].toLowerCase());
+          if (content === '') {
+            const newVal = val.substring(0, lineStart) + val.substring(start);
+            el.value = newVal;
+            el.selectionStart = el.selectionEnd = lineStart;
+          } else {
+            const next = idx >= 0 && idx < romans.length - 1 ? romans[idx + 1] : romans[idx];
+            const insert = `\n${indent}${next}${romanMatch[3]} `;
+            el.value = val.substring(0, start) + insert + val.substring(start);
+            el.selectionStart = el.selectionEnd = start + insert.length;
+          }
+          updateCounter();
+          return;
+        }
+      }
+    });
+
+    // Initial counter update
+    updateCounter();
   });
 }
 
 setupNoteCharCounters();
-
-// Setup formatting guide popover toggle and dismiss actions
-function setupFormattingGuides() {
-  document.querySelectorAll(".info-icon-wrapper").forEach(wrapper => {
-    const icon = wrapper.querySelector(".info-icon");
-    const popover = wrapper.querySelector(".formatting-popover");
-    if (!icon || !popover) return;
-    
-    wrapper.addEventListener("click", (e) => {
-      // If clicked inside popover (including close button), let its own handler manage it
-      if (e.target.closest(".formatting-popover")) return;
-
-      e.stopPropagation();
-      e.preventDefault();
-      
-      const isHidden = popover.classList.contains("hidden");
-      // Close all other formatting popovers first
-      document.querySelectorAll(".formatting-popover").forEach(p => {
-        p.classList.add("hidden");
-      });
-      
-      if (isHidden) {
-        popover.classList.remove("hidden");
-        
-        // Calculate position relative to the modal-container (due to transform containing block behavior)
-        const rect = icon.getBoundingClientRect();
-        const modalContainer = wrapper.closest(".modal-container");
-        const modalRect = modalContainer ? modalContainer.getBoundingClientRect() : { left: 0, top: 0 };
-        const popoverWidth = 240;
-        
-        let left = rect.left - modalRect.left;
-        const containerWidth = modalRect.width || window.innerWidth;
-        if (left + popoverWidth > containerWidth - 16) {
-          left = containerWidth - popoverWidth - 16;
-        }
-        left = Math.max(16, left);
-        
-        popover.style.top = `${rect.bottom - modalRect.top + 6}px`;
-        popover.style.left = `${left}px`;
-      }
-    });
-
-    popover.addEventListener("click", (e) => {
-      e.stopPropagation(); // Avoid closing the popover when tapping inside it
-    });
-
-    const closeBtn = popover.querySelector(".btn-close-popover");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        popover.classList.add("hidden");
-      });
-    }
-  });
-
-  // Tap/click anywhere else on screen closes all formatting popovers
-  window.addEventListener("click", () => {
-    document.querySelectorAll(".formatting-popover").forEach(p => p.classList.add("hidden"));
-  });
-
-  // Close formatting popovers on any scrolling to prevent detached floating states
-  window.addEventListener("scroll", () => {
-    document.querySelectorAll(".formatting-popover").forEach(p => p.classList.add("hidden"));
-  }, { passive: true, capture: true });
-}
-
-setupFormattingGuides();
 
 // ==========================================
 // APK & Edit Mode & Manual Ordering Controls
@@ -6144,13 +4747,7 @@ function toggleCardSelection(card) {
 function updateDeleteSelectedButton() {
   const btn = document.getElementById("btn-delete-selected");
   if (btn) {
-    if (selectedBarIds.size === 0) {
-      btn.textContent = "Tap to select";
-      btn.classList.add("disabled");
-    } else {
-      btn.textContent = `Delete Selected (${selectedBarIds.size})`;
-      btn.classList.remove("disabled");
-    }
+    btn.textContent = `Delete Selected (${selectedBarIds.size})`;
     btn.classList.add("hidden");
   }
 
@@ -6173,7 +4770,7 @@ function updateDeleteSelectedButton() {
     }
 
     if (selectedBarIds.size === 0) {
-      editContainer.innerHTML = `<span class="select-del-title">Tap to select</span>`;
+      editContainer.innerHTML = `<span class="select-del-title">Select the card to del</span>`;
       sortContainer.style.cursor = "default";
       sortContainer.onclick = null;
       sortContainer.classList.remove("danger-active");
@@ -6212,13 +4809,12 @@ function updateDeleteSelectedButton() {
 function setupAPKButton() {
   const btn = document.getElementById("btn-apk-download");
   if (btn) {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       btn.classList.add("shake-anim");
       btn.addEventListener("animationend", () => {
         btn.classList.remove("shake-anim");
       }, { once: true });
-      showToast("Thanks for showing interest! Android APK is under development. In the meantime, you can install the PWA web app version right now.", "info");
-      await window.triggerPWAInstall();
+      showToast("Thanks for showing interest. APK is under development.", "info");
     });
   }
 }
@@ -6389,6 +4985,12 @@ function setupStaggeredHeaderScroll() {
       return;
     }
 
+    // Reveal mobile subbar at the absolute bottom of the page
+    const isAtBottom = (window.innerHeight + currentScrollY) >= (document.documentElement.scrollHeight - 5);
+    if (isAtBottom && H_subbar > 0) {
+      y_subbar = 0;
+    }
+
     if (editModeActive) {
       y_nav = 0;
       y_subbar = 0;
@@ -6412,7 +5014,7 @@ function setupStaggeredHeaderScroll() {
         toDistribute -= take;
       }
       
-      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar) {
+      if (toDistribute > 0 && H_subbar > 0 && y_subbar < H_subbar && !isAtBottom) {
         const space = H_subbar - y_subbar;
         const take = Math.min(space, toDistribute);
         y_subbar += take;
@@ -6620,10 +5222,8 @@ if ('serviceWorker' in navigator) {
   });
 
   // Automatically refresh the page when the service worker updates and takes control
-  const hadControllerOnLoad = !!navigator.serviceWorker.controller;
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadControllerOnLoad) return; // Skip reload if this is the initial service worker activation after unregistering
     if (!refreshing) {
       refreshing = true;
 
@@ -6653,37 +5253,9 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.2 (Latest)",
-    date: "July 9, 2026",
-    isLatest: true,
-    title: "Notification View Actions, Custom Avatars & About Redesign",
-    content: `
-### Key Features & Updates
-* **Instant View Action from Notifications**: Added a 'View Tracker' action button to deadlines. Clicking it instantly smooth-scrolls and highlights the card using direct Service Worker messaging, without reloading the page if the app is active.
-* **Dynamic Push Notification Avatars**: Push notifications look up your profile metadata via Supabase auth, displaying your Google or custom account avatar inside the notification icon.
-* **Monochrome Status Bar Badge**: Generated a transparent-background outline stencil \`badge.png\` for Android status bar compliance.
-* **About Page Redesign**: Re-styled the About page using a sleek box-type container (\`#1A1F25\`) and implemented a native Markdown parser to render features cleanly.
-* **Guest Mode Restrictions**: Prevented guest mode users from turning on notification alerts, showing a professional toast.
-* **Note Editor Legibility**: Increased the Lora font size in card previews by 1 unit for better legibility.
-* **Edit Mode UX**: Fixed click propagation so tapping card text/checklists inside edit mode selects/deselects the card.
-`
-  },
-  {
-    version: "v4.1",
-    date: "July 7, 2026",
-    isLatest: false,
-    title: "Demo Card Rendering Fixes",
-    content: `
-### Bug Fixes
-* Fixed drain-border elapsed time calculation for demo cards by ensuring createdAt is backdated correctly
-* Fixed Quick Notes text overlap on demo cards by deferring syncRowHeights until fonts are ready
-* Improved drain-border fallback logic to use correctly backdated timestamps
-`
-  },
-  {
-    version: "v4.0",
+    version: "v4.0 (Latest)",
     date: "July 2, 2026",
-    isLatest: false,
+    isLatest: true,
     title: "Supabase Integration, FMC Sync & Controls Dashboard",
     content: `
 ### Backend Migration
@@ -6805,170 +5377,6 @@ function closeTerracePage(isPopState = false) {
   }
 }
 
-// ==========================================
-// Demo Cards Banner & Recovery System
-// ==========================================
-
-async function generateDemoCards() {
-  await document.fonts.ready;
-  const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
-  const now = Date.now();
-
-  const dsaDuration = 60 * 24 * 60 * 60 * 1000; // 60 days
-  const dsaElapsed = 0.75;
-  const dsaCreated = now - (dsaElapsed * dsaDuration);
-  const dsaDeadline = dsaCreated + dsaDuration;
-  const dsaNotifyAt = dsaCreated + (0.80 * dsaDuration); // Remind at 20% remaining
-
-  const weeklyDuration = 30 * 24 * 60 * 60 * 1000; // 30 days
-  const weeklyElapsed = 0.50;
-  const weeklyCreated = now - (weeklyElapsed * weeklyDuration);
-  const weeklyDeadline = weeklyCreated + weeklyDuration;
-
-  const bucketDuration = 30 * 24 * 60 * 60 * 1000;
-  const bucketElapsed = 0.50;
-  const bucketCreated = now - (bucketElapsed * bucketDuration);
-  const bucketDeadline = bucketCreated + bucketDuration;
-
-  const demoTrackers = [
-    {
-      title: "DSA Sheet — 450 Qns",
-      type: "goal",
-      preset: "Problems",
-      levels: [{ name: "Problems", conversionToNext: null }],
-      targetSmallest: 450,
-      currentSmallest: 180, // ~40% progress
-      completed: false,
-      createdAt: dsaCreated,
-      deadlineAt: dsaDeadline,
-      deadlineSetAt: dsaCreated,
-      notifyAt: dsaNotifyAt,
-      notifyPercent: 20,
-      alertAtDeadline: true
-    },
-    {
-      title: "Weekly Study Tasks",
-      type: "checklist",
-      items: [
-        { text: "Read assigned chapters", done: true },
-        { text: "Solve practice problems", done: true },
-        { text: "Attend doubt-clearing session", done: false },
-        { text: "Submit assignment", done: false },
-        { text: "Revise before quiz", done: false }
-      ],
-      completed: false,
-      createdAt: weeklyCreated,
-      deadlineAt: weeklyDeadline,
-      deadlineSetAt: weeklyCreated
-    },
-    {
-      title: "Bucket List",
-      type: "checklist",
-      items: [
-        { text: "Learn to swim", done: false },
-        { text: "Visit a hill station", done: false },
-        { text: "Read 12 books this year", done: true },
-        { text: "Learn basic guitar chords", done: false },
-        { text: "Try solo travel once", done: false }
-      ],
-      completed: false,
-      createdAt: bucketCreated,
-      deadlineAt: bucketDeadline,
-      deadlineSetAt: bucketCreated
-    },
-    {
-      title: "Placement Prep Thoughts",
-      type: "note",
-      text: `Feeling a bit all over the place with placement prep lately. Some days I feel ready, some days not at all.
-Things that are actually working:
-- Solving *one* new problem daily > cramming
-- Talking through concepts out loud with roommates
-- Not comparing my pace with others' — **easier said than done**
-
-Saw a good breakdown of company-wise patterns here: www.geeksforgeeks.org — need to revisit this before mocks.
-
-Reminder to future me: you're doing more than you think you are.`,
-      completed: false
-    }
-  ];
-
-  showToast("Generating demo trackers...", "info");
-  for (const tracker of demoTrackers) {
-    try {
-      await createBar(uid, tracker);
-    } catch (err) {
-      console.error("Failed to create demo card:", err);
-    }
-  }
-  showToast("Demo trackers added successfully!", "success");
-  
-  localStorage.setItem("ps_demo_banner_dismissed", "true");
-  localStorage.setItem("ps_demo_used", "true");
-  evaluateDemoBannerAndDropdownState();
-}
-
-function evaluateDemoBannerAndDropdownState() {
-  const count = currentBars ? currentBars.length : 0;
-  const dismissed = localStorage.getItem("ps_demo_banner_dismissed") === "true";
-  const used = localStorage.getItem("ps_demo_used") === "true";
-
-  const demoBanner = document.getElementById("demo-banner");
-  const tryDemoBtn = document.getElementById("btn-profile-try-demo");
-  const tryDemoDiv = document.getElementById("profile-try-demo-divider");
-
-  // Banner visibility: visible if not dismissed, not used, and 0 cards
-  if (demoBanner) {
-    if (!dismissed && !used && count === 0) {
-      demoBanner.classList.remove("hidden");
-    } else {
-      demoBanner.classList.add("hidden");
-    }
-  }
-
-  // Profile option visibility: visible if dismissed, not used, and 0 cards
-  if (tryDemoBtn && tryDemoDiv) {
-    if (dismissed && !used && count === 0) {
-      tryDemoBtn.classList.remove("hidden");
-      tryDemoDiv.classList.remove("hidden");
-    } else {
-      tryDemoBtn.classList.add("hidden");
-      tryDemoDiv.classList.add("hidden");
-    }
-  }
-}
-
-// Bind demo banner & profile menu handlers
-const setupDemoHandlers = () => {
-  const btnTrigger = document.getElementById("btn-trigger-demo-banner");
-  const btnDismiss = document.getElementById("btn-dismiss-demo-banner");
-  const btnProfileTry = document.getElementById("btn-profile-try-demo");
-
-  if (btnTrigger) {
-    btnTrigger.addEventListener("click", (e) => {
-      e.stopPropagation();
-      generateDemoCards();
-    });
-  }
-
-  if (btnDismiss) {
-    btnDismiss.addEventListener("click", (e) => {
-      e.stopPropagation();
-      localStorage.setItem("ps_demo_banner_dismissed", "true");
-      evaluateDemoBannerAndDropdownState();
-      showToast("Demo banner dismissed. You can try the demo anytime from the profile dropdown menu.", "info", 5000);
-    });
-  }
-
-  if (btnProfileTry) {
-    btnProfileTry.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (profileDropdown) profileDropdown.classList.remove("active");
-      generateDemoCards();
-    });
-  }
-};
-setupDemoHandlers();
-
 // Bind Terrace event triggers
 const setupTerracePage = () => {
   const btnTerrace = document.getElementById("btn-terrace");
@@ -6998,59 +5406,7 @@ const checkIsPWA = () => {
          window.navigator.standalone === true;
 };
 
-window.triggerPWAInstall = async function() {
-  // Check device types
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-  // 1. Attempt standard PWA WebAPK installation prompt if available
-  if (deferredPrompt) {
-    try {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        deferredPrompt = null;
-        const btnDownload = document.getElementById("btn-download-apk");
-        if (btnDownload) btnDownload.style.display = "none";
-        showToast("Starting Web APK installation...", "success");
-        return;
-      }
-    } catch (err) {
-      console.error("PWA prompt error:", err);
-    }
-  }
-
-  // 2. If mobile device, show instructions instead of downloading mock .apk
-  if (isMobile) {
-    if (isIOS) {
-      showToast("To install ProgressShelf on iOS, tap the Share button and select 'Add to Home Screen'.", "info");
-    } else if (isAndroid) {
-      showToast("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.", "info");
-    } else {
-      showToast("To install, open browser settings menu and select 'Add to Home Screen'.", "info");
-    }
-    return;
-  }
-
-  // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
-  try {
-    const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "ProgressShelf.apk";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-    
-    showToast("Downloading ProgressShelf.apk...", "success");
-  } catch (err) {
-    showToast("Failed to start download.", "error");
-  }
-};
-
-function setupDownloadApk() {
+const setupDownloadApk = () => {
   const btnDownload = document.getElementById("btn-download-apk");
   if (!btnDownload) return;
 
@@ -7063,9 +5419,57 @@ function setupDownloadApk() {
 
   btnDownload.addEventListener("click", async (e) => {
     e.stopPropagation();
-    await window.triggerPWAInstall();
+
+    // Check device types
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // 1. Attempt standard PWA WebAPK installation prompt if available
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          deferredPrompt = null;
+          btnDownload.style.display = "none";
+          showToast("Starting Web APK installation...", "success");
+          return;
+        }
+      } catch (err) {
+        console.error("PWA prompt error:", err);
+      }
+    }
+
+    // 2. If mobile device, show instructions instead of downloading mock .apk
+    if (isMobile) {
+      if (isIOS) {
+        showToast("To install ProgressShelf on iOS, tap the Share button and select 'Add to Home Screen'.", "info");
+      } else if (isAndroid) {
+        showToast("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.", "info");
+      } else {
+        showToast("To install, open browser settings menu and select 'Add to Home Screen'.", "info");
+      }
+      return;
+    }
+
+    // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
+    try {
+      const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ProgressShelf.apk";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      
+      showToast("Downloading ProgressShelf.apk...", "success");
+    } catch (err) {
+      showToast("Failed to start download.", "error");
+    }
   });
-}
+};
 
 // Global PWA install listener
 window.addEventListener('beforeinstallprompt', (e) => {

@@ -1,19 +1,16 @@
-const CACHE_NAME = 'progressshelf-cache-v155';
+const CACHE_NAME = 'progressshelf-cache-v83';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
   'dashboard.html',
-  'reset-password.html',
   'index.css',
   'app.js',
   'auth.js',
   'db.js',
   'login.js',
-  'reset-password.js',
   'supabase-config.js',
   'favicon.svg',
   'logo.svg',
-  'badge.png',
   'icon-192.png',
   'icon-512.png',
   'manifest.json'
@@ -68,8 +65,7 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
-      const isNavigate = event.request.mode === 'navigate';
-      return cache.match(event.request, { ignoreSearch: isNavigate }).then((cachedResponse) => {
+      return cache.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
         // Fetch new version from network in parallel
         const fetchPromise = fetch(event.request).then((networkResponse) => {
           if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {
@@ -126,19 +122,12 @@ self.addEventListener('push', event => {
       if (json.notification) {
         data.title = json.notification.title || data.title;
         data.body = json.notification.body || data.body;
-        data.icon = json.notification.icon || data.icon;
-      }
-      if (json.data) {
-        if (json.data.title) data.title = json.data.title;
-        if (json.data.body) data.body = json.data.body;
-        if (json.data.icon) data.icon = json.data.icon;
-        if (json.data.tracker_id) data.trackerId = json.data.tracker_id;
-        if (json.data.url) data.url = json.data.url;
-      }
-      if (json.title) {
+      } else if (json.data && json.data.title) {
+        data.title = json.data.title || data.title;
+        data.body = json.data.body || data.body;
+      } else if (json.title) {
         data.title = json.title || data.title;
         data.body = json.body || data.body;
-        data.icon = json.icon || data.icon;
       }
       
       const tagVal = (json.data && json.data.tag) || json.tag;
@@ -149,56 +138,27 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || 'icon-192.png',
-      badge: 'badge.png',
+      icon: '/ProgressShelf/icon-192.png',
+      badge: '/ProgressShelf/favicon.svg',
       tag: data.tag || 'progressshelf-alert',
-      actions: [
-        {
-          action: 'view',
-          title: 'View Tracker'
-        }
-      ],
       renotify: true,
       requireInteraction: false,
-      data: { 
-        url: data.url || 'dashboard.html',
-        trackerId: data.trackerId
-      }
+      data: { url: '/ProgressShelf/dashboard.html' }
     })
   );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  
-  let trackerId = null;
-  let targetUrl = 'dashboard.html';
-  if (event.notification.data) {
-    if (event.notification.data.trackerId) {
-      trackerId = event.notification.data.trackerId;
-      targetUrl = `dashboard.html?id=${trackerId}`;
-    } else if (event.notification.data.url) {
-      targetUrl = event.notification.data.url;
-    }
-  }
-
-  // Resolve relative URLs to absolute URLs relative to the Service Worker's scope
-  const absoluteTargetUrl = new URL(targetUrl, self.location.origin + self.registration.scope).toString();
-  
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+    clients.matchAll({ type: 'window' }).then(clientList => {
       for (const client of clientList) {
         if (client.url.includes('ProgressShelf') && 'focus' in client) {
-          if (trackerId) {
-            client.postMessage({ type: 'highlight-tracker', id: trackerId });
-          } else if ('navigate' in client) {
-            client.navigate(absoluteTargetUrl);
-          }
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow(absoluteTargetUrl);
+        return clients.openWindow('/ProgressShelf/dashboard.html');
       }
     })
   );

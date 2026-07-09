@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co https://lieckszgurlqcujmyrjw.supabase.co wss://lieckszgurlqcujmyrjw.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProgressShelf - Track everything. One bar at a time.</title>
+  <meta name="description" content="ProgressShelf is your personal progress tracking dashboard. Track your habits, courses, readings, or custom goals, one animated progress bar at a time.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="index.css?v=3.8">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0D1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="logo.svg">
+</head>
+<body>
+
+  <!-- Configuration Warning Banner (Dynamic) -->
+  <div id="config-banner" class="config-warning-banner hidden">
+    <span>⚠️ <strong>Supabase Configuration Required:</strong> Update <code>supabase-config.js</code> with your project credentials to get started. Alternatively, you can use the local sandbox.</span>
+  </div>
+
+
+  <main class="landing-container">
+    <div class="landing-card">
+      <a href="index.html" class="logo-container" style="text-decoration: none;">
+        <svg class="logo-svg-large logo-loading" viewBox="0 0 240 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4" />
+            </filter>
+            <linearGradient id="barBlue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38BDF8" />
+              <stop offset="100%" stop-color="#2563EB" />
+            </linearGradient>
+            <linearGradient id="barOrange" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FBBF24" />
+              <stop offset="100%" stop-color="#D97706" />
+            </linearGradient>
+            <linearGradient id="barRed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F87171" />
+              <stop offset="100%" stop-color="#DC2626" />
+            </linearGradient>
+            <linearGradient id="barGreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4ADE80" />
+              <stop offset="100%" stop-color="#16A34A" />
+            </linearGradient>
+            <linearGradient id="shelfGrad" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#1E293B" />
+              <stop offset="50%" stop-color="#475569" />
+              <stop offset="100%" stop-color="#1E293B" />
+            </linearGradient>
+            <linearGradient id="shelfRail" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#334155" />
+              <stop offset="50%" stop-color="#64748B" />
+              <stop offset="100%" stop-color="#334155" />
+            </linearGradient>
+          </defs>
+
+          <!-- Shelf Base -->
+          <rect x="36" y="108" width="168" height="7" rx="3.5" fill="url(#shelfGrad)" filter="url(#logoShadow)" />
+          <rect x="40" y="109" width="160" height="2" rx="1" fill="url(#shelfRail)" />
+
+          <!-- Bars -->
+          <rect class="logo-bar-1" x="60" y="90" width="16" height="16" rx="3" fill="url(#barBlue)" />
+          <rect class="logo-bar-2" x="84" y="70" width="16" height="36" rx="3" fill="url(#barOrange)" />
+          <rect class="logo-bar-3" x="108" y="50" width="16" height="56" rx="3" fill="url(#barRed)" />
+          <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#barGreen)" />
+
+          <!-- Plus -->
+          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round" />
+
+          <!-- Red exclamation warning badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(116, 40)">
+            <g class="logo-badge-red">
+              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5"/>
+              <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+            </g>
+          </g>
+
+          <!-- Green checkmark badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(140, 20)">
+            <g class="logo-badge-green">
+              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5"/>
+              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+          </g>
+        </svg>
+        <h1 class="logo-text">
+          <span class="text-gradient">Progress</span><span class="text-outline">Shelf</span>
+        </h1>
+      </a>
+      <p class="landing-tagline">Track everything. One bar at a time.</p>
+
+      <div class="auth-options">
+        <button id="btn-google-login" class="btn-google">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20" />
+          Sign in with Google
+        </button>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <button id="btn-guest" class="btn-guest">
+          Continue without login
+        </button>
+
+        <p class="auth-hint">
+          <span class="hint-login">Sign in to sync across devices and store on cloud.</span><br/>
+          <span class="hint-guest">Guest mode stays in this browser only.</span>
+        </p>
+      </div>
+      
+      <p id="error-message" style="color: var(--error); margin-top: 16px; font-size: 0.9rem;" class="hidden"></p>
+    </div>
+  </main>
+
+  <!-- Footer Section -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <p class="footer-title">ProgressShelf — Open source &amp; free forever</p>
+      <p class="footer-links">
+        Built by <a href="https://github.com/Anandavnish" target="_blank" rel="noopener noreferrer">Anand Avnish</a> with AI assistance (Antigravity, Claude &amp; Gemini)
+        <span class="footer-bullet">•</span>
+        <a href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">View source on GitHub</a>
+        <span class="footer-bullet">•</span>
+        <span class="footer-version">v4.0</span>
+      </p>
+      <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
+    </div>
+  </footer>
+  <script type="module" src="login.js?v=1.4"></script>
+</body>
+</html>
