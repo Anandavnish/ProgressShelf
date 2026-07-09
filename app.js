@@ -4636,16 +4636,22 @@ btnProfileBadge?.addEventListener("click", (e) => {
   }
 });
 
-// Close profile dropdown and collapse cards when clicking outside (using capture phase to block click side effects)
+// Close profile/theme dropdowns and collapse cards when clicking outside (using capture phase to block click side effects)
 window.addEventListener("click", (e) => {
   const profileDropdown = document.getElementById("profile-dropdown");
   const isProfileActive = profileDropdown && profileDropdown.classList.contains("active");
+  const themeDropdown = document.getElementById("theme-dropdown-menu");
+  const isThemeActive = themeDropdown && themeDropdown.classList.contains("active");
   const hasExpandedCard = expandedCardIds.size > 0;
 
-  if (isProfileActive || hasExpandedCard) {
+  if (isProfileActive || isThemeActive || hasExpandedCard) {
     const btnProfileBadge = document.getElementById("btn-profile-badge");
     const clickedInsideProfile = (profileDropdown && profileDropdown.contains(e.target)) || 
                                  (btnProfileBadge && btnProfileBadge.contains(e.target));
+
+    const btnThemeToggle = document.getElementById("theme-toggle-btn");
+    const clickedInsideTheme = (themeDropdown && themeDropdown.contains(e.target)) || 
+                               (btnThemeToggle && btnThemeToggle.contains(e.target));
                                  
     const clickedInsideExpandedCard = e.target.closest(".card-progress.expanded");
 
@@ -4657,6 +4663,10 @@ window.addEventListener("click", (e) => {
         profileClosedViaPopState = true;
         history.back();
       }
+    }
+
+    if (isThemeActive && !clickedInsideTheme) {
+      themeDropdown.classList.remove("active");
     }
 
     if (hasExpandedCard && !clickedInsideExpandedCard) {
@@ -7099,3 +7109,104 @@ window.addEventListener('appinstalled', () => {
   if (btnDownload) btnDownload.style.display = "none";
   showToast("ProgressShelf installed successfully!", "success");
 });
+
+// Theme Initialization & Management (System, Light, Dark)
+function initTheme() {
+  const savedTheme = localStorage.getItem('app-theme') || 'system';
+  
+  const applyThemeClass = (theme) => {
+    document.documentElement.classList.remove('light-theme', 'dark-theme');
+    let effectiveTheme = theme;
+    if (theme === 'system') {
+      const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      effectiveTheme = systemIsDark ? 'dark' : 'light';
+    }
+    document.documentElement.classList.add(effectiveTheme === 'dark' ? 'dark-theme' : 'light-theme');
+    updateToggleIcon(theme);
+  };
+
+  const updateToggleIcon = (theme) => {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+    
+    let effectiveTheme = theme;
+    if (theme === 'system') {
+      const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      effectiveTheme = systemIsDark ? 'dark' : 'light';
+    }
+    
+    if (effectiveTheme === 'dark') {
+      btn.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      `;
+    } else {
+      btn.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.77" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      `;
+    }
+  };
+
+  const syncToggleButtons = (theme) => {
+    const items = document.querySelectorAll('.theme-dropdown-item');
+    items.forEach(item => {
+      if (item.getAttribute('data-theme') === theme) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  };
+
+  // Toggle menu dropdown open/close
+  const btn = document.getElementById('theme-toggle-btn');
+  const menu = document.getElementById('theme-dropdown-menu');
+  if (btn && menu) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close profile dropdown if open to avoid overlap
+      const profileDropdown = document.getElementById('profile-dropdown');
+      if (profileDropdown) profileDropdown.classList.remove('active');
+      
+      menu.classList.toggle('active');
+    });
+  }
+
+  // Bind click handlers to theme options
+  document.querySelectorAll('.theme-dropdown-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const theme = item.getAttribute('data-theme');
+      localStorage.setItem('app-theme', theme);
+      applyThemeClass(theme);
+      syncToggleButtons(theme);
+      if (menu) menu.classList.remove('active');
+    });
+  });
+
+  // Watch for system color scheme changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const current = localStorage.getItem('app-theme') || 'system';
+    if (current === 'system') {
+      applyThemeClass('system');
+    }
+  });
+
+  // Run initial setup
+  applyThemeClass(savedTheme);
+  syncToggleButtons(savedTheme);
+}
+
+// Start Theme switcher
+initTheme();

@@ -2,9 +2,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-color: #0D1117;
-  --card-bg: #161B22;
-  --card-border: #30363D;
+  /* Default variables (Dark Theme) */
+  --bg-body: #0D1117;
+  --bg-card: #161B22;
+  --border-color: #30363D;
   --text-primary: #E6EDF3;
   --text-muted: #8B949E;
   --accent: #4A90D9;
@@ -12,10 +13,452 @@
   --success: #27AE60;
   --error: #FF4D4D;
   --warning: #F39C12;
+
+  --bg-color: var(--bg-body);
+  --card-bg: var(--bg-card);
+  --card-border: var(--border-color);
+  --card-progress-border: var(--card-border);
+
   --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --border-radius: 12px;
   --transition-speed: 0.3s;
   --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --about-bg: #1A1F25;
+
+  /* New Consolidated Color Variables */
+  --white: #FFFFFF;
+  --black: #000000;
+  --accent-hover: #60a5fa;
+  --accent-hover-bg: rgba(74, 144, 217, 0.05);
+  --accent-hover-bg-strong: rgba(74, 144, 217, 0.1);
+  --auth-divider-color: #444C56;
+
+  /* Shadows */
+  --shadow-small: rgba(0, 0, 0, 0.1);
+  --shadow-medium: rgba(0, 0, 0, 0.15);
+  --shadow-large: rgba(0, 0, 0, 0.4);
+  --shadow-xlarge: rgba(0, 0, 0, 0.5);
+
+  /* Animations & Pulses */
+  --skeleton-pulse-glow: #21262D;
+
+  /* Warning & Banners */
+  --warning-banner-shade: rgba(0, 0, 0, 0.1);
+  --sandbox-banner-bg: rgba(74, 144, 217, 0.1);
+  --banner-info-bg: rgba(74, 144, 217, 0.1);
+  --banner-info-border: rgba(74, 144, 217, 0.2);
+
+  /* Auth & Landing Page */
+  --landing-bg-glow: rgba(74, 144, 217, 0.15);
+  --landing-bg-transparent: rgba(13, 17, 23, 0);
+  --logo-gradient-start: #38BDF8;
+  --logo-gradient-end: #2563EB;
+  --logo-outline: #E5E7EB;
+  --logo-glow-low: rgba(56, 189, 248, 0.3);
+  --logo-glow-high: rgba(56, 189, 248, 0.8);
+  --btn-google-bg: #FFFFFF;
+  --btn-google-text: #1F2022;
+  --btn-google-hover-bg: #F7F7F7;
+  --btn-google-hover-glow: rgba(74, 144, 217, 0.3);
+  --btn-email-hover-bg: rgba(255, 255, 255, 0.03);
+  --btn-email-hover-glow: rgba(74, 144, 217, 0.2);
+  --guest-banner-bg: #1C2128;
+
+  /* Navbar & Header Components */
+  --navbar-bg: rgba(13, 17, 23, 0.8);
+  --profile-btn-bg: #0b0d10;
+  --profile-btn-border: #3d4145;
+  --profile-avatar-bg: #1F242C;
+  --dropdown-bg: rgba(13, 17, 23, 0.7);
+  --dropdown-item-error-hover: rgba(255, 77, 77, 0.05);
+  --search-pill-bg: #0b0d10;
+  --search-pill-border: #21262d;
+  --search-btn-bg: #1f242c;
+  --search-muted-icon: #57606a;
+  --search-helper-bg: rgba(74, 144, 217, 0.06);
+  --search-helper-border: rgba(74, 144, 217, 0.2);
+
+  /* Overall Stats Bar & Filters */
+  --stats-banner-bg: rgba(13, 17, 23, 0.8);
+  --stats-btn-bg: rgba(22, 27, 34, 0.3);
+  --stats-btn-highlight: rgba(255, 255, 255, 0.05);
+  --stats-btn-glass-start: rgba(255, 255, 255, 0.08);
+  --stats-btn-glass-end: rgba(255, 255, 255, 0);
+  --stats-btn-hover-border: rgba(255, 255, 255, 0.15);
+  --stats-btn-hover-bg: rgba(22, 27, 34, 0.5);
+  --stats-btn-hover-highlight: rgba(255, 255, 255, 0.1);
+  --stats-btn-active-highlight: rgba(0, 0, 0, 0.3);
+  --stats-btn-active-text: #FFFFFF;
+
+  /* Card / Category Types (Logical Groups) */
+  /* Goal Colors */
+  --card-goal-bg: rgba(59, 130, 246, 0.12);
+  --card-goal-text: #3B82F6;
+  --card-goal-border: rgba(59, 130, 246, 0.2);
+  --card-goal-active-bg-start: rgba(59, 130, 246, 0.18);
+  --card-goal-active-bg-end: rgba(59, 130, 246, 0.06);
+  --card-goal-active-border: rgba(59, 130, 246, 0.5);
+  --card-goal-active-shadow: rgba(59, 130, 246, 0.25);
+  --card-goal-active-icon-bg: #3B82F6;
+  --card-goal-active-icon-text: #111827;
+  --card-goal-active-icon-shadow: rgba(59, 130, 246, 0.4);
+
+  /* Checklist Colors */
+  --card-checklist-bg: rgba(245, 158, 11, 0.12);
+  --card-checklist-text: #F59E0B;
+  --card-checklist-border: rgba(245, 158, 11, 0.2);
+  --card-checklist-active-bg-start: rgba(245, 158, 11, 0.18);
+  --card-checklist-active-bg-end: rgba(245, 158, 11, 0.06);
+  --card-checklist-active-border: rgba(245, 158, 11, 0.5);
+  --card-checklist-active-shadow: rgba(245, 158, 11, 0.25);
+  --card-checklist-active-icon-bg: #F59E0B;
+  --card-checklist-active-icon-text: #111827;
+  --card-checklist-active-icon-shadow: rgba(245, 158, 11, 0.4);
+
+  /* Note Colors */
+  --card-note-bg: rgba(239, 68, 68, 0.12);
+  --card-note-text: #EF4444;
+  --card-note-border: rgba(239, 68, 68, 0.2);
+  --card-note-active-bg-start: rgba(239, 68, 68, 0.18);
+  --card-note-active-bg-end: rgba(239, 68, 68, 0.06);
+  --card-note-active-border: rgba(239, 68, 68, 0.5);
+  --card-note-active-shadow: rgba(239, 68, 68, 0.25);
+  --card-note-active-icon-bg: #EF4444;
+  --card-note-active-icon-text: #FFFFFF;
+  --card-note-active-icon-shadow: rgba(239, 68, 68, 0.4);
+
+  /* Link Colors */
+  --card-link-bg: rgba(34, 197, 94, 0.12);
+  --card-link-text: #22C55E;
+  --card-link-border: rgba(34, 197, 94, 0.2);
+  --card-link-active-bg-start: rgba(34, 197, 94, 0.18);
+  --card-link-active-bg-end: rgba(34, 197, 94, 0.06);
+  --card-link-active-border: rgba(34, 197, 94, 0.5);
+  --card-link-active-shadow: rgba(34, 197, 94, 0.25);
+  --card-link-active-icon-bg: #22C55E;
+  --card-link-active-icon-text: #111827;
+  --card-link-active-icon-shadow: rgba(34, 197, 94, 0.4);
+
+  /* Habit Colors */
+  --card-habit-bg: rgba(168, 85, 247, 0.12);
+  --card-habit-text: #A855F7;
+  --card-habit-border: rgba(168, 85, 247, 0.2);
+  --card-habit-active-bg-start: rgba(168, 85, 247, 0.18);
+  --card-habit-active-bg-end: rgba(168, 85, 247, 0.06);
+  --card-habit-active-border: rgba(168, 85, 247, 0.5);
+  --card-habit-active-shadow: rgba(168, 85, 247, 0.25);
+  --card-habit-active-icon-bg: #A855F7;
+  --card-habit-active-icon-text: #FFFFFF;
+  --card-habit-active-icon-shadow: rgba(168, 85, 247, 0.4);
+
+  /* Form, Modals & Inputs */
+  --input-bg: rgba(74, 144, 217, 0.02);
+  --input-focus-bg: #1F242C;
+  --input-focus-shadow: rgba(74, 144, 217, 0.4);
+  --input-error-text: #ef4444;
+  --input-error-bg: rgba(239, 68, 68, 0.08);
+  --input-error-border: rgba(239, 68, 68, 0.4);
+  --input-error-focus-bg: rgba(239, 68, 68, 0.15);
+  --input-error-focus-border: rgba(239, 68, 68, 0.8);
+  --tracker-selector-bg: rgba(255, 255, 255, 0.03);
+  --tracker-selector-hover-bg: rgba(255, 255, 255, 0.02);
+  --checklist-item-bg: rgba(255, 255, 255, 0.02);
+  --checklist-row-bg: rgba(255, 255, 255, 0.01);
+  --checklist-row-hover-bg: rgba(255, 255, 255, 0.03);
+  --deadline-box-bg: rgba(255, 255, 255, 0.015);
+  --deadline-track-color: rgba(255, 255, 255, 0.04);
+  --deadline-overdue-color: #E74C3C;
+
+  /* Action & Alert Buttons */
+  --btn-close-color: #FFFFFF;
+  --btn-primary-hover-bg: #357ABD;
+  --btn-primary-hover-glow: rgba(74, 144, 217, 0.3);
+  --btn-danger-hover-bg: rgba(255, 77, 77, 0.08);
+  --btn-danger-confirm-hover-bg: #CC3D3D;
+  --btn-danger-confirm-hover-glow: rgba(255, 77, 77, 0.3);
+  --delete-safety-bg: rgba(255, 77, 77, 0.05);
+  --btn-card-delete-hover-bg: rgba(231, 76, 60, 0.15);
+  --btn-card-delete-hover-text: #E74C3C;
+  --card-delete-overlay-bg: rgba(13, 17, 23, 0.93);
+  --quick-add-btn-hover-bg: rgba(13, 17, 23, 0.8);
+
+  /* Footer */
+  --footer-bg: rgba(13, 17, 23, 0.4);
+
+  /* APK / Mobile Downloads */
+  --btn-apk-bg: rgba(74, 222, 128, 0.1);
+  --btn-apk-border: rgba(74, 222, 128, 0.25);
+  --btn-apk-text: #4ADE80;
+  --btn-apk-shadow: rgba(74, 222, 128, 0.05);
+  --btn-apk-hover-bg: rgba(74, 222, 128, 0.2);
+  --btn-apk-hover-shadow: rgba(74, 222, 128, 0.2);
+
+  /* Toggle Control & Edit Modes */
+  --toggle-bg: #21262d;
+  --btn-toggle-edit-hover-bg: rgba(56, 189, 248, 0.1);
+  --btn-bulk-delete-bg: rgba(248, 81, 73, 0.15);
+  --btn-bulk-delete-border: rgba(248, 81, 73, 0.3);
+  --btn-bulk-delete-text: #FF7B72;
+  --btn-bulk-delete-hover-bg: #f85149;
+  --btn-bulk-delete-disabled-bg: rgba(248, 81, 73, 0.08);
+  --btn-bulk-delete-disabled-text: rgba(255, 123, 114, 0.5);
+
+  /* Toast, Popovers & Sub-overlays */
+  --toast-bg: #1C2128;
+  --overlay-bg: rgba(13, 17, 23, 0.6);
+  --overlay-card-bg: rgba(22, 27, 34, 0.6);
+  --terrace-overlay-bg: rgba(10, 12, 16, 0.95);
+  --terrace-header-bg: rgba(13, 17, 23, 0.5);
+  --terrace-latest-badge-border: rgba(0, 168, 204, 0.3);
+  --note-editor-text-color: #c9d1d9;
+  --note-bullet-color: rgba(139, 148, 158, 0.6);
+  --note-syntax-color: rgba(139, 148, 158, 0.5);
+  --formatting-popover-text: #c9d1d9;
+
+  /* Floating Action Button (FAB) */
+  --btn-fab-bg: rgba(22, 27, 34, 0.5);
+  --btn-fab-color: #3F85F6;
+  --btn-fab-border: rgba(63, 133, 246, 0.45);
+  --btn-fab-highlight: rgba(255, 255, 255, 0.1);
+  --btn-fab-hover-bg: rgba(63, 133, 246, 0.15);
+  --btn-fab-hover-glow: rgba(63, 133, 246, 0.25);
+
+  /* Inline Code Background & Search Highlights */
+  --code-bg: #21262d;
+  --search-highlight-bg: rgba(243, 156, 18, 0.25);
+  --stats-btn-active-icon-text-dark: #111827;
+  --toast-bg-subtle: rgba(10, 12, 16, 0.6);
+  color-scheme: dark;
+}
+
+html.light-theme {
+  --bg-body: #DDE4DA;
+  --bg-card: #ECF1EB;
+  --border-color: #D0D7DE;
+  --card-progress-border: transparent;
+  --text-primary: #000000;
+  --text-muted: #4F5E4E;
+  --accent: #1A73E8;
+  --accent-glow: rgba(26, 115, 232, 0.08);
+  --success: #166534;
+  --error: #B91C1C;
+  --warning: #92400E;
+
+  --bg-color: var(--bg-body);
+  --card-bg: var(--bg-card);
+  --card-border: var(--border-color);
+  --about-bg: var(--bg-card);
+
+  /* Overrides for Light Mode variables */
+  --white: #FFFFFF;
+  --black: #000000;
+  --accent-hover: #1557b0;
+  --accent-hover-bg: rgba(26, 115, 232, 0.05);
+  --accent-hover-bg-strong: rgba(26, 115, 232, 0.1);
+  --auth-divider-color: #D0D7DE;
+
+  /* Shadows */
+  --shadow-small: 0 1px 4px rgba(15, 20, 25, 0.12);
+  --shadow-medium: 0 4px 14px rgba(15, 20, 25, 0.12);
+  --shadow-large: 0 8px 32px rgba(15, 20, 25, 0.16);
+  --shadow-xlarge: 0 12px 48px rgba(15, 20, 25, 0.2);
+
+  /* Animations & Pulses */
+  --skeleton-pulse-glow: #E1E5EB;
+
+  /* Warning & Banners */
+  --warning-banner-shade: rgba(15, 20, 25, 0.04);
+  --sandbox-banner-bg: rgba(26, 115, 232, 0.06);
+  --banner-info-bg: rgba(26, 115, 232, 0.06);
+  --banner-info-border: rgba(26, 115, 232, 0.15);
+
+  /* Auth & Landing Page */
+  --landing-bg-glow: rgba(26, 115, 232, 0.06);
+  --landing-bg-transparent: rgba(240, 244, 249, 0);
+  --logo-gradient-start: #1A73E8;
+  --logo-gradient-end: #1557B0;
+  --logo-outline: #0F1419;
+  --logo-glow-low: rgba(26, 115, 232, 0.1);
+  --logo-glow-high: rgba(26, 115, 232, 0.3);
+  --btn-google-bg: #FFFFFF;
+  --btn-google-text: #0F1419;
+  --btn-google-hover-bg: #F4F6F9;
+  --btn-google-hover-glow: rgba(26, 115, 232, 0.15);
+  --btn-email-hover-bg: rgba(26, 115, 232, 0.03);
+  --btn-email-hover-glow: rgba(26, 115, 232, 0.1);
+  --guest-banner-bg: #FFFFFF;
+
+  /* Navbar & Header Components */
+  --navbar-bg: rgba(240, 244, 249, 0.8);
+  --profile-btn-bg: #FFFFFF;
+  --profile-btn-border: #D0D7DE;
+  --profile-avatar-bg: #F0F4F9;
+  --dropdown-bg: #FFFFFF;
+  --dropdown-item-error-hover: rgba(219, 48, 37, 0.05);
+  --search-pill-bg: #FFFFFF;
+  --search-pill-border: #D0D7DE;
+  --search-btn-bg: #F0F4F9;
+  --search-muted-icon: #57606A;
+  --search-helper-bg: rgba(26, 115, 232, 0.04);
+  --search-helper-border: rgba(26, 115, 232, 0.15);
+
+  /* Overall Stats Bar & Filters */
+  --stats-banner-bg: rgba(240, 244, 249, 0.85);
+  --stats-btn-bg: rgba(255, 255, 255, 0.7);
+  --stats-btn-highlight: rgba(255, 255, 255, 0.8);
+  --stats-btn-glass-start: rgba(255, 255, 255, 0.4);
+  --stats-btn-glass-end: rgba(255, 255, 255, 0);
+  --stats-btn-hover-border: var(--accent);
+  --stats-btn-hover-bg: rgba(255, 255, 255, 0.95);
+  --stats-btn-hover-highlight: rgba(255, 255, 255, 1);
+  --stats-btn-active-highlight: rgba(15, 20, 25, 0.05);
+  --stats-btn-active-text: var(--accent);
+
+  /* Card / Category Types (Logical Groups) */
+  /* Goal Colors */
+  --card-goal-bg: rgba(26, 115, 232, 0.06);
+  --card-goal-text: #1557B0;
+  --card-goal-border: rgba(26, 115, 232, 0.15);
+  --card-goal-active-bg-start: rgba(26, 115, 232, 0.1);
+  --card-goal-active-bg-end: rgba(26, 115, 232, 0.02);
+  --card-goal-active-border: rgba(26, 115, 232, 0.4);
+  --card-goal-active-shadow: rgba(26, 115, 232, 0.1);
+  --card-goal-active-icon-bg: #1557B0;
+  --card-goal-active-icon-text: #FFFFFF;
+  --card-goal-active-icon-shadow: rgba(26, 115, 232, 0.2);
+
+  /* Checklist Colors */
+  --card-checklist-bg: rgba(217, 119, 6, 0.06);
+  --card-checklist-text: #92400E;
+  --card-checklist-border: rgba(217, 119, 6, 0.15);
+  --card-checklist-active-bg-start: rgba(217, 119, 6, 0.1);
+  --card-checklist-active-bg-end: rgba(217, 119, 6, 0.02);
+  --card-checklist-active-border: rgba(217, 119, 6, 0.4);
+  --card-checklist-active-shadow: rgba(217, 119, 6, 0.1);
+  --card-checklist-active-icon-bg: #92400E;
+  --card-checklist-active-icon-text: #FFFFFF;
+  --card-checklist-active-icon-shadow: rgba(217, 119, 6, 0.2);
+
+  /* Note Colors */
+  --card-note-bg: rgba(217, 48, 37, 0.06);
+  --card-note-text: #B91C1C;
+  --card-note-border: rgba(217, 48, 37, 0.15);
+  --card-note-active-bg-start: rgba(217, 48, 37, 0.1);
+  --card-note-active-bg-end: rgba(217, 48, 37, 0.02);
+  --card-note-active-border: rgba(217, 48, 37, 0.4);
+  --card-note-active-shadow: rgba(217, 48, 37, 0.1);
+  --card-note-active-icon-bg: #B91C1C;
+  --card-note-active-icon-text: #FFFFFF;
+  --card-note-active-icon-shadow: rgba(217, 48, 37, 0.2);
+
+  /* Link Colors */
+  --card-link-bg: rgba(22, 163, 74, 0.06);
+  --card-link-text: #166534;
+  --card-link-border: rgba(22, 163, 74, 0.15);
+  --card-link-active-bg-start: rgba(22, 163, 74, 0.1);
+  --card-link-active-bg-end: rgba(22, 163, 74, 0.02);
+  --card-link-active-border: rgba(22, 163, 74, 0.4);
+  --card-link-active-shadow: rgba(22, 163, 74, 0.1);
+  --card-link-active-icon-bg: #166534;
+  --card-link-active-icon-text: #FFFFFF;
+  --card-link-active-icon-shadow: rgba(22, 163, 74, 0.2);
+
+  /* Habit Colors */
+  --card-habit-bg: rgba(147, 51, 234, 0.06);
+  --card-habit-text: #6B21A8;
+  --card-habit-border: rgba(147, 51, 234, 0.15);
+  --card-habit-active-bg-start: rgba(147, 51, 234, 0.1);
+  --card-habit-active-bg-end: rgba(147, 51, 234, 0.02);
+  --card-habit-active-border: rgba(147, 51, 234, 0.4);
+  --card-habit-active-shadow: rgba(147, 51, 234, 0.1);
+  --card-habit-active-icon-bg: #6B21A8;
+  --card-habit-active-icon-text: #FFFFFF;
+  --card-habit-active-icon-shadow: rgba(147, 51, 234, 0.2);
+
+  /* Form, Modals & Inputs */
+  --input-bg: #FFFFFF;
+  --input-focus-bg: #FFFFFF;
+  --input-focus-shadow: rgba(26, 115, 232, 0.15);
+  --input-error-text: #D93025;
+  --input-error-bg: rgba(217, 48, 37, 0.03);
+  --input-error-border: rgba(217, 48, 37, 0.2);
+  --input-error-focus-bg: rgba(217, 48, 37, 0.05);
+  --input-error-focus-border: rgba(217, 48, 37, 0.4);
+  --tracker-selector-bg: #F0F4F9;
+  --tracker-selector-hover-bg: #E1E5EB;
+  --checklist-item-bg: #F0F4F9;
+  --checklist-row-bg: #FFFFFF;
+  --checklist-row-hover-bg: #F0F4F9;
+  --deadline-box-bg: #F0F4F9;
+  --deadline-track-color: #E1E5EB;
+  --deadline-overdue-color: #D93025;
+
+  /* Action & Alert Buttons */
+  --btn-close-color: #0F1419;
+  --btn-primary-hover-bg: #1557B0;
+  --btn-primary-hover-glow: rgba(26, 115, 232, 0.2);
+  --btn-danger-hover-bg: rgba(217, 48, 37, 0.05);
+  --btn-danger-confirm-hover-bg: #B31412;
+  --btn-danger-confirm-hover-glow: rgba(217, 48, 37, 0.2);
+  --delete-safety-bg: rgba(217, 48, 37, 0.02);
+  --btn-card-delete-hover-bg: rgba(217, 48, 37, 0.1);
+  --btn-card-delete-hover-text: #D93025;
+  --card-delete-overlay-bg: rgba(255, 255, 255, 0.96);
+  --quick-add-btn-hover-bg: #E1E5EB;
+
+  /* Footer */
+  --footer-bg: rgba(240, 244, 249, 0.8);
+
+  /* APK / Mobile Downloads */
+  --btn-apk-bg: rgba(22, 163, 74, 0.06);
+  --btn-apk-border: rgba(22, 163, 74, 0.2);
+  --btn-apk-text: #16A34A;
+  --btn-apk-shadow: rgba(22, 163, 74, 0.02);
+  --btn-apk-hover-bg: rgba(22, 163, 74, 0.12);
+  --btn-apk-hover-shadow: rgba(22, 163, 74, 0.1);
+
+  /* Toggle Control & Edit Modes */
+  --toggle-bg: #D0D7DE;
+  --btn-toggle-edit-hover-bg: rgba(26, 115, 232, 0.08);
+  --btn-bulk-delete-bg: rgba(217, 48, 37, 0.08);
+  --btn-bulk-delete-border: rgba(217, 48, 37, 0.2);
+  --btn-bulk-delete-text: #D93025;
+  --btn-bulk-delete-hover-bg: #D93025;
+  --btn-bulk-delete-disabled-bg: rgba(217, 48, 37, 0.03);
+  --btn-bulk-delete-disabled-text: rgba(217, 48, 37, 0.4);
+
+  /* Toast, Popovers & Sub-overlays */
+  --toast-bg: #FFFFFF;
+  --overlay-bg: rgba(15, 20, 25, 0.3);
+  --overlay-card-bg: rgba(255, 255, 255, 0.8);
+  --terrace-overlay-bg: rgba(240, 244, 249, 0.98);
+  --terrace-header-bg: rgba(255, 255, 255, 0.6);
+  --terrace-latest-badge-border: rgba(26, 115, 232, 0.2);
+  --note-editor-text-color: #0F1419;
+  --note-bullet-color: rgba(90, 100, 110, 0.6);
+  --note-syntax-color: rgba(90, 100, 110, 0.4);
+  --formatting-popover-text: #0F1419;
+
+  /* Floating Action Button (FAB) */
+  --btn-fab-bg: rgba(255, 255, 255, 0.7);
+  --btn-fab-color: #1A73E8;
+  --btn-fab-border: rgba(26, 115, 232, 0.4);
+  --btn-fab-highlight: rgba(255, 255, 255, 0.8);
+  --btn-fab-hover-bg: rgba(26, 115, 232, 0.08);
+  --btn-fab-hover-glow: rgba(26, 115, 232, 0.15);
+
+  /* Inline Code Background & Search Highlights */
+  --code-bg: #F0F4F9;
+  --search-highlight-bg: rgba(243, 156, 18, 0.18);
+  --stats-btn-active-icon-text-dark: #FFFFFF;
+  --toast-bg-subtle: rgba(255, 255, 255, 0.8);
+  
+  color-scheme: light;
+}
+
+/* Global Transition Rule for smooth theme switches */
+body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Base resets */
@@ -83,15 +526,15 @@ body {
 
 @keyframes skeletonPulse {
   0% {
-    background-color: #161B22;
+    background-color: var(--card-bg);
   }
 
   50% {
-    background-color: #21262D;
+    background-color: var(--skeleton-pulse-glow);
   }
 
   100% {
-    background-color: #161B22;
+    background-color: var(--card-bg);
   }
 }
 
@@ -147,7 +590,7 @@ body {
 @keyframes highlightFlash {
   0% { box-shadow: 0 0 0 4px var(--accent); }
   50% { box-shadow: 0 0 0 4px var(--accent); }
-  100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+  100% { box-shadow: var(--shadow-sm); }
 }
 
 .card-highlight-flash {
@@ -1117,7 +1560,7 @@ body {
 /* Progress Card Styles */
 .card-progress {
   background-color: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--card-progress-border);
   border-radius: var(--border-radius);
   padding: 24px;
   cursor: pointer;
@@ -1267,7 +1710,7 @@ body {
 /* Skeleton Loading Cards */
 .card-skeleton {
   background-color: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--card-progress-border);
   border-radius: var(--border-radius);
   padding: 24px;
   height: 180px;
@@ -2710,17 +3153,17 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   text-decoration: underline;
 }
 
-.about-content {
-  color: var(--text-primary);
-}
-
 .about-box {
-  background: #1A1F25;
+  background: var(--about-bg, #1A1F25);
   border: 1px solid var(--card-border);
   border-radius: var(--border-radius);
   padding: 32px 28px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-medium);
   margin-top: 16px;
+}
+
+.about-content {
+  color: var(--text-primary);
 }
 
 .about-content h1 {
@@ -3603,7 +4046,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   transform: none !important;
   /* disable lift translation */
   box-shadow: none !important;
-  border-color: var(--card-border) !important;
+  border-color: var(--card-progress-border) !important;
 }
 
 .cards-grid.edit-mode.has-selections .card-progress:not(.selected):hover {
@@ -3848,7 +4291,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 
 
-/* Real-Time Contenteditable Note Editor Styles (v4.0) */
 .note-editor-contenteditable {
   margin: 0 !important;
   width: 100% !important;
@@ -3866,7 +4308,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   overflow-wrap: break-word !important;
   overflow-y: auto !important;
   outline: none !important;
-  background-color: rgba(13, 17, 23, 0.6) !important;
+  background-color: var(--input-bg) !important;
   border: 1px solid var(--card-border) !important;
   border-radius: 8px !important;
   user-select: text !important;
@@ -4129,4 +4571,109 @@ textarea.form-input-single-line {
 
 .formatting-popover .btn-close-popover:hover {
   color: var(--text-primary);
+}
+
+/* Navbar Theme Toggle & Dropdown Menu */
+.theme-menu-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+#theme-toggle-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all var(--transition-speed) ease;
+}
+
+#theme-toggle-btn:hover {
+  border-color: var(--card-border);
+  color: var(--text-primary);
+  background-color: var(--stats-btn-highlight);
+}
+
+.theme-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 170px;
+  background: var(--dropdown-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: var(--shadow-medium);
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  pointer-events: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.theme-dropdown.active {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.theme-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  justify-content: flex-start;
+  position: relative;
+}
+
+.theme-dropdown-item:hover {
+  color: var(--text-primary);
+  background-color: var(--stats-btn-hover-highlight);
+}
+
+.theme-dropdown-item.active {
+  color: var(--accent);
+  background-color: var(--accent-hover-bg);
+  font-weight: 600;
+}
+
+.theme-check-mark {
+  margin-left: auto;
+  font-size: 0.9rem;
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  color: var(--accent);
+}
+
+.theme-dropdown-item.active .theme-check-mark {
+  opacity: 1;
+}
+
+.theme-icon, .theme-item-icon {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
