@@ -593,6 +593,11 @@ html.light-theme .navbar .nav-download-btn:hover {
   color: #1557B0;
 }
 
+/* --- Progress bar fill: override per-card inline --bar-color in light mode --- */
+html.light-theme .progressbar-fill {
+  background-color: rgb(16, 144, 70) !important;
+}
+
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
