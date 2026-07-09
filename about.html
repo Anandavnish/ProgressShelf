@@ -12,6 +12,30 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="logo.svg">
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('app-theme') || 'system';
+      let effectiveTheme = savedTheme;
+      if (savedTheme === 'system') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      if (effectiveTheme === 'light') {
+        document.documentElement.classList.add('light-theme');
+        const accent = localStorage.getItem('app-accent-color');
+        if (accent) {
+          document.documentElement.style.setProperty('--accent', accent);
+          document.documentElement.style.setProperty('--accent-hover', accent);
+          document.documentElement.style.setProperty('--accent-glow', accent);
+          document.documentElement.style.setProperty('--btn-primary-hover-bg', accent);
+          document.documentElement.style.setProperty('--btn-primary-hover-glow', accent);
+          document.documentElement.style.setProperty('--logo-gradient-start', accent);
+          document.documentElement.style.setProperty('--logo-gradient-end', accent);
+        }
+      } else {
+        document.documentElement.classList.add('dark-theme');
+      }
+    })();
+  </script>
 </head>
 <body>
   <main class="about-page-container">

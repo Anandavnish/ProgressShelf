@@ -210,6 +210,7 @@
   --terrace-overlay-bg: rgba(10, 12, 16, 0.95);
   --terrace-header-bg: rgba(13, 17, 23, 0.5);
   --terrace-latest-badge-border: rgba(0, 168, 204, 0.3);
+  --delete-confirm-bg: rgba(13, 17, 23, 0.93);
   --note-editor-text-color: #c9d1d9;
   --note-bullet-color: rgba(139, 148, 158, 0.6);
   --note-syntax-color: rgba(139, 148, 158, 0.5);
@@ -292,7 +293,7 @@ html.light-theme {
   --btn-google-hover-glow: rgba(26, 115, 232, 0.15);
   --btn-email-hover-bg: rgba(26, 115, 232, 0.03);
   --btn-email-hover-glow: rgba(26, 115, 232, 0.1);
-  --guest-banner-bg: #FFFFFF;
+  --guest-banner-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
 
   /* Navbar & Header Components */
   --navbar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
@@ -437,9 +438,10 @@ html.light-theme {
   --toast-bg: #FFFFFF;
   --overlay-bg: rgba(15, 20, 25, 0.3);
   --overlay-card-bg: rgba(255, 255, 255, 0.8);
-  --terrace-overlay-bg: rgba(240, 244, 249, 0.98);
-  --terrace-header-bg: rgba(255, 255, 255, 0.6);
-  --terrace-latest-badge-border: rgba(26, 115, 232, 0.2);
+  --terrace-overlay-bg: color-mix(in srgb, var(--accent) 3%, #F0F4F9);
+  --terrace-header-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
+  --terrace-latest-badge-border: color-mix(in srgb, var(--accent) 20%, transparent);
+  --delete-confirm-bg: rgba(255, 255, 255, 0.8);
   --note-editor-text-color: #0F1419;
   --note-bullet-color: rgba(90, 100, 110, 0.6);
   --note-syntax-color: rgba(90, 100, 110, 0.4);
@@ -569,7 +571,35 @@ html.light-theme .footer-bullet {
 }
 
 html.light-theme .footer-links a:hover {
-  color: #1557B0;
+  color: var(--accent-hover);
+}
+
+/* --- Guest Banner --- */
+html.light-theme .guest-banner {
+  border-bottom-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--text-primary);
+}
+
+html.light-theme .btn-banner-login {
+  background: var(--accent);
+  color: #fff;
+}
+
+html.light-theme .btn-banner-login:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+html.light-theme .btn-apk-download {
+  background-color: var(--accent-hover-bg);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--accent);
+}
+
+html.light-theme .btn-apk-download:hover {
+  background-color: var(--accent-hover-bg-strong);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* --- Mobile subbar & nav SVG icons: black in light mode --- */
@@ -1170,7 +1200,7 @@ body {
 
 .version-select {
   background-color: var(--navbar-bg);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--profile-btn-border);
   color: var(--text-muted);
   font-family: var(--font-family);
   font-size: 0.82rem;
@@ -1179,13 +1209,14 @@ body {
   border-radius: 8px;
   cursor: pointer;
   outline: none;
-  transition: all 0.2s ease;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238B949E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 8px center;
-  background-size: 12px;
+  background-size: 14px;
+  transition: all 0.2s ease;
 }
 
 .version-select option {
@@ -1196,7 +1227,7 @@ body {
 .version-select:hover {
   border-color: var(--accent);
   color: var(--text-primary);
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A90D9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* User Profile Badge Menu */
@@ -1334,6 +1365,12 @@ body {
 }
 
 .dropdown-item:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background-color: var(--accent-hover-bg);
+}
+
+.dropdown-item.btn-delete-account:hover {
   border-color: var(--error);
   color: var(--error);
   background-color: rgba(255, 77, 77, 0.05);
@@ -2224,8 +2261,8 @@ body {
 }
 
 .toast {
-  background-color: #1C2128;
-  border: 1px solid var(--card-border);
+  background-color: var(--toast-bg);
+  border: 1px solid var(--border-color);
   border-left: 4px solid var(--accent);
   border-radius: 8px;
   padding: 16px;
@@ -2512,7 +2549,7 @@ body {
 
 .guest-banner {
   width: 100%;
-  background: #1C2128;
+  background: var(--guest-banner-bg);
   border-bottom: 1px solid #30363D;
   padding: 10px 24px;
   display: flex;
@@ -2608,8 +2645,9 @@ body {
 .card-delete-confirm {
   position: absolute;
   inset: 0;
-  background: rgba(13, 17, 23, 0.93);
-  backdrop-filter: blur(4px);
+  background: var(--delete-confirm-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: var(--border-radius);
   display: flex;
   flex-direction: column;
@@ -3136,9 +3174,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .mobile-subbar-container {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-evenly;
   align-items: center;
-  gap: 16px;
+  gap: 0;
   width: 100%;
 }
 
@@ -3180,7 +3218,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   /* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
   .navbar .nav-github-link,
   .navbar .version-selector,
-  .navbar .theme-menu-container {
+  .navbar .theme-menu-container,
+  .navbar .accent-menu-container {
     display: none !important;
   }
 
@@ -3847,6 +3886,38 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   background: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='20 6 9 17 4 12'%3e%3c/polyline%3e%3c/svg%3e") center/14px no-repeat;
 }
 
+.accent-swatch-delete {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--error);
+  color: white;
+  border: none;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+div:hover > .accent-swatch-delete {
+  opacity: 1;
+}
+
+.accent-swatch-delete:hover {
+  transform: scale(1.2);
+}
+
 /* Hide the palette section in dark mode — dark uses its own fixed accent */
 html.dark-theme .dropdown-theme-section {
   display: none;
@@ -4324,7 +4395,7 @@ html.dark-theme .dropdown-theme-section {
   right: 0;
   bottom: 0;
   z-index: 9999;
-  background-color: rgba(10, 12, 16, 0.95);
+  background-color: var(--terrace-overlay-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   opacity: 0;
@@ -4804,59 +4875,95 @@ textarea.form-input-single-line {
   color: var(--text-primary);
 }
 
-/* Navbar Theme Toggle & Dropdown Menu */
-.theme-menu-container {
+/* Navbar Theme & Accent Toggles */
+.theme-menu-container,
+.accent-menu-container {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
 
-#theme-toggle-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  width: 38px;
-  height: 38px;
+#theme-toggle-btn,
+.accent-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: all var(--transition-speed) ease;
+  transition: all 0.2s ease;
 }
 
-#theme-toggle-btn:hover {
-  border-color: var(--card-border);
-  color: var(--text-primary);
-  background-color: var(--stats-btn-highlight);
+#theme-toggle-btn:hover,
+.accent-toggle-btn:hover {
+  background: var(--search-btn-hover-bg);
+  color: var(--search-btn-hover-text);
 }
 
 .theme-dropdown {
   position: absolute;
-  top: calc(100% + 12px);
+  top: 100%;
+  margin-top: 12px;
   right: 0;
-  width: 170px;
   background: var(--dropdown-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 6px;
   box-shadow: var(--shadow-medium);
-  opacity: 0;
-  transform: translateY(-10px) scale(0.95);
-  pointer-events: none;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+  padding: 6px;
+  min-width: 130px;
   z-index: 110;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  pointer-events: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+  transform-origin: top right;
 }
 
 .theme-dropdown.active {
   opacity: 1;
   transform: none;
   pointer-events: auto;
+}
+
+/* Adjust dropdowns in mobile subbar to align left so they don't overflow */
+.mobile-subbar .theme-dropdown {
+  top: 100%;
+  bottom: auto;
+  margin-top: 12px;
+  margin-bottom: 0;
+  right: auto;
+  left: 0;
+  transform-origin: top left;
+}
+
+.beta-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(25%, -25%);
+  background-color: var(--accent);
+  color: #ffffff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Custom Accent Dropdown overrides */
+.accent-dropdown {
+  min-width: 160px;
+  padding: 12px;
 }
 
 .theme-dropdown-item {
@@ -4879,15 +4986,46 @@ textarea.form-input-single-line {
   position: relative;
 }
 
-.theme-dropdown-item:hover {
-  color: var(--text-primary);
-  background-color: var(--stats-btn-hover-highlight);
+.theme-dropdown-item:hover,
+.theme-dropdown-item.active {
+  background: var(--search-helper-bg);
 }
 
-.theme-dropdown-item.active {
+/* Custom Color Wrapper */
+.custom-color-wrapper {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: center;
+}
+
+.custom-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px dashed var(--text-muted);
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.custom-color-btn:hover {
+  border-color: var(--accent);
   color: var(--accent);
-  background-color: var(--accent-hover-bg);
-  font-weight: 600;
+  background: var(--accent-hover-bg);
+}
+
+.custom-accent-picker {
+  opacity: 0;
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .theme-check-mark {

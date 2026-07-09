@@ -19,7 +19,10 @@ function mapSupabaseUser(supabaseUser) {
     email: supabaseUser.email,
     displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email || "Tracker User",
     photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y",
-    preferredSort: supabaseUser.user_metadata?.preferred_sort || null
+    preferredSort: supabaseUser.user_metadata?.preferred_sort || null,
+    appTheme: supabaseUser.user_metadata?.app_theme || null,
+    accentColor: supabaseUser.user_metadata?.accent_color || null,
+    customAccents: supabaseUser.user_metadata?.custom_accents || null
   };
 }
 
@@ -340,5 +343,25 @@ export async function updateUserPreferredSort(sortValue) {
     if (error) throw error;
   } catch (err) {
     console.error("Failed to update user preferred sort:", err);
+  }
+}
+
+/**
+ * Persists the user's theme and accent color preferences to Supabase user_metadata.
+ * @param {string} themeMode 'light' | 'dark' | 'system'
+ * @param {string} accentColor Hex color string
+ * @param {Array} customAccents Array of custom accent hex strings
+ */
+export async function updateUserThemePreference(themeMode, accentColor, customAccents) {
+  if (!isConfigured || isGuestMode()) return;
+  try {
+    const dataToUpdate = { app_theme: themeMode, accent_color: accentColor };
+    if (customAccents !== undefined) {
+      dataToUpdate.custom_accents = customAccents;
+    }
+    const { error } = await supabase.auth.updateUser({ data: dataToUpdate });
+    if (error) throw error;
+  } catch (err) {
+    console.error("Failed to update user theme preference:", err);
   }
 }

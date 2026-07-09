@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=6.7">
+  <link rel="stylesheet" href="index.css?v=6.8">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -102,10 +102,11 @@
         </button>
       </div>
       <div class="nav-toolbar">
-        <!-- Theme Toggle Button & Dropdown Menu (leftmost toolbar item) -->
+        <!-- Theme Toggle Dropdown -->
         <div class="theme-menu-container">
           <button id="theme-toggle-btn" title="Toggle Theme">
-            <!-- Icon dynamically swapped by app.js -->
+            <span class="beta-badge" id="theme-beta-badge" style="display:none;">BETA</span>
+            <!-- Icon injected by JS -->
           </button>
           <div id="theme-dropdown-menu" class="theme-dropdown">
             <button class="theme-dropdown-item" data-theme="system">
@@ -139,6 +140,26 @@
               Dark
               <span class="theme-check-mark">✓</span>
             </button>
+          </div>
+        </div>
+        <!-- Accent Color Picker -->
+        <div class="accent-menu-container">
+          <button id="accent-toggle-btn" class="accent-toggle-btn" title="Theme Color">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M346-140 100-386q-10-10-15-22t-5-25q0-13 5-25t15-22l230-229-106-106 62-65 400 400q10 10 14.5 22t4.5 25q0 13-4.5 25T686-386L440-140q-10 10-22 15t-25 5q-13 0-25-5t-22-15Zm47-506L179-432h428L393-646Zm399 526q-36 0-61-25.5T706-208q0-27 13.5-51t30.5-47l42-54 44 54q16 23 30 47t14 51q0 37-26 62.5T792-120Z"/></svg>
+          </button>
+          <div id="accent-dropdown-menu" class="theme-dropdown accent-dropdown">
+            <div class="accent-palette" id="accent-palette">
+              <!-- Swatches injected by JS -->
+            </div>
+            <div class="custom-color-wrapper">
+              <label for="custom-accent-picker" class="custom-color-btn" title="Pick Custom Color">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </label>
+              <input type="color" id="custom-accent-picker" class="custom-accent-picker">
+            </div>
           </div>
         </div>
         <!-- Download Button -->
@@ -948,13 +969,6 @@
       <p id="user-name" class="dropdown-user-name">Loading...</p>
       <p id="user-status" class="dropdown-user-status">Online Mode</p>
     </div>
-    <!-- Theme Color Palette (light-mode only, above Terrace) -->
-    <div class="dropdown-theme-section" id="dropdown-theme-section">
-      <p class="dropdown-section-label">Theme Color</p>
-      <div class="accent-palette" id="accent-palette">
-        <!-- Swatches injected by JS -->
-      </div>
-    </div>
     <div class="dropdown-divider"></div>
     <button id="btn-terrace" class="dropdown-item btn-terrace">
       <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1003,6 +1017,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=10.10"></script>
+  <script type="module" src="app.js?v=10.11"></script>
 </body>
 </html>

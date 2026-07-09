@@ -1,5 +1,5 @@
 import { isConfigured } from "./supabase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort } from "./auth.js";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference } from "./auth.js";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars } from "./db.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
@@ -4758,6 +4758,21 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
+  // Sync Theme Preferences from DB
+  if (user && user.appTheme) {
+    localStorage.setItem('app-theme', user.appTheme);
+    if (user.accentColor) localStorage.setItem('app-accent-color', user.accentColor);
+    if (user.customAccents) {
+      try {
+        localStorage.setItem('app-custom-accents', JSON.stringify(user.customAccents));
+      } catch(e) {}
+    }
+    if (typeof window.applyThemeClass === 'function') {
+      window.applyThemeClass(user.appTheme);
+      if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(user.appTheme);
+    }
+  }
+
   // Silent auto-migration if guest logs in or has local bars
   const failedMigrationBars = (() => {
     try {
@@ -6678,9 +6693,23 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.2 (Latest)",
-    date: "July 9, 2026",
+    version: "v4.3 (Latest)",
+    date: "July 10, 2026",
     isLatest: true,
+    title: "Dynamic Theming, Custom Color Math & UI Refinement",
+    content: `
+### Key Features & Updates
+* **Custom Accent Palette Sync**: Choose your own custom color and perfectly sync it across all your devices using Supabase \`user_metadata\`.
+* **Smart HSL Clamping**: Automatically adjusts faded or overly bright custom colors (by dynamically calculating and clamping HSL Lightness) to ensure the UI remains sharp and accessible.
+* **Auto Theme Reset**: Smooth transition that resets custom colors intelligently if you switch device OS themes or toggle between system defaults.
+* **Theme Dropdown UI Polish**: Refined the theme picker to elegantly handle closing on external clicks/Esc key, opening cleanly on mobile without overlapping the navbar, and maintaining smooth 'glow' shadow animations for version selectors.
+* **Dynamic Terrace Overlays**: Enhanced modal popups (like Terrace and Delete Account) to perfectly adapt their backdrop blurs and transparencies to your active light/dark theme variables.
+`
+  },
+  {
+    version: "v4.2",
+    date: "July 9, 2026",
+    isLatest: false,
     title: "Notification View Actions, Custom Avatars & About Redesign",
     content: `
 ### Key Features & Updates
@@ -7128,6 +7157,7 @@ function initTheme() {
       window.applyAccentToTheme(effectiveTheme);
     }
   };
+  window.applyThemeClass = applyThemeClass;
 
   const updateToggleIcon = (theme) => {
     const btn = document.getElementById('theme-toggle-btn');
@@ -7147,6 +7177,7 @@ function initTheme() {
       `;
     } else {
       btn.innerHTML = `
+        <span class="beta-badge" id="theme-beta-badge">BETA</span>
         <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -7172,6 +7203,7 @@ function initTheme() {
       }
     });
   };
+  window.syncToggleButtons = syncToggleButtons;
 
   // Toggle menu dropdown open/close
   const btn = document.getElementById('theme-toggle-btn');
@@ -7179,9 +7211,11 @@ function initTheme() {
   if (btn && menu) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Close profile dropdown if open to avoid overlap
+      // Close other dropdowns
       const profileDropdown = document.getElementById('profile-dropdown');
       if (profileDropdown) profileDropdown.classList.remove('active');
+      const accentDropdown = document.getElementById('accent-dropdown-menu');
+      if (accentDropdown) accentDropdown.classList.remove('active');
       
       menu.classList.toggle('active');
     });
@@ -7195,15 +7229,25 @@ function initTheme() {
       localStorage.setItem('app-theme', theme);
       applyThemeClass(theme);
       syncToggleButtons(theme);
+      if (typeof updateUserThemePreference === 'function') {
+        const accent = localStorage.getItem('app-accent-color');
+        updateUserThemePreference(theme, accent);
+      }
       if (menu) menu.classList.remove('active');
     });
   });
 
   // Watch for system color scheme changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    const current = localStorage.getItem('app-theme') || 'system';
-    if (current === 'system') {
-      applyThemeClass('system');
+    // OS theme changed: Forget manual override and let browser dictate
+    localStorage.setItem('app-theme', 'system');
+    applyThemeClass('system');
+    syncToggleButtons('system');
+    
+    // Sync the reset to DB
+    if (typeof updateUserThemePreference === 'function') {
+      const accent = localStorage.getItem('app-accent-color');
+      updateUserThemePreference('system', accent);
     }
   });
 
@@ -7234,6 +7278,87 @@ function initAccentColor() {
   ];
 
   const DEFAULT_COLOR = COLORS[0]; // Forest Green
+
+  // HSL Math utilities
+  function hexToHsl(hex) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+    let r = parseInt(hex.substring(0,2), 16) / 255;
+    let g = parseInt(hex.substring(2,4), 16) / 255;
+    let b = parseInt(hex.substring(4,6), 16) / 255;
+    let max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      let d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch(max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    return [h, s, l];
+  }
+
+  function hslToHex(h, s, l) {
+    let r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      const hue2rgb = (p, q, t) => {
+        if(t < 0) t += 1;
+        if(t > 1) t -= 1;
+        if(t < 1/6) return p + (q - p) * 6 * t;
+        if(t < 1/2) return q;
+        if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      let p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    const toHex = x => {
+      const hex = Math.round(x * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+
+  function processCustomColor(hex) {
+    let [h, s, l] = hexToHsl(hex);
+    // Clamp Lightness between 30% and 50% for vibrant solid contrast
+    l = Math.max(0.3, Math.min(l, 0.5));
+    const clampedHex = hslToHex(h, s, l);
+    // Convert clampedHex back to RGB for glow
+    let r = parseInt(clampedHex.substring(1,3), 16);
+    let g = parseInt(clampedHex.substring(3,5), 16);
+    let b = parseInt(clampedHex.substring(5,7), 16);
+    const hoverHex = hslToHex(h, s, Math.max(0.2, l - 0.1));
+    return {
+      name: 'Custom',
+      value: clampedHex,
+      glow: `rgba(${r},${g},${b},0.18)`,
+      hover: hoverHex,
+      isCustom: true
+    };
+  }
+
+  function getCustomAccents() {
+    try {
+      return JSON.parse(localStorage.getItem('app-custom-accents')) || [];
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function saveCustomAccents(accents) {
+    localStorage.setItem('app-custom-accents', JSON.stringify(accents));
+  }
 
   /**
    * Resolve the effective light/dark state from the current HTML class.
@@ -7279,7 +7404,12 @@ function initAccentColor() {
   window.applyAccentToTheme = function(effectiveTheme) {
     if (effectiveTheme === 'light') {
       const saved = localStorage.getItem(STORAGE_KEY);
-      const entry = COLORS.find(c => c.value === saved) || DEFAULT_COLOR;
+      const customAccents = getCustomAccents();
+      let entry = COLORS.find(c => c.value === saved);
+      if (!entry && customAccents.includes(saved)) {
+        entry = processCustomColor(saved);
+      }
+      entry = entry || DEFAULT_COLOR;
       applyAccent(entry);
       renderSwatches(entry.value);
     } else {
@@ -7293,20 +7423,135 @@ function initAccentColor() {
   function renderSwatches(activeValue) {
     const palette = document.getElementById('accent-palette');
     if (!palette) return;
+    
+    const customAccents = getCustomAccents();
+    
+    // Clear and re-append predefined colors
     palette.innerHTML = '';
+    const allColors = [...COLORS, ...customAccents.map(hex => processCustomColor(hex))];
 
-    COLORS.forEach(color => {
+    allColors.forEach(color => {
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'inline-block';
+      
       const btn = document.createElement('button');
       btn.className = 'accent-swatch' + (color.value === activeValue ? ' active' : '');
       btn.style.backgroundColor = color.value;
       btn.title = color.name;
       btn.setAttribute('aria-label', color.name);
+      
       btn.addEventListener('click', () => {
         localStorage.setItem(STORAGE_KEY, color.value);
         applyAccent(color);
         renderSwatches(color.value);
+        
+        if (typeof window.applyThemeClass === 'function') {
+          localStorage.setItem('app-theme', 'light');
+          window.applyThemeClass('light');
+          if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
+        }
+        
+        if (typeof updateUserThemePreference === 'function') {
+          updateUserThemePreference('light', color.value, getCustomAccents());
+        }
+        
+        const menu = document.getElementById('accent-dropdown-menu');
+        if (menu) menu.classList.remove('active');
       });
-      palette.appendChild(btn);
+      
+      wrapper.appendChild(btn);
+
+      // Add delete 'x' button for custom colors
+      if (color.isCustom) {
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '×';
+        delBtn.className = 'accent-swatch-delete';
+        delBtn.title = 'Delete custom color';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          let newAccents = getCustomAccents().filter(h => h !== color.value);
+          saveCustomAccents(newAccents);
+          if (activeValue === color.value) {
+            // Revert to default green if we delete the active color
+            localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
+            applyAccent(DEFAULT_COLOR);
+            activeValue = DEFAULT_COLOR.value;
+            if (typeof updateUserThemePreference === 'function') {
+              updateUserThemePreference('light', DEFAULT_COLOR.value, newAccents);
+            }
+          } else {
+            if (typeof updateUserThemePreference === 'function') {
+              updateUserThemePreference('light', localStorage.getItem(STORAGE_KEY), newAccents);
+            }
+          }
+          renderSwatches(activeValue);
+        });
+        wrapper.appendChild(delBtn);
+      }
+      
+      palette.appendChild(wrapper);
+    });
+
+    // Hide '+' button if 3 custom colors exist
+    const customPickerBtn = document.querySelector('.custom-accent-btn');
+    if (customPickerBtn) {
+      if (customAccents.length >= 3) {
+        customPickerBtn.style.display = 'none';
+      } else {
+        customPickerBtn.style.display = 'flex';
+      }
+    }
+  }
+
+  // Toggle menu dropdown open/close
+  const toggleBtn = document.getElementById('accent-toggle-btn');
+  const menu = document.getElementById('accent-dropdown-menu');
+  if (toggleBtn && menu) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close other dropdowns
+      const profileDropdown = document.getElementById('profile-dropdown');
+      if (profileDropdown) profileDropdown.classList.remove('active');
+      const themeDropdown = document.getElementById('theme-dropdown-menu');
+      if (themeDropdown) themeDropdown.classList.remove('active');
+      
+      menu.classList.toggle('active');
+    });
+  }
+
+  // Custom Color Picker
+  const customPicker = document.getElementById('custom-accent-picker');
+  if (customPicker) {
+    customPicker.addEventListener('change', (e) => {
+      const hex = e.target.value;
+      let customAccents = getCustomAccents();
+      
+      const processedColor = processCustomColor(hex);
+      
+      if (!customAccents.includes(processedColor.value)) {
+        if (customAccents.length < 3) {
+          customAccents.push(processedColor.value);
+          saveCustomAccents(customAccents);
+        }
+      }
+      
+      localStorage.setItem(STORAGE_KEY, processedColor.value);
+      applyAccent(processedColor);
+      
+      // Update swatches
+      renderSwatches(processedColor.value);
+      
+      // Force light mode
+      if (typeof window.applyThemeClass === 'function') {
+        localStorage.setItem('app-theme', 'light');
+        window.applyThemeClass('light');
+        if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
+      }
+      
+      if (typeof updateUserThemePreference === 'function') {
+        updateUserThemePreference('light', processedColor.value, customAccents);
+      }
     });
   }
 
@@ -7323,3 +7568,37 @@ function initAccentColor() {
 }
 
 initAccentColor();
+
+// Global listeners for closing dropdown menus
+document.addEventListener('click', (e) => {
+  const profileDropdown = document.getElementById('profile-dropdown');
+  const profileBtn = document.getElementById('profile-btn');
+  const themeMenu = document.getElementById('theme-dropdown-menu');
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  const accentMenu = document.getElementById('accent-dropdown-menu');
+  const accentBtn = document.getElementById('accent-toggle-btn');
+
+  if (profileDropdown && profileDropdown.classList.contains('active') && !profileDropdown.contains(e.target) && (!profileBtn || !profileBtn.contains(e.target))) {
+    profileDropdown.classList.remove('active');
+  }
+  if (themeMenu && themeMenu.classList.contains('active') && !themeMenu.contains(e.target) && (!themeBtn || !themeBtn.contains(e.target))) {
+    themeMenu.classList.remove('active');
+  }
+  if (accentMenu && accentMenu.classList.contains('active') && !accentMenu.contains(e.target) && (!accentBtn || !accentBtn.contains(e.target))) {
+    accentMenu.classList.remove('active');
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const profileDropdown = document.getElementById('profile-dropdown');
+    if (profileDropdown) profileDropdown.classList.remove('active');
+    
+    const themeMenu = document.getElementById('theme-dropdown-menu');
+    if (themeMenu) themeMenu.classList.remove('active');
+    
+    const accentMenu = document.getElementById('accent-dropdown-menu');
+    if (accentMenu) accentMenu.classList.remove('active');
+  }
+});
+
