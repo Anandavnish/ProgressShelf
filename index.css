@@ -2714,6 +2714,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   color: var(--text-primary);
 }
 
+.about-box {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  padding: 32px 28px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 16px;
+}
+
 .about-content h1 {
   font-size: 2rem;
   font-weight: 700;
@@ -2957,7 +2966,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* --- Card Note styles --- */
 .card-note-text {
   font-family: 'Lora', Georgia, serif !important;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   line-height: 1.55;
   color: #c9d1d9;
   margin-top: 12px;

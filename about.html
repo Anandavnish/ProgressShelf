@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co https://lieckszgurlqcujmyrjw.supabase.co wss://lieckszgurlqcujmyrjw.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com/">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com/">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>About ProgressShelf</title>
-  <meta name="description" content="Learn about ProgressShelf — a personal progress tracker built to give you a clear picture of what you're working on.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="index.css?v=5.13">
   <link rel="manifest" href="manifest.json">
@@ -19,40 +18,9 @@
     <a href="javascript:history.back()" class="about-back-link">← Back</a>
 
     <div class="about-content">
-      <h1>About ProgressShelf</h1>
-      <p>A personal progress tracker — built to give you a clear picture of what you're working on, and how far you've come.</p>
-      <p>Works instantly across devices under the same account — no refresh needed.</p>
-
-      <h2>Three ways to track</h2>
-      <ul>
-        <li><strong>Goals</strong> — set a deadline, update progress as you go</li>
-        <li><strong>Checklists</strong> — tick things off, and your progress bar updates automatically</li>
-        <li><strong>Quick Notes</strong> — write freely, with Markdown formatting support (bold, italics, links, and more)</li>
-      </ul>
-
-      <h2>Deadlines that show themselves</h2>
-      <p>Every card can carry a deadline, visualized as a draining border that shifts color as time runs out — so you feel your timeline, not just read it.</p>
-
-      <h2>Notifications, your way</h2>
-      <p>Set an alert at an exact deadline, a fixed time before it, or as a percentage of time remaining — whatever matches how you actually think about time.</p>
-
-      <h2>Built to bend</h2>
-      <p>Nothing is locked in once saved — edit any card, any field, at any stage. Input fields are forgiving too: type 1.5 in an hours field and it's read as 1 hr 30 min.</p>
-
-      <h2>Search that actually searches</h2>
-      <p>Global search looks inside your cards, not just their titles — though titles are still prioritized first.</p>
-
-      <h2>Everywhere you need it</h2>
-      <p>Install ProgressShelf as an app on Windows, Mac, Android, or iPhone.</p>
-
-      <h2>Built by AI, tuned by a human</h2>
-      <p>Built with AI tools, designed and refined by Anand Avnish.</p>
-
-      <h2>The idea behind it</h2>
-      <p>A quiet place to see what you're doing, and how far along you are — nothing more, nothing less.</p>
-
-      <h2>Feedback & bugs</h2>
-      <p>Got an idea or found something broken? <a href="mailto:anandavnish1753@gmail.com?subject=ProgressShelf%20Feedback&body=Hi%20Anand%2C%0A%0A">Write to us</a> — it opens your email app directly.</p>
+      <div class="about-box" id="about-rendered-content">
+        <!-- Rendered markdown content will be inserted here -->
+      </div>
     </div>
   </main>
 
@@ -72,5 +40,173 @@
       <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
     </div>
   </footer>
+
+  <!-- Raw Markdown Content -->
+  <script type="text/markdown" id="about-markdown-source">
+# About ProgressShelf
+A personal progress tracker — built to give you a clear picture of what you're working on, and how far you've come.
+
+Works instantly across devices under the same account — no refresh needed.
+
+### Three ways to track
+- **Goals** — set a deadline, update progress as you go
+- **Checklists** — tick things off, and your progress bar updates automatically
+- **Quick Notes** — write freely, with Markdown formatting support (bold, italics, links, and more)
+
+### Deadlines that show themselves
+Every card can carry a deadline, visualized as a draining border that shifts color as time runs out — so you feel your timeline, not just read it.
+
+### Notifications, your way
+Set an alert at an exact deadline, a fixed time before it, or as a percentage of time remaining — whatever matches how you actually think about time.
+
+### Built to bend
+Nothing is locked in once saved — edit any card, any field, at any stage. Input fields are forgiving too: type 1.5 in an hours field and it's read as 1 hr 30 min.
+
+### Search that actually searches
+Global search looks inside your cards, not just their titles — though titles are still prioritized first.
+
+### Everywhere you need it
+[Install ProgressShelf] as an app on Windows, Mac, Android, or iPhone.
+
+### Built by AI, tuned by a human
+Built with AI tools, designed and refined by Anand Avnish.
+
+### The idea behind it
+A quiet place to see what you're doing, and how far along you are — nothing more, nothing less.
+
+### Feedback & bugs
+Got an idea or found something broken? [Write to us] — it opens your email app directly.
+  </script>
+
+  <script>
+    // Register Service Worker for PWA capabilities
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('Service Worker registration failed inside about.html:', err);
+      });
+    }
+
+    // Capture standard PWA installation event
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    async function triggerPWAInstall() {
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (deferredPrompt) {
+        try {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            deferredPrompt = null;
+            return;
+          }
+        } catch (err) {
+          console.error("PWA prompt error:", err);
+        }
+      }
+
+      if (isMobile) {
+        if (isIOS) {
+          alert("To install ProgressShelf on iOS, tap the Share button in Safari and select 'Add to Home Screen'.");
+        } else if (isAndroid) {
+          alert("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.");
+        } else {
+          alert("To install, open your browser's settings menu and select 'Add to Home Screen'.");
+        }
+        return;
+      }
+
+      // Desktop fallback
+      try {
+        const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "ProgressShelf.apk";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+      } catch (err) {
+        alert("Failed to start download.");
+      }
+    }
+
+    // Markdown Parser
+    function parseMarkdown(mdText) {
+      let html = mdText;
+      
+      // Escape HTML entities to prevent XSS
+      html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      // Replace headers: ### text and # text
+      html = html.replace(/^### (.*$)/gim, '<h2>$1</h2>');
+      html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+      
+      // Replace bold: **text**
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Replace links: [Install ProgressShelf] and [Write to us]
+      html = html.replace(/\[Install ProgressShelf\]/g, '<a href="#" class="pwa-install-trigger">Install ProgressShelf</a>');
+      html = html.replace(/\[Write to us\]/g, '<a href="mailto:anandavnish1753@gmail.com?subject=ProgressShelf%20Feedback%20%26%20Bug%20Report&body=Hi%20Anand%2C%0A%0A">Write to us</a>');
+      
+      // Replace bullet points: - item
+      const lines = html.split('\n');
+      let inList = false;
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (trimmed.startsWith('- ')) {
+          const content = trimmed.substring(2);
+          if (!inList) {
+            lines[i] = '<ul><li>' + content + '</li>';
+            inList = true;
+          } else {
+            lines[i] = '<li>' + content + '</li>';
+          }
+        } else {
+          if (inList && trimmed !== "") {
+            lines[i] = '</ul>' + lines[i];
+            inList = false;
+          }
+        }
+      }
+      if (inList) {
+        lines.push('</ul>');
+      }
+      html = lines.join('\n');
+      
+      // Wrap paragraphs (non-empty block groups that are not tags)
+      const blocks = html.split(/\n\s*\n/);
+      for (let i = 0; i < blocks.length; i++) {
+        const trimmed = blocks[i].trim();
+        if (!trimmed) continue;
+        if (!trimmed.startsWith('<h1') && !trimmed.startsWith('<h2') && !trimmed.startsWith('<ul') && !trimmed.startsWith('</ul') && !trimmed.startsWith('<li') && !trimmed.startsWith('</li')) {
+          blocks[i] = '<p>' + trimmed.replace(/\n/g, '<br>') + '</p>';
+        }
+      }
+      return blocks.join('\n');
+    }
+
+    // Render markdown content
+    const sourceEl = document.getElementById("about-markdown-source");
+    const containerEl = document.getElementById("about-rendered-content");
+    if (sourceEl && containerEl) {
+      const rawText = sourceEl.textContent.trim();
+      containerEl.innerHTML = parseMarkdown(rawText);
+
+      // Attach click listeners to PWA installation triggers
+      document.querySelectorAll('.pwa-install-trigger').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          triggerPWAInstall();
+        });
+      });
+    }
+  </script>
 </body>
 </html>

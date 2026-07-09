@@ -1,6 +1,20 @@
 import admin from 'firebase-admin';
 import { createClient } from '@supabase/supabase-js';
 
+function toUnicodeBold(str) {
+  return Array.from(str).map(char => {
+    const code = char.codePointAt(0);
+    if (code >= 65 && code <= 90) {
+      return String.fromCodePoint(code + 120211); // Bold Sans-Serif A-Z
+    } else if (code >= 97 && code <= 122) {
+      return String.fromCodePoint(code + 120205); // Bold Sans-Serif a-z
+    } else if (code >= 48 && code <= 57) {
+      return String.fromCodePoint(code + 120764); // Bold Sans-Serif 0-9
+    }
+    return char;
+  }).join('');
+}
+
 // Initialize firebase-admin using service account from env
 const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!serviceAccountStr) {
@@ -117,7 +131,7 @@ async function runNotifier() {
         }
 
         const titleText = "ProgressShelf";
-        const bodyText = `⏰ "${tracker.title}": ${timeStr}${progressStr}`;
+        const bodyText = `${toUnicodeBold(tracker.title)}\n⏰ ${timeStr}${progressStr}`;
 
         const payload = {
           notification: {

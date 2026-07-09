@@ -2,6 +2,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleAuth } from 'npm:google-auth-library'
 
+function toUnicodeBold(str: string): string {
+  return Array.from(str).map(char => {
+    const code = char.codePointAt(0)!;
+    if (code >= 65 && code <= 90) {
+      return String.fromCodePoint(code + 120211); // Bold Sans-Serif A-Z
+    } else if (code >= 97 && code <= 122) {
+      return String.fromCodePoint(code + 120205); // Bold Sans-Serif a-z
+    } else if (code >= 48 && code <= 57) {
+      return String.fromCodePoint(code + 120764); // Bold Sans-Serif 0-9
+    }
+    return char;
+  }).join('');
+}
+
 Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -181,7 +195,7 @@ Deno.serve(async (req) => {
             }
 
             titleText = "ProgressShelf";
-            bodyText = `⏰ "${tracker.title}": ${timeStr}${progressStr}`;
+            bodyText = `${toUnicodeBold(tracker.title)}\n⏰ ${timeStr}${progressStr}`;
           } else {
             // Deadline Alert
             let progressStr = "";
@@ -192,7 +206,7 @@ Deno.serve(async (req) => {
               progressStr = ` • Final Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
             titleText = "ProgressShelf";
-            bodyText = `⏰ "${tracker.title}": Deadline has arrived!${progressStr}`;
+            bodyText = `${toUnicodeBold(tracker.title)}\n⏰ Deadline has arrived!${progressStr}`;
           }
 
           // Send FCM Push Notification via HTTP v1 API

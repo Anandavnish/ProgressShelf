@@ -5307,8 +5307,23 @@ function setupNotificationListeners(prefix = "") {
   }
 
   // Toggle switch listeners
-  toggle?.addEventListener('change', runUpdate);
-  endAlertToggle?.addEventListener('change', runUpdate);
+  const handleToggleClick = (e) => {
+    if (isGuestMode()) {
+      e.preventDefault();
+      e.currentTarget.checked = false;
+      showToast("Notifications cannot be sent without loggedin id. kindly sign in for that.", "error");
+      runUpdate();
+    }
+  };
+
+  if (toggle) {
+    toggle.addEventListener('click', handleToggleClick);
+    toggle.addEventListener('change', runUpdate);
+  }
+  if (endAlertToggle) {
+    endAlertToggle.addEventListener('click', handleToggleClick);
+    endAlertToggle.addEventListener('change', runUpdate);
+  }
 
   // Auto-clearing input triggers
   const onFixedType = () => {
@@ -6175,12 +6190,13 @@ function updateDeleteSelectedButton() {
 function setupAPKButton() {
   const btn = document.getElementById("btn-apk-download");
   if (btn) {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       btn.classList.add("shake-anim");
       btn.addEventListener("animationend", () => {
         btn.classList.remove("shake-anim");
       }, { once: true });
-      showToast("Thanks for showing interest. APK is under development.", "info");
+      showToast("Thanks for showing interest! Android APK is under development. In the meantime, you can install the PWA web app version right now.", "info");
+      await window.triggerPWAInstall();
     });
   }
 }
@@ -6960,6 +6976,58 @@ const checkIsPWA = () => {
          window.navigator.standalone === true;
 };
 
+window.triggerPWAInstall = async function() {
+  // Check device types
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // 1. Attempt standard PWA WebAPK installation prompt if available
+  if (deferredPrompt) {
+    try {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        deferredPrompt = null;
+        const btnDownload = document.getElementById("btn-download-apk");
+        if (btnDownload) btnDownload.style.display = "none";
+        showToast("Starting Web APK installation...", "success");
+        return;
+      }
+    } catch (err) {
+      console.error("PWA prompt error:", err);
+    }
+  }
+
+  // 2. If mobile device, show instructions instead of downloading mock .apk
+  if (isMobile) {
+    if (isIOS) {
+      showToast("To install ProgressShelf on iOS, tap the Share button and select 'Add to Home Screen'.", "info");
+    } else if (isAndroid) {
+      showToast("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.", "info");
+    } else {
+      showToast("To install, open browser settings menu and select 'Add to Home Screen'.", "info");
+    }
+    return;
+  }
+
+  // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
+  try {
+    const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "ProgressShelf.apk";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    
+    showToast("Downloading ProgressShelf.apk...", "success");
+  } catch (err) {
+    showToast("Failed to start download.", "error");
+  }
+};
+
 function setupDownloadApk() {
   const btnDownload = document.getElementById("btn-download-apk");
   if (!btnDownload) return;
@@ -6973,57 +7041,9 @@ function setupDownloadApk() {
 
   btnDownload.addEventListener("click", async (e) => {
     e.stopPropagation();
-
-    // Check device types
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-    // 1. Attempt standard PWA WebAPK installation prompt if available
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          deferredPrompt = null;
-          btnDownload.style.display = "none";
-          showToast("Starting Web APK installation...", "success");
-          return;
-        }
-      } catch (err) {
-        console.error("PWA prompt error:", err);
-      }
-    }
-
-    // 2. If mobile device, show instructions instead of downloading mock .apk
-    if (isMobile) {
-      if (isIOS) {
-        showToast("To install ProgressShelf on iOS, tap the Share button and select 'Add to Home Screen'.", "info");
-      } else if (isAndroid) {
-        showToast("To install, tap Chrome's three dots menu (top right) and select 'Install app' or 'Add to Home Screen'.", "info");
-      } else {
-        showToast("To install, open browser settings menu and select 'Add to Home Screen'.", "info");
-      }
-      return;
-    }
-
-    // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
-    try {
-      const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "ProgressShelf.apk";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-      
-      showToast("Downloading ProgressShelf.apk...", "success");
-    } catch (err) {
-      showToast("Failed to start download.", "error");
-    }
+    await window.triggerPWAInstall();
   });
-};
+}
 
 // Global PWA install listener
 window.addEventListener('beforeinstallprompt', (e) => {
