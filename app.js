@@ -4759,8 +4759,7 @@ function showNotificationBanner(uid) {
 // Initialize auth check
 initAuthProtection(async (user) => {
   // Sync Theme Preferences from DB
-  if (user && user.appTheme) {
-    localStorage.setItem('app-theme', user.appTheme);
+  if (user) {
     if (user.accentColor) localStorage.setItem('app-accent-color', user.accentColor);
     if (user.customAccents) {
       try {
@@ -4768,8 +4767,9 @@ initAuthProtection(async (user) => {
       } catch(e) {}
     }
     if (typeof window.applyThemeClass === 'function') {
-      window.applyThemeClass(user.appTheme);
-      if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(user.appTheme);
+      const activeTheme = localStorage.getItem('app-theme') || 'system';
+      window.applyThemeClass(activeTheme);
+      if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(activeTheme);
     }
   }
 
@@ -6693,26 +6693,17 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.3 (Latest)",
-    date: "July 10, 2026",
+    version: "v4.2 (Latest)",
+    date: "July 9, 2026",
     isLatest: true,
-    title: "Dynamic Theming, Custom Color Math & UI Refinement",
+    title: "Dynamic Theming, Notification Actions & UI Refinement",
     content: `
 ### Key Features & Updates
 * **Custom Accent Palette Sync**: Choose your own custom color and perfectly sync it across all your devices using Supabase \`user_metadata\`.
 * **Smart HSL Clamping**: Automatically adjusts faded or overly bright custom colors (by dynamically calculating and clamping HSL Lightness) to ensure the UI remains sharp and accessible.
 * **Auto Theme Reset**: Smooth transition that resets custom colors intelligently if you switch device OS themes or toggle between system defaults.
 * **Theme Dropdown UI Polish**: Refined the theme picker to elegantly handle closing on external clicks/Esc key, opening cleanly on mobile without overlapping the navbar, and maintaining smooth 'glow' shadow animations for version selectors.
-* **Dynamic Terrace Overlays**: Enhanced modal popups (like Terrace and Delete Account) to perfectly adapt their backdrop blurs and transparencies to your active light/dark theme variables.
-`
-  },
-  {
-    version: "v4.2",
-    date: "July 9, 2026",
-    isLatest: false,
-    title: "Notification View Actions, Custom Avatars & About Redesign",
-    content: `
-### Key Features & Updates
+* **Dynamic Terrace Overlays**: Enhanced modal popups (like Terrace and Delete Account), Stats Banner, and FAB to perfectly adapt their backdrop blurs and transparencies to your active light/dark theme variables.
 * **Instant View Action from Notifications**: Added a 'View Tracker' action button to deadlines. Clicking it instantly smooth-scrolls and highlights the card using direct Service Worker messaging, without reloading the page if the app is active.
 * **Dynamic Push Notification Avatars**: Push notifications look up your profile metadata via Supabase auth, displaying your Google or custom account avatar inside the notification icon.
 * **Monochrome Status Bar Badge**: Generated a transparent-background outline stencil \`badge.png\` for Android status bar compliance.

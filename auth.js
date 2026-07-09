@@ -20,7 +20,6 @@ function mapSupabaseUser(supabaseUser) {
     displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email || "Tracker User",
     photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y",
     preferredSort: supabaseUser.user_metadata?.preferred_sort || null,
-    appTheme: supabaseUser.user_metadata?.app_theme || null,
     accentColor: supabaseUser.user_metadata?.accent_color || null,
     customAccents: supabaseUser.user_metadata?.custom_accents || null
   };
@@ -355,7 +354,7 @@ export async function updateUserPreferredSort(sortValue) {
 export async function updateUserThemePreference(themeMode, accentColor, customAccents) {
   if (!isConfigured || isGuestMode()) return;
   try {
-    const dataToUpdate = { app_theme: themeMode, accent_color: accentColor };
+    const dataToUpdate = { accent_color: accentColor };
     if (customAccents !== undefined) {
       dataToUpdate.custom_accents = customAccents;
     }

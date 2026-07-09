@@ -442,6 +442,7 @@ html.light-theme {
   --terrace-header-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
   --terrace-latest-badge-border: color-mix(in srgb, var(--accent) 20%, transparent);
   --delete-confirm-bg: rgba(255, 255, 255, 0.8);
+  --stats-banner-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
   --note-editor-text-color: #0F1419;
   --note-bullet-color: rgba(90, 100, 110, 0.6);
   --note-syntax-color: rgba(90, 100, 110, 0.4);
@@ -4773,9 +4774,9 @@ textarea.form-input-single-line {
 
 .btn-fab:hover {
   transform: scale(1.08);
-  border-color: #3F85F6;
-  background: rgba(63, 133, 246, 0.15) !important;
-  box-shadow: 0 12px 40px rgba(63, 133, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: var(--accent);
+  background: var(--accent-hover-bg) !important;
+  box-shadow: 0 12px 40px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .btn-fab:active {
@@ -4791,7 +4792,7 @@ textarea.form-input-single-line {
 .btn-fab svg {
   display: block;
   pointer-events: none;
-  stroke: #3F85F6;
+  stroke: var(--accent);
   transition: transform 0.25s ease;
 }
 
