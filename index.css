@@ -598,6 +598,35 @@ html.light-theme .progressbar-fill {
   background-color: rgb(16, 144, 70) !important;
 }
 
+/* --- Card percentage text: true black --- */
+html.light-theme .card-percent {
+  color: #000000;
+}
+
+/* --- Modal title: true black --- */
+html.light-theme .modal-title {
+  color: #000000;
+}
+
+/* --- Card-add hover: use theme accent, not hardcoded blue --- */
+html.light-theme .card-add:hover {
+  border-color: #048b15;
+  background-color: rgba(4, 139, 21, 0.03);
+}
+
+/* --- Tracker type selector active tab: green theme instead of blue --- */
+html.light-theme .tracker-type-selector input[type="radio"]:checked + label.type-tab {
+  background: #048b15;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(4, 139, 21, 0.25);
+}
+
+/* --- Form-row grouped inputs: light surface, no dark hsl bg --- */
+html.light-theme .form-row {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
