@@ -5330,7 +5330,7 @@ function setupNotificationListeners(prefix = "") {
     if (isGuestMode()) {
       e.preventDefault();
       e.currentTarget.checked = false;
-      showToast("Notifications cannot be sent without loggedin id. kindly sign in for that.", "error");
+      showToast("Notifications cannot be enabled in guest mode. Please sign in with an account to enable tracker alerts.", "error");
       runUpdate();
     }
   };

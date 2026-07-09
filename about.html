@@ -139,57 +139,82 @@ Got an idea or found something broken? [Write to us] — it opens your email app
 
     // Markdown Parser
     function parseMarkdown(mdText) {
-      let html = mdText;
-      
       // Escape HTML entities to prevent XSS
-      html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-      // Replace headers: ### text and # text
-      html = html.replace(/^### (.*$)/gim, '<h2>$1</h2>');
-      html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+      let escaped = mdText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       
-      // Replace bold: **text**
+      const lines = escaped.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+      let html = '';
+      let inList = false;
+      let currentParagraph = [];
+
+      const flushParagraph = () => {
+        if (currentParagraph.length > 0) {
+          html += '<p>' + currentParagraph.join(' ') + '</p>\n';
+          currentParagraph = [];
+        }
+      };
+
+      const flushList = () => {
+        if (inList) {
+          html += '</ul>\n';
+          inList = false;
+        }
+      };
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+
+        // Heading 1
+        if (line.startsWith('# ')) {
+          flushParagraph();
+          flushList();
+          html += '<h1>' + line.substring(2).trim() + '</h1>\n';
+          continue;
+        }
+
+        // Heading 3
+        if (line.startsWith('### ')) {
+          flushParagraph();
+          flushList();
+          html += '<h2>' + line.substring(4).trim() + '</h2>\n';
+          continue;
+        }
+
+        // List item
+        if (line.startsWith('- ')) {
+          flushParagraph();
+          if (!inList) {
+            html += '<ul>\n';
+            inList = true;
+          }
+          html += '<li>' + line.substring(2).trim() + '</li>\n';
+          continue;
+        }
+
+        // Empty line
+        if (line === '') {
+          flushParagraph();
+          flushList();
+          continue;
+        }
+
+        // Normal text line - collect into current paragraph
+        flushList();
+        currentParagraph.push(line);
+      }
+
+      // Flush any remaining
+      flushParagraph();
+      flushList();
+
+      // Inline formatting: Bold **text**
       html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       
-      // Replace links: [Install ProgressShelf] and [Write to us]
+      // Inline formatting: Links [text]
       html = html.replace(/\[Install ProgressShelf\]/g, '<a href="#" class="pwa-install-trigger">Install ProgressShelf</a>');
       html = html.replace(/\[Write to us\]/g, '<a href="mailto:anandavnish1753@gmail.com?subject=ProgressShelf%20Feedback%20%26%20Bug%20Report&body=Hi%20Anand%2C%0A%0A">Write to us</a>');
-      
-      // Replace bullet points: - item
-      const lines = html.split('\n');
-      let inList = false;
-      for (let i = 0; i < lines.length; i++) {
-        const trimmed = lines[i].trim();
-        if (trimmed.startsWith('- ')) {
-          const content = trimmed.substring(2);
-          if (!inList) {
-            lines[i] = '<ul><li>' + content + '</li>';
-            inList = true;
-          } else {
-            lines[i] = '<li>' + content + '</li>';
-          }
-        } else {
-          if (inList && trimmed !== "") {
-            lines[i] = '</ul>' + lines[i];
-            inList = false;
-          }
-        }
-      }
-      if (inList) {
-        lines.push('</ul>');
-      }
-      html = lines.join('\n');
-      
-      // Wrap paragraphs (non-empty block groups that are not tags)
-      const blocks = html.split(/\n\s*\n/);
-      for (let i = 0; i < blocks.length; i++) {
-        const trimmed = blocks[i].trim();
-        if (!trimmed) continue;
-        if (!trimmed.startsWith('<h1') && !trimmed.startsWith('<h2') && !trimmed.startsWith('<ul') && !trimmed.startsWith('</ul') && !trimmed.startsWith('<li') && !trimmed.startsWith('</li')) {
-          blocks[i] = '<p>' + trimmed.replace(/\n/g, '<br>') + '</p>';
-        }
-      }
-      return blocks.join('\n');
+
+      return html;
     }
 
     // Render markdown content
