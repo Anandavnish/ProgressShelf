@@ -473,6 +473,126 @@ html.light-theme .version-select {
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234F5E4E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
+/* =====================================================================
+   LIGHT THEME COMPONENT OVERRIDES
+   All rules scoped to html.light-theme — dark mode unaffected
+   ===================================================================== */
+
+/* --- Card action icon buttons: true black on light bg --- */
+html.light-theme .btn-card-edit,
+html.light-theme .btn-card-delete {
+  color: #000000;
+}
+
+html.light-theme .btn-card-edit:hover {
+  background: rgba(21, 87, 176, 0.1);
+  color: #1557B0;
+}
+
+html.light-theme .btn-card-delete:hover {
+  background: rgba(185, 28, 28, 0.1);
+  color: #B91C1C;
+}
+
+/* --- Card add slot: dark dashed border in light mode --- */
+html.light-theme .card-add {
+  border-color: #8D9F8A;
+}
+
+html.light-theme .card-add:hover {
+  border-color: var(--accent);
+}
+
+/* --- Checklist checkbox accent: true green --- */
+html.light-theme .card-checklist-item input[type="checkbox"] {
+  accent-color: #048b15;
+}
+
+/* --- Badge completed: dark green text, solid bg, no border --- */
+html.light-theme .badge-completed {
+  color: #034d22;
+  background-color: rgba(4, 139, 21, 0.15);
+  border: 1px solid transparent;
+}
+
+/* --- Progress bar track: light sage grey instead of dark slate --- */
+html.light-theme .progressbar-track {
+  background-color: #C0CEC0;
+}
+
+/* --- Modal form inputs: light surface with dark text --- */
+html.light-theme .form-input {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+html.light-theme .form-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* --- Tracker type selector (modal tabs) --- */
+html.light-theme .tracker-type-selector {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: var(--border-color);
+}
+
+html.light-theme .tracker-type-selector label.type-tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+/* --- Primary action buttons (Create Bar / Save): green theme --- */
+html.light-theme .btn-primary {
+  background-color: #048b15;
+  color: #FFFFFF;
+}
+
+html.light-theme .btn-primary:hover {
+  background-color: #036610;
+  box-shadow: 0 0 12px rgba(4, 139, 21, 0.25);
+}
+
+/* --- Deadline collapsible box --- */
+html.light-theme .deadline-box {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: var(--border-color);
+}
+
+/* --- Footer: clean sage surface --- */
+html.light-theme .app-footer {
+  background-color: rgba(197, 209, 193, 0.6);
+  border-top-color: #B8C5B5;
+}
+
+html.light-theme .footer-bullet {
+  color: #8D9F8A;
+}
+
+html.light-theme .footer-links a:hover {
+  color: #1557B0;
+}
+
+/* --- Mobile subbar & nav SVG icons: black in light mode --- */
+html.light-theme .mobile-subbar .nav-github-link,
+html.light-theme .mobile-subbar .nav-refresh-btn,
+html.light-theme .mobile-subbar .nav-download-btn,
+html.light-theme .navbar .nav-github-link,
+html.light-theme .navbar .nav-refresh-btn,
+html.light-theme .navbar .nav-download-btn,
+html.light-theme #theme-toggle-btn {
+  color: #000000;
+}
+
+html.light-theme .mobile-subbar .nav-github-link:hover,
+html.light-theme .mobile-subbar .nav-refresh-btn:hover,
+html.light-theme .mobile-subbar .nav-download-btn:hover,
+html.light-theme .navbar .nav-github-link:hover,
+html.light-theme .navbar .nav-refresh-btn:hover,
+html.light-theme .navbar .nav-download-btn:hover {
+  color: #1557B0;
+}
+
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -3023,9 +3143,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     gap: 8px !important;
   }
 
-  /* Hide original Version selector and GitHub icon from the main navbar on mobile */
+  /* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
   .navbar .nav-github-link,
-  .navbar .version-selector {
+  .navbar .version-selector,
+  .navbar .theme-menu-container {
     display: none !important;
   }
 
@@ -3053,7 +3174,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
   .mobile-subbar .nav-github-link svg,
   .mobile-subbar .nav-refresh-btn svg,
-  .mobile-subbar .nav-download-btn svg {
+  .mobile-subbar .nav-download-btn svg,
+  .mobile-subbar #theme-toggle-btn svg {
     width: 18px !important;
     height: 18px !important;
   }
