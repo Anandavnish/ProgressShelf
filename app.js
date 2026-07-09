@@ -2377,6 +2377,21 @@ function syncFabVisibility() {
     } else {
       fab.classList.remove("visible");
     }
+
+    // Restrict FAB from overlapping footer areas when scrolling down
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      const footerRect = footer.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const normalBottom = window.innerWidth <= 493 ? 28 : 32;
+      
+      if (footerRect.top < windowHeight) {
+        const visibleFooterHeight = windowHeight - footerRect.top;
+        fab.style.bottom = (normalBottom + visibleFooterHeight) + "px";
+      } else {
+        fab.style.bottom = "";
+      }
+    }
   }
 }
 
