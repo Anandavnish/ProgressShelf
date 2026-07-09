@@ -626,6 +626,11 @@ html.light-theme .form-row {
   background: rgba(0, 0, 0, 0.04);
 }
 
+/* --- Toggle switch: green when checked --- */
+html.light-theme .toggle-switch input:checked + .toggle-slider {
+  background-color: #048b15;
+  border-color: #048b15;
+}
 
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
