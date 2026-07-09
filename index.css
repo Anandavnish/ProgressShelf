@@ -228,6 +228,12 @@
   --search-highlight-bg: rgba(243, 156, 18, 0.25);
   --stats-btn-active-icon-text-dark: #111827;
   --toast-bg-subtle: rgba(10, 12, 16, 0.6);
+  /* Search button hover */
+  --search-btn-hover-bg: #30363d;
+  --search-btn-hover-text: #ffffff;
+  /* Note editor code elements */
+  --note-code-bg: #21262d;
+  --note-code-block-bg: #161b22;
   color-scheme: dark;
 }
 
@@ -289,16 +295,16 @@ html.light-theme {
   --guest-banner-bg: #FFFFFF;
 
   /* Navbar & Header Components */
-  --navbar-bg: rgba(240, 244, 249, 0.8);
-  --profile-btn-bg: #FFFFFF;
-  --profile-btn-border: #D0D7DE;
-  --profile-avatar-bg: #F0F4F9;
-  --dropdown-bg: #FFFFFF;
-  --dropdown-item-error-hover: rgba(219, 48, 37, 0.05);
-  --search-pill-bg: #FFFFFF;
-  --search-pill-border: #D0D7DE;
-  --search-btn-bg: #F0F4F9;
-  --search-muted-icon: #57606A;
+  --navbar-bg: rgba(197, 209, 193, 0.85);
+  --profile-btn-bg: #ECF1EB;
+  --profile-btn-border: #B8C5B5;
+  --profile-avatar-bg: #D5DDD3;
+  --dropdown-bg: #ECF1EB;
+  --dropdown-item-error-hover: rgba(185, 28, 28, 0.05);
+  --search-pill-bg: #ECF1EB;
+  --search-pill-border: #B8C5B5;
+  --search-btn-bg: #D5DDD3;
+  --search-muted-icon: #4F5E4E;
   --search-helper-bg: rgba(26, 115, 232, 0.04);
   --search-helper-border: rgba(26, 115, 232, 0.15);
 
@@ -452,8 +458,19 @@ html.light-theme {
   --search-highlight-bg: rgba(243, 156, 18, 0.18);
   --stats-btn-active-icon-text-dark: #FFFFFF;
   --toast-bg-subtle: rgba(255, 255, 255, 0.8);
+  /* Search button hover */
+  --search-btn-hover-bg: #C8D5C5;
+  --search-btn-hover-text: #000000;
+  /* Note editor code elements */
+  --note-code-bg: #D5DDD3;
+  --note-code-block-bg: #C8D5C5;
   
   color-scheme: light;
+}
+
+/* Light-theme version selector: dark chevron arrow */
+html.light-theme .version-select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234F5E4E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
 /* Global Transition Rule for smooth theme switches */
@@ -677,7 +694,7 @@ body {
 
 .logo-text .text-outline {
   color: transparent;
-  -webkit-text-stroke: 1.1px #E5E7EB;
+  -webkit-text-stroke: 1.1px var(--logo-outline);
   font-weight: 500;
   margin-left: 2px;
   letter-spacing: 2px;
@@ -871,7 +888,7 @@ body {
   z-index: 100;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--card-border);
   padding: 12px 24px;
   will-change: transform;
@@ -917,7 +934,7 @@ body {
 .nav-logo-text .text-outline {
   -webkit-text-fill-color: transparent;
   color: transparent;
-  -webkit-text-stroke: 1.25px #E5E7EB;
+  -webkit-text-stroke: 1.25px var(--logo-outline);
   font-weight: 500;
   margin-left: 1px;
   letter-spacing: 0.75px;
@@ -998,7 +1015,7 @@ body {
 }
 
 .version-select {
-  background-color: #0D1117;
+  background-color: var(--navbar-bg);
   border: 1px solid var(--card-border);
   color: var(--text-muted);
   font-family: var(--font-family);
@@ -1017,6 +1034,11 @@ body {
   background-size: 12px;
 }
 
+.version-select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
 .version-select:hover {
   border-color: var(--accent);
   color: var(--text-primary);
@@ -1029,8 +1051,8 @@ body {
 }
 
 .profile-badge-btn {
-  background-color: #0b0d10;
-  border: 1px solid #3d4145;
+  background-color: var(--profile-btn-bg);
+  border: 1px solid var(--profile-btn-border);
   padding: 2px 2px 2px 12px;
   cursor: pointer;
   border-radius: 9999px;
@@ -1061,7 +1083,7 @@ body {
   height: 26px;
   border-radius: 50%;
   border: 1px solid transparent;
-  background-color: #1F242C;
+  background-color: var(--profile-avatar-bg);
   object-fit: cover;
   transition: border-color var(--transition-speed) ease;
 }
@@ -1094,7 +1116,7 @@ body {
   top: calc(100% + 12px);
   right: 0;
   width: 220px;
-  background: rgba(13, 17, 23, 0.7);
+  background: var(--dropdown-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--card-border);
@@ -1168,7 +1190,7 @@ body {
   position: sticky;
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px));
   z-index: 98;
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--stats-banner-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--card-border);
@@ -1461,7 +1483,7 @@ body {
   position: sticky;
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px) + var(--stats-height, 0px) - 2px);
   z-index: 97;
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--bg-body);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 16px 24px;
@@ -1678,7 +1700,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background-color: #1F242C;
+  background-color: var(--bg-card);
   border: 1px solid var(--card-border);
   display: flex;
   justify-content: center;
@@ -2224,10 +2246,10 @@ body {
   text-align: center;
   font-size: 1.5rem;
   font-weight: 600;
-  background-color: #0D1117;
+  background-color: var(--bg-body);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  color: #FFF;
+  color: var(--text-primary);
   font-family: var(--font-family);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   -moz-appearance: textfield;
@@ -2808,8 +2830,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .nav-search-container .nav-search-btn:hover {
-  background-color: #30363d;
-  color: #fff;
+  background-color: var(--search-btn-hover-bg);
+  color: var(--search-btn-hover-text);
 }
 
 .nav-search-container .nav-search-btn:active {
@@ -2825,10 +2847,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .nav-search-container.search-pill-mode {
   display: flex;
   align-items: center;
-  background-color: #0b0d10;
-  /* Slate/dark theme background */
-  border: 1px solid #21262d;
-  /* Sleek thin border */
+  background-color: var(--search-pill-bg);
+  border: 1px solid var(--search-pill-border);
   border-radius: 9999px;
   /* Perfect pill shape */
   padding: 3px 3px 3px 16px;
@@ -2862,7 +2882,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   position: relative;
   right: auto;
   top: auto;
-  background-color: #1f242c;
+  background-color: var(--search-btn-bg);
   width: 26px;
   height: 26px;
 }
@@ -2877,7 +2897,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   background: transparent;
   border: none;
   outline: none;
-  color: #57606a;
+  color: var(--search-muted-icon);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0 4px;
@@ -2898,8 +2918,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .nav-search-input::placeholder {
-  color: #57606a;
-  /* Muted placeholder color */
+  color: var(--search-muted-icon);
 }
 
 /* Hide WebKit and standard native clear search buttons */
@@ -2919,7 +2938,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   right: 8px;
   width: calc(100% - 16px);
   height: 38px;
-  background-color: #0b0d10;
+  background-color: var(--search-pill-bg);
   border: 1px solid var(--accent);
   border-radius: 9999px;
   padding: 3px 3px 3px 16px;
@@ -2943,7 +2962,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   position: relative;
   right: auto;
   top: auto;
-  background-color: #1f242c;
+  background-color: var(--search-btn-bg);
 }
 
 .mobile-subbar {
@@ -2953,7 +2972,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   justify-content: flex-end;
   align-items: center;
   padding: 8px 16px;
-  background-color: rgba(13, 17, 23, 0.8);
+  background-color: var(--navbar-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--card-border);
@@ -3411,7 +3430,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   font-family: 'Lora', Georgia, serif !important;
   font-size: 1.02rem;
   line-height: 1.55;
-  color: #c9d1d9;
+  color: var(--text-primary);
   margin-top: 12px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -4348,7 +4367,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   content: "●";
   position: absolute;
   left: 4px;
-  color: rgba(139, 148, 158, 0.6);
+  color: var(--note-bullet-color);
   font-size: 0.75rem;
   line-height: 2.1;
   pointer-events: none;
@@ -4366,7 +4385,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   content: attr(data-number) ".";
   position: absolute;
   left: 4px;
-  color: rgba(139, 148, 158, 0.6);
+  color: var(--note-bullet-color);
   pointer-events: none;
   user-select: none;
 }
@@ -4402,12 +4421,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* Markdown Inline Syntax Markers (styled low-opacity) */
 .note-editor-contenteditable .markdown-syntax {
-  color: rgba(139, 148, 158, 0.5) !important;
+  color: var(--note-syntax-color) !important;
 }
 
 /* Code Styles inside Editor */
 .note-editor-contenteditable .note-code {
-  background-color: #21262d;
+  background-color: var(--note-code-bg);
   padding: 2px 4px;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
@@ -4419,7 +4438,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .note-editor-contenteditable .note-code-block {
-  background-color: #161b22;
+  background-color: var(--note-code-block-bg);
   padding: 8px;
   border-radius: 6px;
   border: 1px solid var(--card-border);
@@ -4520,7 +4539,7 @@ textarea.form-input-single-line {
 .formatting-popover {
   position: fixed; /* view-relative to prevent clipping */
   margin-top: 6px;
-  background-color: #161B22;
+  background-color: var(--dropdown-bg);
   border: 1px solid var(--card-border);
   border-radius: 6px;
   padding: 8px 10px;
@@ -4533,7 +4552,7 @@ textarea.form-input-single-line {
   line-height: 1.35;
   text-align: left;
   cursor: default;
-  color: #c9d1d9;
+  color: var(--formatting-popover-text);
 }
 
 .formatting-popover.hidden {
