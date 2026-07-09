@@ -116,8 +116,8 @@ async function runNotifier() {
           progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
         }
 
-        const titleText = `ProgressShelf: ${tracker.title}`;
-        const bodyText = `${timeStr}${progressStr}`;
+        const titleText = "ProgressShelf";
+        const bodyText = `⏰ "${tracker.title}": ${timeStr}${progressStr}`;
 
         const payload = {
           notification: {

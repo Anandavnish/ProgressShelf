@@ -132,6 +132,8 @@ self.addEventListener('push', event => {
         if (json.data.title) data.title = json.data.title;
         if (json.data.body) data.body = json.data.body;
         if (json.data.icon) data.icon = json.data.icon;
+        if (json.data.tracker_id) data.trackerId = json.data.tracker_id;
+        if (json.data.url) data.url = json.data.url;
       }
       if (json.title) {
         data.title = json.title || data.title;
@@ -150,24 +152,49 @@ self.addEventListener('push', event => {
       icon: data.icon || 'icon-192.png',
       badge: 'badge.png',
       tag: data.tag || 'progressshelf-alert',
+      actions: [
+        {
+          action: 'view',
+          title: 'View Tracker'
+        }
+      ],
       renotify: true,
       requireInteraction: false,
-      data: { url: 'dashboard.html' }
+      data: { 
+        url: data.url || 'dashboard.html',
+        trackerId: data.trackerId
+      }
     })
   );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  
+  let targetUrl = 'dashboard.html';
+  if (event.notification.data) {
+    if (event.notification.data.trackerId) {
+      targetUrl = `dashboard.html?id=${event.notification.data.trackerId}`;
+    } else if (event.notification.data.url) {
+      targetUrl = event.notification.data.url;
+    }
+  }
+
+  // Resolve relative URLs to absolute URLs relative to the Service Worker's scope
+  const absoluteTargetUrl = new URL(targetUrl, self.location.origin + self.registration.scope).toString();
+  
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(clientList => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
         if (client.url.includes('ProgressShelf') && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(absoluteTargetUrl);
+          }
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow('/ProgressShelf/dashboard.html');
+        return clients.openWindow(absoluteTargetUrl);
       }
     })
   );

@@ -2080,6 +2080,22 @@ function renderDashboard(bars) {
   syncRowHeights();
   syncFabVisibility();
   evaluateDemoBannerAndDropdownState();
+
+  // Scroll to and highlight card if 'id' parameter is set in the URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetId = urlParams.get('id');
+  if (targetId) {
+    const card = cardsGrid.querySelector(`[data-bar-id="${targetId}"]`);
+    if (card) {
+      setTimeout(() => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('card-highlight-flash');
+        setTimeout(() => {
+          card.classList.remove('card-highlight-flash');
+        }, 3000);
+      }, 300);
+    }
+  }
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes

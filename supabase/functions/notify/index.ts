@@ -180,8 +180,8 @@ Deno.serve(async (req) => {
               progressStr = ` • Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
 
-            titleText = `⏰ ${tracker.title}`;
-            bodyText = `${timeStr}${progressStr}`;
+            titleText = "ProgressShelf";
+            bodyText = `⏰ "${tracker.title}": ${timeStr}${progressStr}`;
           } else {
             // Deadline Alert
             let progressStr = "";
@@ -191,8 +191,8 @@ Deno.serve(async (req) => {
             } else if (tracker.type === "checklist" && tracker.target_smallest) {
               progressStr = ` • Final Checklist: ${tracker.current_smallest}/${tracker.target_smallest} done`;
             }
-            titleText = `⏰ ${tracker.title}`;
-            bodyText = `The deadline for "${tracker.title}" has arrived!${progressStr}`;
+            titleText = "ProgressShelf";
+            bodyText = `⏰ "${tracker.title}": Deadline has arrived!${progressStr}`;
           }
 
           // Send FCM Push Notification via HTTP v1 API
