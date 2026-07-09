@@ -2085,17 +2085,36 @@ function renderDashboard(bars) {
   const urlParams = new URLSearchParams(window.location.search);
   const targetId = urlParams.get('id');
   if (targetId) {
-    const card = cardsGrid.querySelector(`[data-bar-id="${targetId}"]`);
-    if (card) {
-      setTimeout(() => {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        card.classList.add('card-highlight-flash');
-        setTimeout(() => {
-          card.classList.remove('card-highlight-flash');
-        }, 3000);
-      }, 300);
-    }
+    setTimeout(() => {
+      highlightAndScrollToCard(targetId);
+    }, 400);
   }
+}
+
+function highlightAndScrollToCard(targetId) {
+  if (!targetId) return;
+  const cardsGrid = document.getElementById("cards-grid");
+  if (!cardsGrid) return;
+  const card = cardsGrid.querySelector(`[data-bar-id="${targetId}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('card-highlight-flash');
+    setTimeout(() => {
+      card.classList.remove('card-highlight-flash');
+    }, 3000);
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'highlight-tracker') {
+      const targetId = event.data.id;
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', targetId);
+      window.history.pushState(null, '', url.toString());
+      highlightAndScrollToCard(targetId);
+    }
+  });
 }
 
 // Background timer to remove .pulse-glow class after 5 minutes

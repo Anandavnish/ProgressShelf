@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v152';
+const CACHE_NAME = 'progressshelf-cache-v153';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -171,10 +171,12 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   
+  let trackerId = null;
   let targetUrl = 'dashboard.html';
   if (event.notification.data) {
     if (event.notification.data.trackerId) {
-      targetUrl = `dashboard.html?id=${event.notification.data.trackerId}`;
+      trackerId = event.notification.data.trackerId;
+      targetUrl = `dashboard.html?id=${trackerId}`;
     } else if (event.notification.data.url) {
       targetUrl = event.notification.data.url;
     }
@@ -187,7 +189,9 @@ self.addEventListener('notificationclick', event => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
         if (client.url.includes('ProgressShelf') && 'focus' in client) {
-          if ('navigate' in client) {
+          if (trackerId) {
+            client.postMessage({ type: 'highlight-tracker', id: trackerId });
+          } else if ('navigate' in client) {
             client.navigate(absoluteTargetUrl);
           }
           return client.focus();
