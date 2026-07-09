@@ -238,8 +238,8 @@
 }
 
 html.light-theme {
-  --bg-body: #DDE4DA;
-  --bg-card: #ECF1EB;
+  --bg-body: color-mix(in srgb, var(--accent) 8%, #F2F4F7);
+  --bg-card: color-mix(in srgb, var(--accent) 2%, #FFFFFF);
   --border-color: #D0D7DE;
   --card-progress-border: transparent;
   --text-primary: #000000;
@@ -295,15 +295,15 @@ html.light-theme {
   --guest-banner-bg: #FFFFFF;
 
   /* Navbar & Header Components */
-  --navbar-bg: rgba(197, 209, 193, 0.85);
-  --profile-btn-bg: #ECF1EB;
-  --profile-btn-border: #B8C5B5;
-  --profile-avatar-bg: #D5DDD3;
-  --dropdown-bg: #ECF1EB;
+  --navbar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
+  --profile-btn-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
+  --profile-btn-border: color-mix(in srgb, var(--accent) 30%, transparent);
+  --profile-avatar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
+  --dropdown-bg: color-mix(in srgb, var(--accent) 2%, #FFFFFF);
   --dropdown-item-error-hover: rgba(185, 28, 28, 0.05);
-  --search-pill-bg: #ECF1EB;
-  --search-pill-border: #B8C5B5;
-  --search-btn-bg: #D5DDD3;
+  --search-pill-bg: color-mix(in srgb, var(--accent) 5%, #FFFFFF);
+  --search-pill-border: color-mix(in srgb, var(--accent) 25%, transparent);
+  --search-btn-bg: color-mix(in srgb, var(--accent) 12%, #FFFFFF);
   --search-muted-icon: #4F5E4E;
   --search-helper-bg: rgba(26, 115, 232, 0.04);
   --search-helper-border: rgba(26, 115, 232, 0.15);
@@ -459,11 +459,11 @@ html.light-theme {
   --stats-btn-active-icon-text-dark: #FFFFFF;
   --toast-bg-subtle: rgba(255, 255, 255, 0.8);
   /* Search button hover */
-  --search-btn-hover-bg: #C8D5C5;
+  --search-btn-hover-bg: color-mix(in srgb, var(--accent) 22%, #EBEFF5);
   --search-btn-hover-text: #000000;
   /* Note editor code elements */
-  --note-code-bg: #D5DDD3;
-  --note-code-block-bg: #C8D5C5;
+  --note-code-bg: color-mix(in srgb, var(--accent) 12%, #EBEFF5);
+  --note-code-block-bg: color-mix(in srgb, var(--accent) 18%, #EBEFF5);
   
   color-scheme: light;
 }
@@ -494,9 +494,8 @@ html.light-theme .btn-card-delete:hover {
   color: #B91C1C;
 }
 
-/* --- Card add slot: dark dashed border in light mode --- */
 html.light-theme .card-add {
-  border-color: #8D9F8A;
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 html.light-theme .card-add:hover {
@@ -515,9 +514,9 @@ html.light-theme .badge-completed {
   border: 1px solid transparent;
 }
 
-/* --- Progress bar track: light sage grey instead of dark slate --- */
+/* --- Progress bar track: theme adaptive tint --- */
 html.light-theme .progressbar-track {
-  background-color: #C0CEC0;
+  background-color: color-mix(in srgb, var(--accent) 20%, #EBEFF5);
 }
 
 /* --- Modal form inputs: light surface with dark text --- */
@@ -559,14 +558,14 @@ html.light-theme .deadline-box {
   border-color: var(--border-color);
 }
 
-/* --- Footer: clean sage surface --- */
+/* --- Footer: theme adaptive surface --- */
 html.light-theme .app-footer {
-  background-color: rgba(197, 209, 193, 0.6);
-  border-top-color: #B8C5B5;
+  background-color: color-mix(in srgb, var(--accent) 10%, #EBEFF5);
+  border-top-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 html.light-theme .footer-bullet {
-  color: #8D9F8A;
+  color: color-mix(in srgb, var(--accent) 60%, black);
 }
 
 html.light-theme .footer-links a:hover {
