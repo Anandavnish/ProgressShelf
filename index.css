@@ -3457,16 +3457,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .about-content a {
-  color: var(--accent);
+  color: var(--ui-accent);
   text-decoration: none;
   transition: color var(--transition-speed) ease;
 }
-}
 
-  .about-content a:hover {
-    color: var(--accent);
-    text-decoration: underline;
-  }
+.about-content a:hover {
+  color: var(--ui-accent-hover);
+  text-decoration: underline;
+}
 
 /* --- Tracker Type Segmented Control --- */
 .tracker-type-selector {
