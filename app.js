@@ -6515,13 +6515,18 @@ function setupStaggeredHeaderScroll() {
         toDistribute -= take;
       }
     } else if (deltaY < 0) {
-      // Scrolling up (reveal elements): Main Nav -> Stats banner -> Dashboard Controls
-      // (Mobile subbar remains hidden at H_subbar until we reach the top/bottom boundary)
+      // Scrolling up (reveal elements): Main Nav -> Mobile Subbar -> Stats banner -> Dashboard Controls
       let toDistribute = -deltaY;
       
       if (y_nav > 0) {
         const take = Math.min(y_nav, toDistribute);
         y_nav -= take;
+        toDistribute -= take;
+      }
+      
+      if (toDistribute > 0 && H_subbar > 0 && y_subbar > 0) {
+        const take = Math.min(y_subbar, toDistribute);
+        y_subbar -= take;
         toDistribute -= take;
       }
       
