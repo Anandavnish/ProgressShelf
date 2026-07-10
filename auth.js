@@ -358,7 +358,6 @@ export async function updateUserThemePreference(themeMode, accentColor, customAc
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const settings = { 
-      theme_preference: themeMode,
       accent_color: accentColor 
     };
     if (customAccents !== undefined) {

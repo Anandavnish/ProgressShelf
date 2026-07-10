@@ -4769,14 +4769,6 @@ initAuthProtection(async (user) => {
   if (user) {
     const settings = await getUserSettings(user.uid);
     if (settings) {
-      if (settings.theme_preference) {
-        localStorage.setItem('app-theme', settings.theme_preference);
-        if (typeof window.applyThemeClass === 'function') {
-          window.applyThemeClass(settings.theme_preference);
-          if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(settings.theme_preference);
-        }
-      }
-
       if (settings.accent_color) {
         localStorage.setItem('app-accent-color', settings.accent_color);
         if (typeof window.updateAccentFromSync === 'function') {
@@ -4795,16 +4787,6 @@ initAuthProtection(async (user) => {
     subscribeToUserSettings(user.uid, (newSettings) => {
       if (!newSettings) return;
       
-      if (newSettings.theme_preference) {
-        localStorage.setItem('app-theme', newSettings.theme_preference);
-        if (typeof window.applyThemeClass === 'function') {
-          window.applyThemeClass(newSettings.theme_preference);
-        }
-        if (typeof window.syncToggleButtons === 'function') {
-          window.syncToggleButtons(newSettings.theme_preference);
-        }
-      }
-
       if (newSettings.accent_color) {
         localStorage.setItem('app-accent-color', newSettings.accent_color);
         if (typeof window.updateAccentFromSync === 'function') {
