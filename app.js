@@ -6991,7 +6991,7 @@ async function generateDemoCards() {
       items: [
         { text: "Learn to swim", done: false },
         { text: "Visit a hill station", done: true },
-        { text: "The courage to be disliked", done: false },
+        { text: "Complete The courage to be disliked", done: false },
         { text: "Learn basic guitar chords", done: false },
         { text: "Try solo travel once", done: false }
       ],
