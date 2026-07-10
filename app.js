@@ -6956,7 +6956,7 @@ async function generateDemoCards() {
 
   const demoTrackers = [
     {
-      title: "DSA Sheet — 450 Qns",
+      title: "DSA Easy",
       type: "goal",
       preset: "Problems",
       levels: [{ name: "Problems", conversionToNext: null }],
@@ -6990,8 +6990,8 @@ async function generateDemoCards() {
       type: "checklist",
       items: [
         { text: "Learn to swim", done: false },
-        { text: "Visit a hill station", done: false },
-        { text: "The courage to be disliked", done: true },
+        { text: "Visit a hill station", done: true },
+        { text: "The courage to be disliked", done: false },
         { text: "Learn basic guitar chords", done: false },
         { text: "Try solo travel once", done: false }
       ],
