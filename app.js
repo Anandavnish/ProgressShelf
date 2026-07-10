@@ -4797,6 +4797,9 @@ initAuthProtection(async (user) => {
       if (newSettings.custom_accents) {
         try {
           localStorage.setItem('app-custom-accents', JSON.stringify(newSettings.custom_accents));
+          if (typeof window.updateAccentFromSync === 'function') {
+            window.updateAccentFromSync(localStorage.getItem('app-accent-color'));
+          }
         } catch(e) {}
       }
     });
@@ -7461,6 +7464,16 @@ function initAccentColor() {
     root.style.setProperty('--btn-primary-hover-glow',colorEntry.glow);
     root.style.setProperty('--logo-gradient-start',   colorEntry.value);
     root.style.setProperty('--logo-gradient-end',     colorEntry.hover);
+
+    // Dynamic FAB colors based on theme accent
+    let r = parseInt(colorEntry.value.substring(1,3), 16);
+    let g = parseInt(colorEntry.value.substring(3,5), 16);
+    let b = parseInt(colorEntry.value.substring(5,7), 16);
+    const toHex = x => { const h = Math.round(x).toString(16); return h.length === 1 ? '0'+h : h; };
+    const bgHex = `#${toHex(r*0.125 + 255*0.875)}${toHex(g*0.125 + 255*0.875)}${toHex(b*0.125 + 255*0.875)}`;
+    root.style.setProperty('--fab-bg-custom', bgHex);
+    root.style.setProperty('--fab-border-custom', colorEntry.value);
+    root.style.setProperty('--fab-icon-custom', colorEntry.value);
   }
 
   /**
@@ -7473,6 +7486,7 @@ function initAccentColor() {
       '--accent-hover-bg', '--accent-hover-bg-strong',
       '--btn-primary-hover-bg', '--btn-primary-hover-glow',
       '--logo-gradient-start', '--logo-gradient-end',
+      '--fab-bg-custom', '--fab-border-custom', '--fab-icon-custom'
     ].forEach(p => root.style.removeProperty(p));
   }
 
@@ -7582,7 +7596,7 @@ function initAccentColor() {
     // Hide '+' button if 3 custom colors exist
     const customPickerBtn = document.querySelector('.custom-accent-btn');
     if (customPickerBtn) {
-      if (customAccents.length >= 3) {
+      if (customAccents.length >= 4) {
         customPickerBtn.style.display = 'none';
       } else {
         customPickerBtn.style.display = 'flex';
@@ -7621,13 +7635,14 @@ function initAccentColor() {
       const processedColor = processCustomColor(hex);
       
       if (!customAccents.includes(processedColor.value)) {
-        if (customAccents.length < 3) {
+        if (customAccents.length < 4) {
           customAccents.push(processedColor.value);
           saveCustomAccents(customAccents);
         } else {
           if (typeof window.showToast === 'function') {
-            window.showToast("Maximum of 3 custom colors allowed. Please delete one first.", "error");
+            window.showToast("can't create more than 4. delete to create more.", "error");
           }
+          return;
         }
       }
       

@@ -603,6 +603,16 @@ html.light-theme .btn-banner-login:hover {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
+html.light-theme .btn-fab {
+  background: var(--fab-bg-custom, rgba(255, 255, 255, 0.7)) !important;
+  border-color: var(--fab-border-custom, var(--accent, #1A73E8)) !important;
+  color: var(--fab-icon-custom, var(--accent, #1A73E8)) !important;
+}
+
+html.light-theme .btn-fab:hover {
+  background: var(--fab-icon-custom, rgba(26, 115, 232, 0.15)) !important;
+}
+
 html.light-theme .btn-apk-download {
   background-color: var(--accent-hover-bg);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
@@ -3932,15 +3942,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 1;
+  transition: transform 0.2s ease;
   z-index: 10;
   padding: 0;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-}
-
-div:hover > .accent-swatch-delete {
-  opacity: 1;
 }
 
 .accent-swatch-delete:hover {
@@ -4857,7 +4863,7 @@ textarea.form-input-single-line {
 .btn-fab svg {
   display: block;
   pointer-events: none;
-  stroke: #3F85F6;
+  stroke: currentColor;
   transition: transform 0.25s ease;
 }
 
