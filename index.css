@@ -1254,9 +1254,9 @@ body {
 }
 
 .version-select:hover {
-  border-color: var(--accent);
+  border-color: var(--ui-accent);
   color: var(--text-primary);
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 12px var(--ui-accent-glow);
 }
 
 /* User Profile Badge Menu */
@@ -2141,8 +2141,8 @@ body {
 
 .form-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px var(--ui-accent-glow);
 }
 
 .form-row {
@@ -2220,13 +2220,13 @@ body {
 }
 
 .btn-primary {
-  background-color: var(--accent);
+  background-color: var(--ui-accent);
   color: #FFF;
 }
 
 .btn-primary:hover {
-  background-color: #357ABD;
-  box-shadow: 0 0 12px rgba(74, 144, 217, 0.3);
+  background-color: var(--ui-accent-hover);
+  box-shadow: 0 0 12px var(--ui-accent-glow);
 }
 
 .btn-danger {
@@ -2478,8 +2478,8 @@ body {
 
 .stepper-input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px var(--ui-accent-glow);
 }
 
 .stepper-input::-webkit-inner-spin-button,
@@ -3088,8 +3088,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .nav-search-container.search-pill-mode:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px var(--ui-accent-glow);
 }
 
 .nav-search-container.search-pill-mode .nav-search-input {
@@ -3857,8 +3857,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background-color: var(--accent);
-  border-color: var(--accent);
+  background-color: var(--ui-accent);
+  border-color: var(--ui-accent);
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
@@ -4354,8 +4354,8 @@ html.dark-theme .dropdown-theme-section {
 }
 
 .card-progress.selected {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow) !important;
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 2px var(--ui-accent), 0 0 20px var(--ui-accent-glow) !important;
 }
 
 /* Edit Mode grid active state rules */
