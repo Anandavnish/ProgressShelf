@@ -1,6 +1,6 @@
 // db.js
-import { supabase, isConfigured } from "./supabase-config.js";
-import { isGuestMode } from "./auth.js";
+import { supabase, isConfigured } from "./supabase-config.js?v=2.3";
+import { isGuestMode } from "./auth.js?v=2.3";
 
 const writeQueues = new Map(); // barId -> latest pending write promise
 
@@ -500,4 +500,61 @@ export async function deleteMultipleBars(uid, barIds) {
     console.error("Error deleting multiple progress bars:", error);
     throw error;
   }
+}
+
+// ==========================================
+// User Settings (Realtime)
+// ==========================================
+
+export async function getUserSettings(uid) {
+  if (!isConfigured || isGuestMode()) return null;
+  try {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', uid)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+    return data;
+  } catch (err) {
+    console.error("Error fetching user settings:", err);
+    alert("DB Fetch Error: " + (err.message || err));
+    return null;
+  }
+}
+
+export async function updateUserSettings(uid, settings) {
+  if (!isConfigured || isGuestMode()) return;
+  try {
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: uid,
+        ...settings,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    if (error) throw error;
+  } catch (err) {
+    console.error("Error updating user settings:", err);
+    alert("DB Update Error: " + (err.message || err));
+    throw err;
+  }
+}
+
+export function subscribeToUserSettings(uid, onUpdate) {
+  if (!isConfigured || isGuestMode()) return () => {};
+
+  const channel = supabase
+    .channel(`user-settings-${uid}`)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${uid}` },
+      (payload) => {
+        onUpdate(payload.new);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }

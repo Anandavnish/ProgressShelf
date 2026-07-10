@@ -442,7 +442,7 @@ html.light-theme {
   --terrace-header-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
   --terrace-latest-badge-border: color-mix(in srgb, var(--accent) 20%, transparent);
   --delete-confirm-bg: rgba(255, 255, 255, 0.8);
-  --stats-banner-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
+  --stats-banner-bg: color-mix(in srgb, var(--accent) 4%, rgba(255, 255, 255, 0.7));
   --note-editor-text-color: #0F1419;
   --note-bullet-color: rgba(90, 100, 110, 0.6);
   --note-syntax-color: rgba(90, 100, 110, 0.4);
@@ -661,6 +661,22 @@ html.light-theme .form-row {
 /* Global Transition Rule for smooth theme switches */
 body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about-box, .modal, .profile-dropdown, .form-input, .textarea-note, .deadline-box, .terrace-overlay, .terrace-card, .preset-badge {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Menu Backdrop (Click Shield) */
+.menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99; /* Just below the navbar (100) */
+  background: transparent;
+  display: block;
+}
+
+.menu-backdrop.hidden {
+  display: none;
 }
 
 /* Base resets */
@@ -3169,7 +3185,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--card-border);
-  z-index: 99;
+  z-index: 100;
   will-change: transform;
 }
 
@@ -3236,7 +3252,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .mobile-subbar {
     position: sticky !important;
     top: var(--navbar-height, 51px) !important;
-    z-index: 99;
+    z-index: 100;
     will-change: transform;
   }
 
@@ -4419,7 +4435,15 @@ html.dark-theme .dropdown-theme-section {
   align-items: center;
   padding: 16px 24px;
   border-bottom: 1px solid var(--card-border);
-  background-color: rgba(13, 17, 23, 0.5);
+  background-color: var(--terrace-header-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  transition: transform 0.3s ease;
+}
+
+.terrace-header.header-hidden {
+  transform: translateY(-100%);
 }
 
 .terrace-back-btn {
@@ -4503,13 +4527,42 @@ html.dark-theme .dropdown-theme-section {
 
 .terrace-card-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  margin-bottom: 0;
+  border-bottom: 1px dashed transparent;
+  padding-bottom: 0;
+  transition: border-color 0.3s ease, margin-bottom 0.3s ease, padding-bottom 0.3s ease;
+}
+
+.terrace-card:not(.collapsed) .terrace-card-header {
   margin-bottom: 16px;
-  border-bottom: 1px dashed var(--card-border);
+  border-bottom-color: var(--card-border);
   padding-bottom: 12px;
+}
+
+.terrace-card.collapsed .chevron-icon {
+  transform: rotate(-90deg);
+}
+
+.terrace-body-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease-out;
+}
+
+.terrace-card.collapsed .terrace-body-wrapper {
+  grid-template-rows: 0fr;
+}
+
+.terrace-body {
+  overflow: hidden;
+  color: var(--text-secondary);
+}
+
+.terrace-body-inner {
+  padding-top: 4px;
 }
 
 .terrace-version-badge {

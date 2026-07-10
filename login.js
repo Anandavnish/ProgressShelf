@@ -1,6 +1,6 @@
 // login.js
-import { isConfigured } from "./supabase-config.js";
-import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp, isGuestMode } from "./auth.js";
+import { isConfigured } from "./supabase-config.js?v=2.3";
+import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp, isGuestMode } from "./auth.js?v=2.3";
 
 const configBanner = document.getElementById("config-banner");
 const googleLoginBtn = document.getElementById("btn-google-login");

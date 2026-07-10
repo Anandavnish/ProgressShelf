@@ -1,6 +1,6 @@
-import { isConfigured } from "./supabase-config.js";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference } from "./auth.js";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars } from "./db.js";
+import { isConfigured } from "./supabase-config.js?v=2.3";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference } from "./auth.js?v=2.3";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=2.3";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
@@ -362,7 +362,9 @@ function applyDeadlineTick(barEl) {
     barEl.setAttribute('stroke', '#E74C3C');
     barEl.classList.add('deadline-overdue');
   } else {
-    barEl.setAttribute('stroke', `hsl(${percentLeft * 1.2}, 90%, 48%)`);
+    const isLight = document.documentElement.classList.contains('light-theme');
+    const lightness = isLight ? 38 : 55;
+    barEl.setAttribute('stroke', `hsl(${percentLeft * 1.2}, 95%, ${lightness}%)`);
     barEl.classList.remove('deadline-overdue');
   }
 }
@@ -4426,7 +4428,7 @@ function adjustSearchLayout() {
   const navWidth = navContainer.clientWidth;
   const logoWidth = logo.getBoundingClientRect().width || 170;
   const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-  const searchMinWidth = 160;
+  const searchMinWidth = 240; // Increased to prevent search bar from squishing too much
 
   // Total required width: Logo + Min Search Pill Width + Profile Badge + Toolbar width + 50px buffer
   const totalRequiredWidth = logoWidth + searchMinWidth + profileWidth + toolbarWidth + 50;
@@ -4625,9 +4627,14 @@ btnProfileBadge?.addEventListener("click", (e) => {
       profileDropdown.style.left = `${rect.right + window.scrollX - 220}px`;
 
       profileDropdown.classList.add("active");
+      if (typeof showBackdrop === 'function') showBackdrop();
       history.pushState({ profileDropdown: true }, "");
     } else {
-      profileDropdown.classList.remove("active");
+      if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+      } else {
+        profileDropdown.classList.remove("active");
+      }
       if (history.state && history.state.profileDropdown) {
         profileClosedViaPopState = true;
         history.back();
@@ -4760,17 +4767,57 @@ function showNotificationBanner(uid) {
 initAuthProtection(async (user) => {
   // Sync Theme Preferences from DB
   if (user) {
-    if (user.accentColor) localStorage.setItem('app-accent-color', user.accentColor);
-    if (user.customAccents) {
-      try {
-        localStorage.setItem('app-custom-accents', JSON.stringify(user.customAccents));
-      } catch(e) {}
+    const settings = await getUserSettings(user.uid);
+    if (settings) {
+      if (settings.theme_preference) {
+        localStorage.setItem('app-theme', settings.theme_preference);
+        if (typeof window.applyThemeClass === 'function') {
+          window.applyThemeClass(settings.theme_preference);
+          if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(settings.theme_preference);
+        }
+      }
+
+      if (settings.accent_color) {
+        localStorage.setItem('app-accent-color', settings.accent_color);
+        if (typeof window.updateAccentFromSync === 'function') {
+          window.updateAccentFromSync(settings.accent_color);
+        }
+      }
+
+      if (settings.custom_accents) {
+        try {
+          localStorage.setItem('app-custom-accents', JSON.stringify(settings.custom_accents));
+        } catch(e) {}
+      }
     }
-    if (typeof window.applyThemeClass === 'function') {
-      const activeTheme = localStorage.getItem('app-theme') || 'system';
-      window.applyThemeClass(activeTheme);
-      if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons(activeTheme);
-    }
+
+    // Subscribe to realtime changes in user_settings for instant cross-device sync
+    subscribeToUserSettings(user.uid, (newSettings) => {
+      if (!newSettings) return;
+      
+      if (newSettings.theme_preference) {
+        localStorage.setItem('app-theme', newSettings.theme_preference);
+        if (typeof window.applyThemeClass === 'function') {
+          window.applyThemeClass(newSettings.theme_preference);
+        }
+        if (typeof window.syncToggleButtons === 'function') {
+          window.syncToggleButtons(newSettings.theme_preference);
+        }
+      }
+
+      if (newSettings.accent_color) {
+        localStorage.setItem('app-accent-color', newSettings.accent_color);
+        if (typeof window.updateAccentFromSync === 'function') {
+          window.updateAccentFromSync(newSettings.accent_color);
+        }
+      }
+
+      if (newSettings.custom_accents) {
+        try {
+          localStorage.setItem('app-custom-accents', JSON.stringify(newSettings.custom_accents));
+        } catch(e) {}
+      }
+    });
   }
 
   // Silent auto-migration if guest logs in or has local bars
@@ -6257,8 +6304,10 @@ function setupAPKButton() {
       btn.addEventListener("animationend", () => {
         btn.classList.remove("shake-anim");
       }, { once: true });
-      showToast("Thanks for showing interest! Android APK is under development. In the meantime, you can install the PWA web app version right now.", "info");
-      await window.triggerPWAInstall();
+      const userAgreed = confirm("The Android APK is currently under development.\n\nWould you like to install the PWA Web App version right now instead?");
+      if (userAgreed) {
+        await window.triggerPWAInstall();
+      }
     });
   }
 }
@@ -6711,6 +6760,9 @@ const terraceUpdates = [
 * **Guest Mode Restrictions**: Prevented guest mode users from turning on notification alerts, showing a professional toast.
 * **Note Editor Legibility**: Increased the Lora font size in card previews by 1 unit for better legibility.
 * **Edit Mode UX**: Fixed click propagation so tapping card text/checklists inside edit mode selects/deselects the card.
+* **Instant Cross-Device Sync**: Added full Supabase Realtime synchronization for Custom Accents and Light/Dark themes, repainting the UI instantly across all active sessions.
+* **PWA Smart Installer**: Embedded an automatic 'Web App (PWA)' installer fallback into the APK download button flow to encourage desktop/mobile standalone installations.
+* **Palette Strict Enforcement**: Hard-capped user custom palettes to a maximum of 3 custom colors, showing a professional UI toast when limits are exceeded.
 `
   },
   {
@@ -6816,17 +6868,46 @@ function renderTerraceUpdates() {
   if (!container) return;
 
   container.innerHTML = terraceUpdates.map(up => `
-    <div class="terrace-card ${up.isLatest ? 'latest' : ''}">
-      <div class="terrace-card-header">
-        <span class="terrace-version-badge">${up.version}</span>
-        <span class="terrace-date">${up.date}</span>
+    <div class="terrace-card ${up.isLatest ? 'latest' : 'collapsed'}">
+      <div class="terrace-card-header" style="cursor: pointer;" onclick="this.parentElement.classList.toggle('collapsed')">
+        <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+          <span class="terrace-version-badge">${up.version}</span>
+          <span class="terrace-date">${up.date}</span>
+          <div style="flex-grow: 1;"></div>
+          <svg class="chevron-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s ease;">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
         <h2 class="terrace-version-title">${up.title}</h2>
       </div>
-      <div class="terrace-body">
-        ${parseTerraceMarkdown(up.content)}
+      <div class="terrace-body-wrapper">
+        <div class="terrace-body">
+          <div class="terrace-body-inner">
+            ${parseTerraceMarkdown(up.content)}
+          </div>
+        </div>
       </div>
     </div>
   `).join('');
+
+  // Setup smart scroll header
+  const header = document.querySelector(".terrace-header");
+  const overlay = document.getElementById("terrace-overlay");
+  let lastScroll = 0;
+  
+  if (overlay && header) {
+    overlay.addEventListener('scroll', () => {
+      const currentScroll = overlay.scrollTop;
+      if (currentScroll > 50 && currentScroll > lastScroll) {
+        // Scrolling down
+        header.classList.add('header-hidden');
+      } else {
+        // Scrolling up or at top
+        header.classList.remove('header-hidden');
+      }
+      lastScroll = currentScroll;
+    });
+  }
 }
 
 function openTerracePage() {
@@ -6848,6 +6929,25 @@ function closeTerracePage(isPopState = false) {
   if (!isPopState) {
     window.history.back();
   }
+}
+
+// Terrace auto-hide header logic
+const terraceOverlay = document.getElementById("terrace-overlay");
+if (terraceOverlay) {
+  let lastTerraceScroll = 0;
+  terraceOverlay.addEventListener("scroll", () => {
+    const header = terraceOverlay.querySelector(".terrace-header");
+    if (!header) return;
+    const currentScroll = terraceOverlay.scrollTop;
+    if (currentScroll > lastTerraceScroll && currentScroll > 50) {
+      // Scrolling down
+      header.classList.add("header-hidden");
+    } else {
+      // Scrolling up
+      header.classList.remove("header-hidden");
+    }
+    lastTerraceScroll = currentScroll <= 0 ? 0 : currentScroll;
+  });
 }
 
 // ==========================================
@@ -7209,6 +7309,11 @@ function initTheme() {
       if (accentDropdown) accentDropdown.classList.remove('active');
       
       menu.classList.toggle('active');
+      if (menu.classList.contains('active')) {
+        showBackdrop();
+      } else {
+        if (typeof closeAllMenus === 'function') closeAllMenus();
+      }
     });
   }
 
@@ -7224,7 +7329,11 @@ function initTheme() {
         const accent = localStorage.getItem('app-accent-color');
         updateUserThemePreference(theme, accent);
       }
-      if (menu) menu.classList.remove('active');
+      if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+      } else if (menu) {
+        menu.classList.remove('active');
+      }
     });
   });
 
@@ -7438,9 +7547,12 @@ function initAccentColor() {
         renderSwatches(color.value);
         
         if (typeof window.applyThemeClass === 'function') {
-          localStorage.setItem('app-theme', 'light');
-          window.applyThemeClass('light');
-          if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
+          const currentTheme = localStorage.getItem('app-theme') || 'system';
+          if (currentTheme !== 'light') {
+            localStorage.setItem('app-theme', 'light');
+            window.applyThemeClass('light');
+            if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
+          }
         }
         
         if (typeof updateUserThemePreference === 'function') {
@@ -7448,7 +7560,11 @@ function initAccentColor() {
         }
         
         const menu = document.getElementById('accent-dropdown-menu');
-        if (menu) menu.classList.remove('active');
+        if (typeof closeAllMenus === 'function') {
+          closeAllMenus();
+        } else if (menu) {
+          menu.classList.remove('active');
+        }
       });
       
       wrapper.appendChild(btn);
@@ -7508,6 +7624,11 @@ function initAccentColor() {
       if (themeDropdown) themeDropdown.classList.remove('active');
       
       menu.classList.toggle('active');
+      if (menu.classList.contains('active')) {
+        showBackdrop();
+      } else {
+        if (typeof closeAllMenus === 'function') closeAllMenus();
+      }
     });
   }
 
@@ -7524,6 +7645,10 @@ function initAccentColor() {
         if (customAccents.length < 3) {
           customAccents.push(processedColor.value);
           saveCustomAccents(customAccents);
+        } else {
+          if (typeof window.showToast === 'function') {
+            window.showToast("Maximum of 3 custom colors allowed. Please delete one first.", "error");
+          }
         }
       }
       
@@ -7546,50 +7671,73 @@ function initAccentColor() {
     });
   }
 
-  // Boot: apply saved or default color if light is already active
+  // Boot: apply saved or default color and always render swatches
   const savedColor = localStorage.getItem(STORAGE_KEY);
   if (!savedColor) {
     localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
   }
-  if (isLightActive()) {
-    const entry = COLORS.find(c => c.value === (savedColor || DEFAULT_COLOR.value)) || DEFAULT_COLOR;
-    applyAccent(entry);
-    renderSwatches(entry.value);
-  }
+  const entry = COLORS.find(c => c.value === (savedColor || DEFAULT_COLOR.value)) || DEFAULT_COLOR;
+  applyAccent(entry);
+  renderSwatches(entry.value);
+
+  // Expose for realtime sync
+  window.updateAccentFromSync = function(hex) {
+    let syncEntry = COLORS.find(c => c.value === hex);
+    if (!syncEntry) syncEntry = processCustomColor(hex);
+    applyAccent(syncEntry);
+    renderSwatches(hex);
+  };
 }
 
 initAccentColor();
 
 // Global listeners for closing dropdown menus
-document.addEventListener('click', (e) => {
+function closeAllMenus() {
   const profileDropdown = document.getElementById('profile-dropdown');
-  const profileBtn = document.getElementById('profile-btn');
   const themeMenu = document.getElementById('theme-dropdown-menu');
-  const themeBtn = document.getElementById('theme-toggle-btn');
   const accentMenu = document.getElementById('accent-dropdown-menu');
-  const accentBtn = document.getElementById('accent-toggle-btn');
+  const backdrop = document.getElementById('menu-backdrop');
+  
+  if (profileDropdown) profileDropdown.classList.remove('active');
+  if (themeMenu) themeMenu.classList.remove('active');
+  if (accentMenu) accentMenu.classList.remove('active');
+  if (backdrop) backdrop.classList.add('hidden');
+}
 
-  if (profileDropdown && profileDropdown.classList.contains('active') && !profileDropdown.contains(e.target) && (!profileBtn || !profileBtn.contains(e.target))) {
-    profileDropdown.classList.remove('active');
-  }
-  if (themeMenu && themeMenu.classList.contains('active') && !themeMenu.contains(e.target) && (!themeBtn || !themeBtn.contains(e.target))) {
-    themeMenu.classList.remove('active');
-  }
-  if (accentMenu && accentMenu.classList.contains('active') && !accentMenu.contains(e.target) && (!accentBtn || !accentBtn.contains(e.target))) {
-    accentMenu.classList.remove('active');
+function showBackdrop() {
+  const backdrop = document.getElementById('menu-backdrop');
+  if (backdrop) backdrop.classList.remove('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  const backdrop = document.getElementById('menu-backdrop');
+  if (e.target === backdrop) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeAllMenus();
+  } else {
+    // Original closing logic for clicks not on the backdrop (e.g. clicking the navbar itself)
+    const profileDropdown = document.getElementById('profile-dropdown');
+    const profileBtn = document.getElementById('profile-btn');
+    const themeMenu = document.getElementById('theme-dropdown-menu');
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const accentMenu = document.getElementById('accent-dropdown-menu');
+    const accentBtn = document.getElementById('accent-toggle-btn');
+
+    let clickedOutside = true;
+    if (profileDropdown && profileDropdown.classList.contains('active') && (profileDropdown.contains(e.target) || (profileBtn && profileBtn.contains(e.target)))) clickedOutside = false;
+    if (themeMenu && themeMenu.classList.contains('active') && (themeMenu.contains(e.target) || (themeBtn && themeBtn.contains(e.target)))) clickedOutside = false;
+    if (accentMenu && accentMenu.classList.contains('active') && (accentMenu.contains(e.target) || (accentBtn && accentBtn.contains(e.target)))) clickedOutside = false;
+    
+    if (clickedOutside && !e.target.closest('.profile-dropdown, .theme-dropdown, .accent-dropdown-menu')) {
+      closeAllMenus();
+    }
   }
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    const profileDropdown = document.getElementById('profile-dropdown');
-    if (profileDropdown) profileDropdown.classList.remove('active');
-    
-    const themeMenu = document.getElementById('theme-dropdown-menu');
-    if (themeMenu) themeMenu.classList.remove('active');
-    
-    const accentMenu = document.getElementById('accent-dropdown-menu');
-    if (accentMenu) accentMenu.classList.remove('active');
+    closeAllMenus();
   }
 });
 

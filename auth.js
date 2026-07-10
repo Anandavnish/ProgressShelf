@@ -1,5 +1,6 @@
 // auth.js
-import { supabase, isConfigured } from "./supabase-config.js";
+import { supabase, isConfigured } from "./supabase-config.js?v=2.3";
+import { updateUserSettings } from "./db.js?v=2.3";
 
 const isDashboard = window.location.pathname.endsWith("dashboard.html");
 
@@ -354,12 +355,16 @@ export async function updateUserPreferredSort(sortValue) {
 export async function updateUserThemePreference(themeMode, accentColor, customAccents) {
   if (!isConfigured || isGuestMode()) return;
   try {
-    const dataToUpdate = { accent_color: accentColor };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const settings = { 
+      theme_preference: themeMode,
+      accent_color: accentColor 
+    };
     if (customAccents !== undefined) {
-      dataToUpdate.custom_accents = customAccents;
+      settings.custom_accents = customAccents;
     }
-    const { error } = await supabase.auth.updateUser({ data: dataToUpdate });
-    if (error) throw error;
+    await updateUserSettings(user.id, settings);
   } catch (err) {
     console.error("Failed to update user theme preference:", err);
   }
