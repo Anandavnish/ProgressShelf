@@ -6941,20 +6941,17 @@ async function generateDemoCards() {
   const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
   const now = Date.now();
 
-  const dsaDuration = 60 * 24 * 60 * 60 * 1000; // 60 days
-  const dsaElapsed = 0.75;
-  const dsaCreated = now - (dsaElapsed * dsaDuration);
+  const dsaDuration = 1 * 60 * 60 * 1000; // 1 hour
+  const dsaCreated = now - (45 * 60 * 1000); // 45 mins ago
   const dsaDeadline = dsaCreated + dsaDuration;
   const dsaNotifyAt = dsaCreated + (0.80 * dsaDuration); // Remind at 20% remaining
 
-  const weeklyDuration = 30 * 24 * 60 * 60 * 1000; // 30 days
-  const weeklyElapsed = 0.50;
-  const weeklyCreated = now - (weeklyElapsed * weeklyDuration);
+  const weeklyDuration = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const weeklyCreated = now - (3 * 24 * 60 * 60 * 1000); // 3 days ago
   const weeklyDeadline = weeklyCreated + weeklyDuration;
 
-  const bucketDuration = 30 * 24 * 60 * 60 * 1000;
-  const bucketElapsed = 0.50;
-  const bucketCreated = now - (bucketElapsed * bucketDuration);
+  const bucketDuration = 50 * 24 * 60 * 60 * 1000; // 1 month 20 days (approx 50 days)
+  const bucketCreated = now - (35 * 24 * 60 * 60 * 1000); // 35 days ago
   const bucketDeadline = bucketCreated + bucketDuration;
 
   const demoTrackers = [
@@ -6963,8 +6960,8 @@ async function generateDemoCards() {
       type: "goal",
       preset: "Problems",
       levels: [{ name: "Problems", conversionToNext: null }],
-      targetSmallest: 450,
-      currentSmallest: 180, // ~40% progress
+      targetSmallest: 3,
+      currentSmallest: 2, // 2 out of 3 solved
       completed: false,
       createdAt: dsaCreated,
       deadlineAt: dsaDeadline,
@@ -6994,7 +6991,7 @@ async function generateDemoCards() {
       items: [
         { text: "Learn to swim", done: false },
         { text: "Visit a hill station", done: false },
-        { text: "Read 12 books this year", done: true },
+        { text: "The courage to be disliked", done: true },
         { text: "Learn basic guitar chords", done: false },
         { text: "Try solo travel once", done: false }
       ],
