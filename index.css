@@ -1341,8 +1341,8 @@ body {
   right: 0;
   width: 220px;
   background: var(--dropdown-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(48px);
+  -webkit-backdrop-filter: blur(48px);
   border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 16px;
@@ -4980,8 +4980,8 @@ textarea.form-input-single-line {
   margin-top: 12px;
   right: 0;
   background: var(--dropdown-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(48px);
+  -webkit-backdrop-filter: blur(48px);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: var(--shadow-medium);
