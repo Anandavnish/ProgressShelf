@@ -71,11 +71,11 @@
   --guest-banner-bg: #1C2128;
 
   /* Navbar & Header Components */
-  --navbar-bg: rgba(13, 17, 23, 0.8);
+  --navbar-bg: rgba(13, 17, 23, 0.55);
   --profile-btn-bg: #0b0d10;
   --profile-btn-border: #3d4145;
   --profile-avatar-bg: #1F242C;
-  --dropdown-bg: rgba(13, 17, 23, 0.7);
+  --dropdown-bg: rgba(13, 17, 23, 0.55);
   --dropdown-item-error-hover: rgba(255, 77, 77, 0.05);
   --search-pill-bg: #0b0d10;
   --search-pill-border: #21262d;
@@ -85,7 +85,7 @@
   --search-helper-border: rgba(74, 144, 217, 0.2);
 
   /* Overall Stats Bar & Filters */
-  --stats-banner-bg: rgba(13, 17, 23, 0.8);
+  --stats-banner-bg: rgba(13, 17, 23, 0.55);
   --stats-btn-bg: rgba(22, 27, 34, 0.3);
   --stats-btn-highlight: rgba(255, 255, 255, 0.05);
   --stats-btn-glass-start: rgba(255, 255, 255, 0.08);
@@ -308,11 +308,11 @@ html.light-theme {
   --guest-banner-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
 
   /* Navbar & Header Components */
-  --navbar-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
+  --navbar-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.45));
   --profile-btn-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
   --profile-btn-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --profile-avatar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
-  --dropdown-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
+  --dropdown-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.45));
   --dropdown-item-error-hover: rgba(185, 28, 28, 0.05);
   --search-pill-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.8));
   --search-pill-border: color-mix(in srgb, var(--accent) 25%, transparent);
@@ -322,7 +322,7 @@ html.light-theme {
   --search-helper-border: rgba(26, 115, 232, 0.15);
 
   /* Overall Stats Bar & Filters */
-  --stats-banner-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
+  --stats-banner-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.45));
   --stats-btn-bg: var(--bg-card);
   --stats-btn-hover-bg: color-mix(in srgb, var(--accent) 6%, #FFFFFF);
   --stats-btn-hover-border: var(--border-color);
@@ -454,7 +454,7 @@ html.light-theme {
   --terrace-header-bg: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.6));
   --terrace-latest-badge-border: color-mix(in srgb, var(--accent) 20%, transparent);
   --delete-confirm-bg: rgba(255, 255, 255, 0.8);
-  --stats-banner-bg: color-mix(in srgb, var(--accent) 4%, rgba(255, 255, 255, 0.7));
+  --stats-banner-bg: color-mix(in srgb, var(--accent) 4%, rgba(255, 255, 255, 0.45));
   --note-editor-text-color: #0F1419;
   --note-bullet-color: rgba(90, 100, 110, 0.6);
   --note-syntax-color: rgba(90, 100, 110, 0.4);
@@ -1109,8 +1109,8 @@ body {
   position: sticky;
   top: 0;
   z-index: 110;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--card-border);
   padding: 12px 24px;
@@ -1341,8 +1341,8 @@ body {
   right: 0;
   width: 220px;
   background: var(--dropdown-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 16px;
@@ -1421,8 +1421,8 @@ body {
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px));
   z-index: 98;
   background-color: var(--stats-banner-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--card-border);
   padding: 14px 16px;
   animation: fadeIn 0.4s var(--transition-ease);
@@ -1714,8 +1714,8 @@ body {
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px) + var(--stats-height, 0px) - 2px);
   z-index: 97;
   background-color: var(--navbar-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   padding: 16px calc(50vw - 50%) !important;
   margin: -2px calc(50% - 50vw) 12px calc(50% - 50vw) !important;
   display: flex;
@@ -3203,8 +3203,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   align-items: center;
   padding: 8px 16px;
   background-color: var(--navbar-bg);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--card-border);
   z-index: 100;
   will-change: transform;
@@ -4825,8 +4825,8 @@ textarea.form-input-single-line {
   height: 58px;
   border-radius: 50%;
   background: rgba(22, 27, 34, 0.8) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   color: #3F85F6;
   border: 1.5px solid rgba(63, 133, 246, 0.45);
   display: flex;
@@ -4980,8 +4980,8 @@ textarea.form-input-single-line {
   margin-top: 12px;
   right: 0;
   background: var(--dropdown-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: var(--shadow-medium);
