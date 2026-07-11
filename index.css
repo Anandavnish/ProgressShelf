@@ -312,9 +312,9 @@ html.light-theme {
   --profile-btn-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
   --profile-btn-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --profile-avatar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
-  --dropdown-bg: color-mix(in srgb, var(--accent) 2%, #FFFFFF);
+  --dropdown-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
   --dropdown-item-error-hover: rgba(185, 28, 28, 0.05);
-  --search-pill-bg: color-mix(in srgb, var(--accent) 5%, #FFFFFF);
+  --search-pill-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.8));
   --search-pill-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --search-btn-bg: color-mix(in srgb, var(--accent) 24%, #FFFFFF);
   --search-muted-icon: #4F5E4E;
