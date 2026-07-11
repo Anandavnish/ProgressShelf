@@ -308,7 +308,7 @@ html.light-theme {
   --guest-banner-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
 
   /* Navbar & Header Components */
-  --navbar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
+  --navbar-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
   --profile-btn-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
   --profile-btn-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --profile-avatar-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
@@ -322,7 +322,7 @@ html.light-theme {
   --search-helper-border: rgba(26, 115, 232, 0.15);
 
   /* Overall Stats Bar & Filters */
-  --stats-banner-bg: color-mix(in srgb, var(--accent) 15%, #EBEFF5);
+  --stats-banner-bg: color-mix(in srgb, var(--accent) 5%, rgba(255, 255, 255, 0.7));
   --stats-btn-bg: var(--bg-card);
   --stats-btn-hover-bg: color-mix(in srgb, var(--accent) 6%, #FFFFFF);
   --stats-btn-hover-border: var(--border-color);
@@ -1713,7 +1713,7 @@ body {
   position: sticky;
   top: calc(var(--navbar-height, 57px) + var(--subbar-height, 0px) + var(--stats-height, 0px) - 2px);
   z-index: 97;
-  background-color: var(--bg-body);
+  background-color: var(--navbar-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 16px 24px;
