@@ -7242,16 +7242,52 @@ function initTheme() {
       effectiveTheme = systemIsDark ? 'dark' : 'light';
     }
     
-    if (effectiveTheme === 'dark') {
+    if (theme === 'system') {
+      const ua = navigator.userAgent;
+      let device = 'laptop';
+      if (/tablet|ipad|playbook|silk/i.test(ua) || (navigator.maxTouchPoints > 0 && /Macintosh/.test(ua))) {
+        device = 'tablet';
+      } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/i.test(ua)) {
+        device = 'phone';
+      }
+      
+      let svgInner = '';
+      if (device === 'phone') {
+        svgInner = `
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+          <line x1="12" y1="18" x2="12.01" y2="18"></line>
+        `;
+      } else if (device === 'tablet') {
+        svgInner = `
+          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+          <line x1="12" y1="18" x2="12.01" y2="18"></line>
+        `;
+      } else {
+        svgInner = `
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        `;
+      }
+      
       btn.innerHTML = `
-        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" 
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${svgInner}
+        </svg>
+      `;
+    } else if (theme === 'dark') {
+      btn.innerHTML = `
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" 
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       `;
     } else {
       btn.innerHTML = `
         <span class="beta-badge" id="theme-beta-badge">BETA</span>
-        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" 
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>
           <line x1="12" y1="21" x2="12" y2="23"></line>

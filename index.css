@@ -316,7 +316,7 @@ html.light-theme {
   --dropdown-item-error-hover: rgba(185, 28, 28, 0.05);
   --search-pill-bg: color-mix(in srgb, var(--accent) 5%, #FFFFFF);
   --search-pill-border: color-mix(in srgb, var(--accent) 25%, transparent);
-  --search-btn-bg: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
+  --search-btn-bg: color-mix(in srgb, var(--accent) 24%, #FFFFFF);
   --search-muted-icon: #4F5E4E;
   --search-helper-bg: rgba(26, 115, 232, 0.06);
   --search-helper-border: rgba(26, 115, 232, 0.15);
