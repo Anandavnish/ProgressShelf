@@ -1,6 +1,6 @@
 // auth.js
 import { supabase, isConfigured } from "./supabase-config.js?v=2.3";
-import { updateUserSettings } from "./db.js?v=2.3";
+import { updateUserSettings } from "./db.js?v=2.4";
 
 const isDashboard = window.location.pathname.endsWith("dashboard.html");
 
@@ -22,7 +22,8 @@ function mapSupabaseUser(supabaseUser) {
     photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y",
     preferredSort: supabaseUser.user_metadata?.preferred_sort || null,
     accentColor: supabaseUser.user_metadata?.accent_color || null,
-    customAccents: supabaseUser.user_metadata?.custom_accents || null
+    customAccents: supabaseUser.user_metadata?.custom_accents || null,
+    fontFamily: supabaseUser.user_metadata?.font_family || null
   };
 }
 
@@ -347,7 +348,7 @@ export async function updateUserPreferredSort(sortValue) {
 }
 
 /**
- * Persists the user's theme and accent color preferences to Supabase user_metadata.
+ * Persists the user's theme and accent color preferences to Supabase user_metadata and user_settings table.
  * @param {string} themeMode 'light' | 'dark' | 'system'
  * @param {string} accentColor Hex color string
  * @param {Array} customAccents Array of custom accent hex strings
@@ -363,6 +364,13 @@ export async function updateUserThemePreference(themeMode, accentColor, customAc
     if (customAccents !== undefined) {
       settings.custom_accents = customAccents;
     }
+
+    // 1. Persist directly to Supabase Auth user_metadata
+    await supabase.auth.updateUser({
+      data: settings
+    }).catch(err => console.warn("Supabase auth metadata update notice:", err));
+
+    // 2. Persist to user_settings table
     await updateUserSettings(user.id, settings);
   } catch (err) {
     console.error("Failed to update user theme preference:", err);
@@ -370,7 +378,7 @@ export async function updateUserThemePreference(themeMode, accentColor, customAc
 }
 
 /**
- * Persists the user's font family preference to Supabase user_settings.
+ * Persists the user's font family preference to Supabase user_metadata and user_settings table.
  * @param {string} fontFamily 'outfit' | 'space-mono' | 'jetbrains-mono'
  */
 export async function updateUserFontPreference(fontFamily) {
@@ -378,6 +386,13 @@ export async function updateUserFontPreference(fontFamily) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // 1. Persist directly to Supabase Auth user_metadata (bulletproof fallback)
+    await supabase.auth.updateUser({
+      data: { font_family: fontFamily }
+    }).catch(err => console.warn("Supabase auth metadata update notice:", err));
+
+    // 2. Persist to user_settings table for cross-device realtime synchronization
     await updateUserSettings(user.id, { font_family: fontFamily });
   } catch (err) {
     console.error("Failed to update user font preference:", err);

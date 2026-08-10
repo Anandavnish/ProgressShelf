@@ -717,11 +717,23 @@ export async function getUserSettings(uid) {
       .select('*')
       .eq('user_id', uid)
       .single();
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
-    return data;
+    if (error && error.code !== 'PGRST116') {
+      console.warn("User settings query notice:", error.message || error);
+    }
+
+    // Retrieve auth metadata as fallback if table column is absent
+    const { data: authData } = await supabase.auth.getUser();
+    const meta = authData?.user?.user_metadata || {};
+
+    return {
+      ...(data || {}),
+      font_family: data?.font_family || meta?.font_family || null,
+      accent_color: data?.accent_color || meta?.accent_color || null,
+      custom_accents: data?.custom_accents || meta?.custom_accents || null,
+      preferred_sort: data?.preferred_sort || meta?.preferred_sort || null
+    };
   } catch (err) {
-    console.error("Error fetching user settings:", err);
-    alert("DB Fetch Error: " + (err.message || err));
+    console.warn("Error fetching user settings:", err.message || err);
     return null;
   }
 }
@@ -736,11 +748,11 @@ export async function updateUserSettings(uid, settings) {
         ...settings,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
-    if (error) throw error;
+    if (error) {
+      console.warn("user_settings upsert notice:", error.message || error);
+    }
   } catch (err) {
-    console.error("Error updating user settings:", err);
-    alert("DB Update Error: " + (err.message || err));
-    throw err;
+    console.warn("Error updating user settings table:", err.message || err);
   }
 }
 
