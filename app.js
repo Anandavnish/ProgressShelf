@@ -537,6 +537,52 @@ async function silentFCMReregister(uid) {
   }
 }
 
+/**
+ * Interpolates from #4A90D9 (blue, 0%) to #27AE60 (green, 100%).
+ * @param {number} percent Completion percentage (0 to 100).
+ * @returns {string} RGB color string.
+ */
+function getProgressColor(percent) {
+  const p = Math.max(0, Math.min(100, percent)) / 100;
+
+  // Blue: rgb(74, 144, 217)
+  const rStart = 74, gStart = 144, bStart = 217;
+  // Green: rgb(39, 174, 96)
+  const rEnd = 39, gEnd = 174, bEnd = 96;
+
+  const r = Math.round(rStart + (rEnd - rStart) * p);
+  const g = Math.round(gStart + (gEnd - gStart) * p);
+  const b = Math.round(bStart + (bEnd - bStart) * p);
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function applyCardProgressColor(card, bar) {
+  if (!card) return;
+  if (!bar) {
+    card.style.setProperty("--bar-color", "var(--ui-accent, #4A90D9)");
+    return;
+  }
+  const barType = bar.type || "goal";
+  if (barType === "note") {
+    card.style.removeProperty("--bar-color");
+    return;
+  }
+  let percent = 0;
+  if (barType === "goal") {
+    percent = bar.targetSmallest > 0
+      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+      : 0;
+  } else if (barType === "checklist") {
+    const items = bar.items || [];
+    const doneCount = items.filter(item => item.done).length;
+    const totalCount = items.length;
+    percent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+  }
+  const barColor = getProgressColor(percent);
+  card.style.setProperty("--bar-color", barColor);
+}
+
 function applyDeadlineTick(barEl) {
   const card = barEl.closest('.card-progress');
   const bar = card ? card._barData : null;
@@ -553,7 +599,7 @@ function applyDeadlineTick(barEl) {
   // Guard: if tracker is completed, skip all overdue/pending-reset styling entirely
   if (isCompleted) {
     if (card) {
-      card.style.removeProperty("--bar-color");
+      applyCardProgressColor(card, bar);
     }
     barEl.setAttribute('stroke', 'transparent');
     const perimeter = Number(barEl.dataset.perimeter) || 0;
@@ -612,7 +658,7 @@ function applyDeadlineTick(barEl) {
     barEl.setAttribute('stroke-dashoffset', 0);
     barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
     if (card) {
-      card.style.removeProperty("--bar-color");
+      applyCardProgressColor(card, bar);
     }
   } else {
     // Active deadline: green/yellow/orange drain towards deadline
@@ -625,7 +671,7 @@ function applyDeadlineTick(barEl) {
     const hue = (percentLeft * 1.2).toFixed(0);
     barEl.setAttribute('stroke', `hsl(${hue}, 80%, ${lightness}%)`);
     if (card) {
-      card.style.removeProperty("--bar-color");
+      applyCardProgressColor(card, bar);
     }
   }
 }
@@ -1068,26 +1114,6 @@ function formatTimeLeft(deadlineMs) {
 // Unit Conversion & Formatting Mathematics
 // ==========================================
 
-/**
- * Interpolates from #4A90D9 (blue, 0%) to #27AE60 (green, 100%).
- * @param {number} percent Completion percentage (0 to 100).
- * @returns {string} RGB color string.
- */
-function getProgressColor(percent) {
-  const p = Math.max(0, Math.min(100, percent)) / 100;
-
-  // Blue: rgb(74, 144, 217)
-  const rStart = 74, gStart = 144, bStart = 217;
-  // Green: rgb(39, 174, 96)
-  const rEnd = 39, gEnd = 174, bEnd = 96;
-
-  const r = Math.round(rStart + (rEnd - rStart) * p);
-  const g = Math.round(gStart + (gEnd - gStart) * p);
-  const b = Math.round(bStart + (bEnd - bStart) * p);
-
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
 function encodeToSmallest(levelValues, levels) {
   // levelValues: array ordered largest→smallest (matches form display order)
   // levels: array ordered smallest→largest (matches Supabase schema)
@@ -1514,14 +1540,8 @@ function updateCardElement(card, bar) {
     card.classList.remove("pulse-glow");
   }
 
-  // Calculate completion percentage
-  const percent = bar.targetSmallest > 0
-    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-    : 0;
-
-  // Get interpolated color
-  const barColor = getProgressColor(percent);
-  card.style.setProperty("--bar-color", barColor);
+  // Calculate completion percentage and update theme color
+  applyCardProgressColor(card, bar);
 
   // Update title
   const titleEl = card.querySelector(".card-title");
@@ -1862,14 +1882,8 @@ function createCardElement(bar) {
   card.className = "card-progress";
   card.setAttribute("data-bar-id", bar.id);
 
-  // Calculate completion percentage
-  const percent = bar.targetSmallest > 0
-    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-    : 0;
-
-  // Get interpolated color
-  const barColor = getProgressColor(percent);
-  card.style.setProperty("--bar-color", barColor);
+  // Calculate completion percentage and update theme color
+  applyCardProgressColor(card, bar);
 
   // Set timestamp reference for the 5-minute background check
   let lastUpdatedMs = Date.now();
@@ -2498,7 +2512,7 @@ setInterval(() => {
       labelEl.classList.remove("overdue", "pending-renewal", "pending-reset-soft");
       if (card) {
         card.classList.remove("overdue", "pending-renewal", "pending-reset-soft");
-        card.style.removeProperty("--bar-color");
+        applyCardProgressColor(card, bar);
         card.querySelector(".deadline-svg")?.remove();
       }
       if (!labelEl.querySelector('.badge-completed')) {
@@ -2522,7 +2536,7 @@ setInterval(() => {
         labelEl.classList.remove("overdue", "pending-renewal", "pending-reset-soft");
         if (card) {
           card.classList.remove("overdue", "pending-renewal", "pending-reset-soft");
-          card.style.removeProperty("--bar-color");
+          applyCardProgressColor(card, bar);
           card.querySelector(".deadline-svg")?.remove();
         }
         if (!labelEl.querySelector('.badge-completed')) {
@@ -2565,7 +2579,7 @@ setInterval(() => {
         } else if (result.isOverdue) {
           if (card) {
             card.classList.remove("pending-renewal", "pending-reset-soft", "overdue");
-            card.style.removeProperty("--bar-color");
+            applyCardProgressColor(card, bar);
           }
           labelEl.classList.remove("pending-renewal", "pending-reset-soft");
           labelEl.classList.add("overdue");
@@ -2573,7 +2587,7 @@ setInterval(() => {
         } else {
           if (card) {
             card.classList.remove("pending-renewal", "pending-reset-soft", "overdue");
-            card.style.removeProperty("--bar-color");
+            applyCardProgressColor(card, bar);
           }
           labelEl.classList.remove("pending-renewal", "pending-reset-soft", "overdue");
           labelEl.removeAttribute('title');
@@ -8404,20 +8418,28 @@ function initAccentColor() {
     });
   }
 
-  // Boot: apply saved or default color and always render swatches
+  // Boot: apply saved or default color in light mode, or clear in dark mode, and always render swatches
   const savedColor = localStorage.getItem(STORAGE_KEY);
   if (!savedColor) {
     localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
   }
   const entry = COLORS.find(c => c.value === (savedColor || DEFAULT_COLOR.value)) || DEFAULT_COLOR;
-  applyAccent(entry);
+  if (isLightActive()) {
+    applyAccent(entry);
+  } else {
+    clearAccent();
+  }
   renderSwatches(entry.value);
 
   // Expose for realtime sync
   window.updateAccentFromSync = function(hex) {
     let syncEntry = COLORS.find(c => c.value === hex);
     if (!syncEntry) syncEntry = processCustomColor(hex);
-    applyAccent(syncEntry);
+    if (isLightActive()) {
+      applyAccent(syncEntry);
+    } else {
+      clearAccent();
+    }
     renderSwatches(hex);
   };
 }
