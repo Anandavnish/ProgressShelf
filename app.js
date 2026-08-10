@@ -2322,136 +2322,141 @@ function sortBars(bars) {
 }
 
 function renderDashboard(bars) {
-  currentBars = bars;
+  try {
+    currentBars = bars;
 
-  // Hide Edit and Sort controls if 1 or fewer cards exist
-  const rightGroup = document.querySelector(".controls-right-group");
-  if (rightGroup) {
-    if (bars && bars.length >= 2) {
-      rightGroup.classList.remove("hidden");
-    } else {
-      rightGroup.classList.add("hidden");
-      if (editModeActive) {
-        exitEditMode();
+    // Hide Edit and Sort controls if 1 or fewer cards exist
+    const rightGroup = document.querySelector(".controls-right-group");
+    if (rightGroup) {
+      if (bars && bars.length >= 2) {
+        rightGroup.classList.remove("hidden");
+      } else {
+        rightGroup.classList.add("hidden");
+        if (editModeActive) {
+          exitEditMode();
+        }
       }
     }
-  }
 
-  const sortedBars = sortBars(bars);
-  let filtered = filterBars([...sortedBars]);
+    const sortedBars = sortBars(bars);
+    let filtered = filterBars([...sortedBars]);
 
-  // Sort by search relevance score descending when search is active
-  const searchTokens = getCurrentSearchTokens();
-  if (searchTokens.length > 0) {
-    const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
-    scored.sort((a, b) => {
-      // Invert comparator order because of .reverse() in the reconciliation loop!
-      if (a.score !== b.score) {
-        return a.score - b.score;
-      }
-      return b.index - a.index; // Stable sort fallback (preserve original dashboard sort order)
-    });
-    filtered = scored.map(item => item.bar);
-  }
+    // Sort by search relevance score descending when search is active
+    const searchTokens = getCurrentSearchTokens();
+    if (searchTokens.length > 0) {
+      const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
+      scored.sort((a, b) => {
+        // Invert comparator order because of .reverse() in the reconciliation loop!
+        if (a.score !== b.score) {
+          return a.score - b.score;
+        }
+        return b.index - a.index; // Stable sort fallback (preserve original dashboard sort order)
+      });
+      filtered = scored.map(item => item.bar);
+    }
 
-  updateOverallStats(bars);
+    updateOverallStats(bars);
 
-  // Update search helper text for matches in other categories
-  const searchInput = document.getElementById("global-search");
-  const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
-  const searchHelper = document.getElementById("search-helper");
-  if (searchHelper) {
-    if (query && currentFilter !== "all") {
-      const tokens = getCurrentSearchTokens();
-      const totalQueryMatches = bars.filter(bar => matchBarSearch(bar, tokens)).length;
-      const currentCategoryMatches = filtered.length;
-      const diff = totalQueryMatches - currentCategoryMatches;
-      if (diff > 0) {
-        searchHelper.innerHTML = `
-          <span>🔍 Found <strong>${diff}</strong> more match${diff === 1 ? '' : 'es'} in other categories.</span>
-          <button id="btn-clear-search-filters" class="search-helper-link">Clear filters to view</button>
-        `;
-        searchHelper.classList.remove("hidden");
-        document.getElementById("btn-clear-search-filters")?.addEventListener("click", () => {
-          currentFilter = "all";
-          renderDashboard(bars);
-        });
+    // Update search helper text for matches in other categories
+    const searchInput = document.getElementById("global-search");
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+    const searchHelper = document.getElementById("search-helper");
+    if (searchHelper) {
+      if (query && currentFilter !== "all") {
+        const tokens = getCurrentSearchTokens();
+        const totalQueryMatches = bars.filter(bar => matchBarSearch(bar, tokens)).length;
+        const currentCategoryMatches = filtered.length;
+        const diff = totalQueryMatches - currentCategoryMatches;
+        if (diff > 0) {
+          searchHelper.innerHTML = `
+            <span>🔍 Found <strong>${diff}</strong> more match${diff === 1 ? '' : 'es'} in other categories.</span>
+            <button id="btn-clear-search-filters" class="search-helper-link">Clear filters to view</button>
+          `;
+          searchHelper.classList.remove("hidden");
+          document.getElementById("btn-clear-search-filters")?.addEventListener("click", () => {
+            currentFilter = "all";
+            renderDashboard(bars);
+          });
+        } else {
+          searchHelper.classList.add("hidden");
+          searchHelper.innerHTML = "";
+        }
       } else {
         searchHelper.classList.add("hidden");
         searchHelper.innerHTML = "";
       }
-    } else {
-      searchHelper.classList.add("hidden");
-      searchHelper.innerHTML = "";
     }
-  }
 
-  // Ensure Add Card is always present
-  let addCard = document.getElementById("btn-add-card");
-  if (!addCard) {
-    addCard = document.createElement("div");
-    addCard.className = "card-add";
-    addCard.id = "btn-add-card";
-    addCard.innerHTML = `
-      <div class="add-icon">+</div>
-      <span class="add-text">Add New Tracker</span>
-    `;
-    addCard.addEventListener("click", () => openCreateModal());
-    cardsGrid.insertBefore(addCard, cardsGrid.firstChild);
-  }
+    // Ensure Add Card is always present
+    let addCard = document.getElementById("btn-add-card");
+    if (!addCard) {
+      addCard = document.createElement("div");
+      addCard.className = "card-add";
+      addCard.id = "btn-add-card";
+      addCard.innerHTML = `
+        <div class="add-icon">+</div>
+        <span class="add-text">Add New Tracker</span>
+      `;
+      addCard.addEventListener("click", () => openCreateModal());
+      cardsGrid.insertBefore(addCard, cardsGrid.firstChild);
+    }
 
-  // Compile list of expected elements in order
-  const expectedElements = [addCard];
+    // Compile list of expected elements in order
+    const expectedElements = [addCard];
 
-  // Render / reconcile card elements
-  filtered.reverse().forEach((bar) => {
-    const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
-    if (oldCard) {
-      if ((pendingLocalWrites.get(bar.id) || 0) > 0) {
-        // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
-        expectedElements.push(oldCard);
-      } else {
-        const updated = updateCardElement(oldCard, bar);
-        if (updated) {
+    // Render / reconcile card elements
+    filtered.reverse().forEach((bar) => {
+      const oldCard = cardsGrid.querySelector(`[data-bar-id="${bar.id}"]`);
+      if (oldCard) {
+        if ((pendingLocalWrites.get(bar.id) || 0) > 0) {
+          // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
           expectedElements.push(oldCard);
         } else {
-          const newCard = createCardElement(bar);
-          oldCard.replaceWith(newCard);
-          expectedElements.push(newCard);
+          const updated = updateCardElement(oldCard, bar);
+          if (updated) {
+            expectedElements.push(oldCard);
+          } else {
+            const newCard = createCardElement(bar);
+            oldCard.replaceWith(newCard);
+            expectedElements.push(newCard);
+          }
         }
+      } else {
+        const newCard = createCardElement(bar);
+        expectedElements.push(newCard);
       }
-    } else {
-      const newCard = createCardElement(bar);
-      expectedElements.push(newCard);
+    });
+
+    // Remove any obsolete card DOM elements
+    const childrenArray = Array.from(cardsGrid.children);
+    childrenArray.forEach((child) => {
+      if (!expectedElements.includes(child)) {
+        child.remove();
+      }
+    });
+
+    // Reorder children to match expectedElements list
+    expectedElements.forEach((el, index) => {
+      if (cardsGrid.children[index] !== el) {
+        cardsGrid.insertBefore(el, cardsGrid.children[index] || null);
+      }
+    });
+
+    syncRowHeights();
+    syncFabVisibility();
+    evaluateDemoBannerAndDropdownState();
+
+    // Scroll to and highlight card if 'id' parameter is set in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetId = urlParams.get('id');
+    if (targetId) {
+      setTimeout(() => {
+        highlightAndScrollToCard(targetId);
+      }, 400);
     }
-  });
-
-  // Remove any obsolete card DOM elements
-  const childrenArray = Array.from(cardsGrid.children);
-  childrenArray.forEach((child) => {
-    if (!expectedElements.includes(child)) {
-      child.remove();
-    }
-  });
-
-  // Reorder children to match expectedElements list
-  expectedElements.forEach((el, index) => {
-    if (cardsGrid.children[index] !== el) {
-      cardsGrid.insertBefore(el, cardsGrid.children[index] || null);
-    }
-  });
-
-  syncRowHeights();
-  syncFabVisibility();
-  evaluateDemoBannerAndDropdownState();
-
-  // Scroll to and highlight card if 'id' parameter is set in the URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetId = urlParams.get('id');
-  if (targetId) {
-    setTimeout(() => {
-      highlightAndScrollToCard(targetId);
-    }, 400);
+  } catch (err) {
+    console.error("renderDashboard exception:", err);
+    renderErrorState("app_error", err.message);
   }
 }
 
@@ -5469,19 +5474,110 @@ initAuthProtection(async (user) => {
           navLogoSvg.classList.remove("logo-loading");
         }
       }
-      showToast("Error loading progress bars. You may be offline.", "error");
-      if (cardsGrid.querySelectorAll(".card-skeleton").length > 0) {
-        cardsGrid.innerHTML = `
-          <div class="empty-state" style="border-color: var(--error);">
-            <div class="empty-icon" style="color: var(--error)">⚠️</div>
-            <h3 class="empty-title">Offline or Load Failed</h3>
-            <p class="empty-desc">Could not connect to Supabase database. Please check your internet connection.</p>
-            <button class="btn btn-secondary" onclick="window.location.reload()" style="margin-top: 16px;">Retry Connection</button>
-          </div>
-        `;
+      const errType = !navigator.onLine ? "network" : "server";
+      showToast(errType === "network" ? "You are currently offline." : "Error connecting to database.", "error");
+      if (cardsGrid.querySelectorAll(".card-skeleton").length > 0 || cardsGrid.children.length === 0) {
+        renderErrorState(errType, error?.message || "");
       }
     }
   );
+});
+
+/**
+ * Renders distinct error state cards for network, server, or application issues.
+ * @param {"network" | "server" | "app_error"} type The category of error encountered.
+ * @param {string} details Additional context or error details.
+ */
+function renderErrorState(type, details = "") {
+  const cardsGrid = document.getElementById("cards-grid");
+  if (!cardsGrid) return;
+
+  const user = currentUser;
+  let userHtml = "";
+  if (user) {
+    const photo = user.photoURL || `https://www.gravatar.com/avatar/${user.uid || 'guest'}?d=mp&s=80`;
+    const name = user.displayName || user.email || "Signed In User";
+    userHtml = `
+      <div class="error-user-badge">
+        <img src="${escapeHtml(photo)}" class="error-user-avatar" alt="User Avatar" referrerpolicy="no-referrer">
+        <span class="error-user-name">${escapeHtml(name)}</span>
+      </div>
+    `;
+  }
+
+  let icon = "";
+  let title = "";
+  let description = "";
+  let borderStyle = "";
+
+  if (type === "network" || !navigator.onLine) {
+    borderStyle = "border: 1.5px dashed #F59E0B; background: rgba(245, 158, 11, 0.04);";
+    icon = `
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
+    `;
+    title = "Network Connection Lost";
+    description = "You appear to be offline. Please check your Wi-Fi or mobile data connection and try again.";
+  } else if (type === "server") {
+    borderStyle = "border: 1.5px dashed #EF4444; background: rgba(239, 68, 68, 0.04);";
+    icon = `
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+      </svg>
+    `;
+    title = "Server Connection Error";
+    description = details || "Could not connect to Supabase database server. The service may be temporarily unavailable or experiencing high traffic.";
+  } else {
+    // Application Code Error
+    borderStyle = "border: 1.5px dashed #A855F7; background: rgba(168, 85, 247, 0.04);";
+    icon = `
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    `;
+    title = "Application Render Issue";
+    description = details || "An unexpected error occurred while loading dashboard items. Reloading the application should restore layout.";
+  }
+
+  cardsGrid.innerHTML = `
+    <div class="empty-state error-card-container" style="${borderStyle}">
+      ${userHtml}
+      <div class="error-card-icon-box">
+        ${icon}
+      </div>
+      <h3 class="empty-title">${escapeHtml(title)}</h3>
+      <p class="empty-desc">${escapeHtml(description)}</p>
+      <button class="btn btn-primary btn-retry-error" onclick="window.location.reload()" style="margin-top: 20px; padding: 10px 24px; font-weight: 600;">
+        Retry Connection
+      </button>
+    </div>
+  `;
+}
+
+window.addEventListener("offline", () => {
+  showToast("You are currently offline.", "warning");
+  const cardsGrid = document.getElementById("cards-grid");
+  if (cardsGrid && cardsGrid.querySelectorAll(".card-progress").length === 0) {
+    renderErrorState("network");
+  }
+});
+
+window.addEventListener("online", () => {
+  showToast("Network restored! Reconnecting...", "success");
+  window.location.reload();
 });
 
 // Setup mutual exclusion for deadline inputs (Create and Edit modals)
