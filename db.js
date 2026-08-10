@@ -7,7 +7,79 @@ const writeQueues = new Map(); // barId -> latest pending write promise
 // Helper to get/set local storage bars for Sandbox mode
 export function getLocalBars() {
   const data = localStorage.getItem("progress_shelf_bars");
-  return data ? JSON.parse(data) : [];
+  if (!data) {
+    const now = Date.now();
+    const demoBars = [
+      {
+        id: "demo_romio",
+        title: "Romio Update 03/08",
+        type: "note",
+        text: "Check release notes and update dependencies for Romio.",
+        completed: false,
+        created_at: new Date(now - 10 * 86400 * 1000).toISOString(),
+        last_updated: new Date(now - 6 * 86400 * 1000).toISOString(),
+        deadline_at: new Date(now - (6 * 24 * 3600 + 8 * 3600) * 1000).toISOString(),
+        deadline_set_at: new Date(now - 10 * 86400 * 1000).toISOString(),
+        repeat: null
+      },
+      {
+        id: "demo_checklist",
+        title: "Daily Standup Checklist",
+        type: "checklist",
+        items: [
+          { id: 1, text: "Check email & Slack", done: true },
+          { id: 2, text: "Review active PRs", done: true },
+          { id: 3, text: "Submit status update", done: false }
+        ],
+        completed: false,
+        created_at: new Date(now - 5 * 86400 * 1000).toISOString(),
+        last_updated: new Date(now - 1800 * 1000).toISOString(),
+        repeat: {
+          resetTime: "02:02",
+          resetCount: null,
+          checklistResetEnabled: true,
+          deadlineResetEnabled: false,
+          lastResetAt: now - 20 * 3600 * 1000
+        }
+      },
+      {
+        id: "demo_iitb",
+        title: "IITB Classes",
+        type: "checklist",
+        items: [
+          { id: 1, text: "Lecture 1: Intro", done: true },
+          { id: 2, text: "Lecture 2: Architecture", done: true }
+        ],
+        completed: false,
+        created_at: new Date(now - 8 * 86400 * 1000).toISOString(),
+        last_updated: new Date(now - 1 * 86400 * 1000).toISOString(),
+        deadline_at: new Date(now - 2 * 86400 * 1000).toISOString(),
+        deadline_set_at: new Date(now - 8 * 86400 * 1000).toISOString(),
+        repeat: null
+      }
+    ];
+    const mapped = demoBars.map(mapDatabaseRow);
+    localStorage.setItem("progress_shelf_bars", JSON.stringify(mapped));
+    return mapped;
+  }
+  try {
+    const raw = JSON.parse(data);
+    let changed = false;
+    const normalized = raw.map(bar => {
+      const origRepeat = JSON.stringify(bar.repeat);
+      const norm = normalizeBar(bar);
+      if (JSON.stringify(norm.repeat) !== origRepeat) {
+        changed = true;
+      }
+      return norm;
+    });
+    if (changed) {
+      localStorage.setItem("progress_shelf_bars", JSON.stringify(normalized));
+    }
+    return normalized;
+  } catch (e) {
+    return [];
+  }
 }
 
 function setLocalBars(bars) {
@@ -29,7 +101,7 @@ function triggerMockUpdate() {
 }
 
 function mapDatabaseRow(row) {
-  return {
+  const bar = {
     id: row.id,
     title: row.title,
     type: row.type,
@@ -49,8 +121,58 @@ function mapDatabaseRow(row) {
     deadlineNotified: row.deadline_notified || false,
     position: row.position !== null && row.position !== undefined ? Number(row.position) : 0,
     createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
-    lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null
+    lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null,
+    repeat: row.repeat || null
   };
+
+  const rawRepeat = row.repeat;
+  if (rawRepeat && typeof rawRepeat === 'object') {
+    bar.checklistResetEnabled = !!rawRepeat.checklistResetEnabled;
+    bar.deadlineResetEnabled = !!rawRepeat.deadlineResetEnabled;
+
+    const rawCount = rawRepeat.resetCount !== undefined 
+      ? rawRepeat.resetCount 
+      : (rawRepeat.checklistResetCount !== undefined ? rawRepeat.checklistResetCount : rawRepeat.deadlineResetCount);
+
+    bar.resetCount = (rawCount !== undefined && rawCount !== null && rawCount !== '') ? Number(rawCount) : null;
+    bar.checklistResetCount = bar.resetCount;
+    bar.deadlineResetCount = bar.resetCount;
+    bar.lastResetAt = rawRepeat.lastResetAt ? (typeof rawRepeat.lastResetAt === 'number' ? rawRepeat.lastResetAt : new Date(rawRepeat.lastResetAt).getTime()) : null;
+
+    if (rawRepeat.resetTime && typeof rawRepeat.resetTime === 'string') {
+      bar.resetTime = rawRepeat.resetTime;
+    } else {
+      // Migration from duration-based delay or creation time
+      let refDate = new Date();
+      if (bar.createdAt) refDate = new Date(bar.createdAt);
+      else if (bar.lastUpdated) refDate = new Date(bar.lastUpdated);
+
+      const hrs = String(refDate.getHours()).padStart(2, '0');
+      const mins = String(refDate.getMinutes()).padStart(2, '0');
+      bar.resetTime = `${hrs}:${mins}`;
+    }
+
+    // Persist migrated unified repeat object
+    const migratedRepeat = {
+      resetTime: bar.resetTime,
+      resetCount: bar.resetCount,
+      checklistResetEnabled: bar.checklistResetEnabled,
+      deadlineResetEnabled: bar.deadlineResetEnabled,
+      lastResetAt: bar.lastResetAt
+    };
+    bar.repeat = migratedRepeat;
+    row.repeat = migratedRepeat;
+  } else {
+    bar.checklistResetEnabled = false;
+    bar.deadlineResetEnabled = false;
+    bar.resetCount = null;
+    bar.checklistResetCount = null;
+    bar.deadlineResetCount = null;
+    bar.resetTime = null;
+    bar.lastResetAt = null;
+  }
+
+  return bar;
 }
 
 /**
@@ -145,8 +267,35 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @returns {Promise<string>} The auto-generated bar ID.
  */
 export async function createBar(uid, {
-  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified
+  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
 }) {
+  let finalRepeat = null;
+  const rawCount = resetCount !== undefined 
+    ? resetCount 
+    : (checklistResetCount !== undefined ? checklistResetCount : (deadlineResetCount !== undefined ? deadlineResetCount : (repeat && (repeat.resetCount ?? repeat.checklistResetCount ?? repeat.deadlineResetCount))));
+  const parsedCount = (rawCount !== undefined && rawCount !== null && rawCount !== '') ? Number(rawCount) : null;
+  const parsedResetTime = resetTime || (repeat && repeat.resetTime) || null;
+  const isChk = !!(checklistResetEnabled || (repeat && repeat.checklistResetEnabled));
+  const isDln = !!(deadlineResetEnabled || (repeat && repeat.deadlineResetEnabled));
+
+  if (repeat && typeof repeat === 'object') {
+    finalRepeat = {
+      resetTime: parsedResetTime,
+      resetCount: parsedCount,
+      checklistResetEnabled: isChk,
+      deadlineResetEnabled: isDln,
+      lastResetAt: repeat.lastResetAt || lastResetAt || Date.now()
+    };
+  } else if (checklistResetEnabled !== undefined || deadlineResetEnabled !== undefined || resetTime !== undefined || resetCount !== undefined) {
+    finalRepeat = {
+      resetTime: parsedResetTime,
+      resetCount: parsedCount,
+      checklistResetEnabled: isChk,
+      deadlineResetEnabled: isDln,
+      lastResetAt: lastResetAt || Date.now()
+    };
+  }
+
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
@@ -169,7 +318,15 @@ export async function createBar(uid, {
       notified: notified || false,
       notifyPercent: notifyPercent || null,
       alertAtDeadline: alertAtDeadline || false,
-      deadlineNotified: deadlineNotified || false
+      deadlineNotified: deadlineNotified || false,
+      repeat: finalRepeat,
+      resetTime: finalRepeat ? finalRepeat.resetTime : null,
+      resetCount: finalRepeat ? finalRepeat.resetCount : null,
+      lastResetAt: finalRepeat ? finalRepeat.lastResetAt : null,
+      checklistResetEnabled: finalRepeat ? finalRepeat.checklistResetEnabled : false,
+      checklistResetCount: finalRepeat ? finalRepeat.resetCount : null,
+      deadlineResetEnabled: finalRepeat ? finalRepeat.deadlineResetEnabled : false,
+      deadlineResetCount: finalRepeat ? finalRepeat.resetCount : null
     };
     bars.push(newBar);
     setLocalBars(bars);
@@ -202,6 +359,7 @@ export async function createBar(uid, {
       notify_percent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
       alert_at_deadline: alertAtDeadline || false,
       deadline_notified: deadlineNotified || false,
+      repeat: finalRepeat,
       last_updated: now
     });
     if (error) throw error;
@@ -298,8 +456,39 @@ export async function editBar(uid, barId, updates) {
 }
 
 async function _editBarInternal(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
 }) {
+  let finalRepeat = undefined;
+  const rawCount = resetCount !== undefined 
+    ? resetCount 
+    : (checklistResetCount !== undefined ? checklistResetCount : (deadlineResetCount !== undefined ? deadlineResetCount : (repeat && (repeat.resetCount ?? repeat.checklistResetCount ?? repeat.deadlineResetCount))));
+  const parsedCount = (rawCount !== undefined && rawCount !== null && rawCount !== '') ? Number(rawCount) : null;
+  const parsedResetTime = resetTime || (repeat && repeat.resetTime) || null;
+  const isChk = !!(checklistResetEnabled || (repeat && repeat.checklistResetEnabled));
+  const isDln = !!(deadlineResetEnabled || (repeat && repeat.deadlineResetEnabled));
+
+  if (repeat !== undefined) {
+    if (repeat && typeof repeat === 'object') {
+      finalRepeat = {
+        resetTime: parsedResetTime,
+        resetCount: parsedCount,
+        checklistResetEnabled: isChk,
+        deadlineResetEnabled: isDln,
+        lastResetAt: repeat.lastResetAt || lastResetAt || null
+      };
+    } else {
+      finalRepeat = null;
+    }
+  } else if (checklistResetEnabled !== undefined || deadlineResetEnabled !== undefined || resetTime !== undefined || resetCount !== undefined) {
+    finalRepeat = {
+      resetTime: parsedResetTime,
+      resetCount: parsedCount,
+      checklistResetEnabled: isChk,
+      deadlineResetEnabled: isDln,
+      lastResetAt: lastResetAt || null
+    };
+  }
+
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const idx = bars.findIndex(b => b.id === barId);
@@ -318,6 +507,8 @@ async function _editBarInternal(uid, barId, {
         }
       }
 
+      const effectiveRepeat = finalRepeat !== undefined ? finalRepeat : original.repeat;
+
       bars[idx] = {
         ...original,
         title,
@@ -335,7 +526,15 @@ async function _editBarInternal(uid, barId, {
         notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent,
         alertAtDeadline: alertAtDeadline !== undefined ? alertAtDeadline : original.alertAtDeadline,
         deadlineNotified: deadlineNotified !== undefined ? deadlineNotified : original.deadlineNotified,
-        position: position !== undefined ? position : original.position
+        position: position !== undefined ? position : original.position,
+        repeat: effectiveRepeat,
+        resetTime: effectiveRepeat ? effectiveRepeat.resetTime : null,
+        resetCount: effectiveRepeat ? effectiveRepeat.resetCount : null,
+        lastResetAt: effectiveRepeat ? effectiveRepeat.lastResetAt : null,
+        checklistResetEnabled: effectiveRepeat ? effectiveRepeat.checklistResetEnabled : false,
+        checklistResetCount: effectiveRepeat ? effectiveRepeat.resetCount : null,
+        deadlineResetEnabled: effectiveRepeat ? effectiveRepeat.deadlineResetEnabled : false,
+        deadlineResetCount: effectiveRepeat ? effectiveRepeat.resetCount : null
       };
       setLocalBars(bars);
       triggerMockUpdate();
@@ -362,6 +561,10 @@ async function _editBarInternal(uid, barId, {
     if (alertAtDeadline !== undefined) updates.alert_at_deadline = alertAtDeadline;
     if (deadlineNotified !== undefined) updates.deadline_notified = deadlineNotified;
     if (position !== undefined) updates.position = position;
+    
+    if (finalRepeat !== undefined) {
+      updates.repeat = finalRepeat;
+    }
 
     if (updateDeadline) {
       if (deadlineAt) {

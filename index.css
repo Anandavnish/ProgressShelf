@@ -2762,7 +2762,7 @@ body {
 }
 
 .deadline-bar {
-  transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease;
+  transition: stroke-dasharray 1s linear, stroke-dashoffset 1s linear, stroke 0.5s ease;
 }
 
 @keyframes deadline-overdue-pulse {
@@ -2785,6 +2785,52 @@ body {
   color: #E74C3C !important;
   font-weight: 600;
   animation: deadline-overdue-pulse 1.5s ease-in-out infinite;
+}
+
+/* --- Pending Renewal State for Auto-Renewing Cards --- */
+:root {
+  --color-pending-renew: #F59E0B;
+}
+
+.card-progress.pending-renewal {
+  --bar-color: var(--color-pending-renew, #F59E0B) !important;
+}
+
+.card-deadline-label.pending-renewal {
+  color: var(--color-pending-renew, #F59E0B) !important;
+  font-weight: 600;
+  animation: deadline-pending-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes deadline-pending-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.deadline-pending-renewal {
+  animation: deadline-pending-pulse 1.8s ease-in-out infinite;
+}
+
+/* --- Soft Reset State (Case 2) --- */
+:root {
+  --color-pending-reset-soft: #0EA5E9; /* A calm sky blue/teal */
+}
+
+.card-progress.pending-reset-soft {
+  --bar-color: var(--color-pending-reset-soft, #0EA5E9) !important;
+}
+
+.card-deadline-label.pending-reset-soft {
+  color: var(--color-pending-reset-soft, #0EA5E9) !important;
+  font-weight: 500;
+}
+
+.deadline-pending-reset-soft {
+  /* No pulse animation for soft reset, just calm steady color */
 }
 
 .badge-completed {
@@ -3800,6 +3846,133 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .section-divider span {
   padding: 0 4px;
+}
+
+/* --- Repeat / Auto-Renew Settings Panel --- */
+.repeat-section {
+  margin-top: 10px;
+  transition: opacity 0.2s ease;
+}
+
+.repeat-section.disabled-repeat {
+  opacity: 0.5;
+}
+
+.repeat-section.disabled-repeat .toggle-switch input:disabled + .toggle-slider {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.repeat-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.repeat-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.repeat-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.repeat-summary-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.repeat-settings-content {
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+.repeat-settings-content.collapsed {
+  display: none;
+}
+
+.repeat-card {
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 14px;
+  margin-top: 6px;
+}
+
+.repeat-sub-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 12px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.repeat-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.repeat-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+  margin: 0;
+}
+
+.repeat-num-input {
+  width: 44px;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--ui-accent);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 1px 2px;
+}
+
+.repeat-num-input:focus {
+  outline: none;
+  border-bottom-color: var(--success);
+}
+
+.repeat-date-input {
+  padding: 2px 8px;
+  font-size: 0.82rem;
+  width: auto;
+  display: inline-block;
+}
+
+.repeat-option-divider {
+  height: 1px;
+  background: var(--border);
+  opacity: 0.4;
+}
+
+.badge-repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.08));
+  color: var(--ui-accent);
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 /* --- Notification Settings Panel inside Deadline Box --- */

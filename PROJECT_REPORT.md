@@ -4,7 +4,7 @@ This report serves as a detailed documentation of the **ProgressShelf** applicat
 
 ---
 
-## 📅 Project Journey: From v1.0 to v2.0
+## 📅 Project Journey: From v1.0 to v4.3
 
 ### Phase 1: v1.0 (The Basic Sandbox)
 * **Goal**: Create a simple progress bar tracker to avoid the complexity of spreadsheets.
@@ -18,48 +18,63 @@ This report serves as a detailed documentation of the **ProgressShelf** applicat
 * **Goal**: Enhance the application with scheduling, deadlines, and a premium visual overhaul.
 * **Features Added**:
   - **Deadlines**: The ability to bind target dates/times to your trackers.
-  - **Live Overdue Counter**: Math functions to compute remaining or overdue time (excluding seconds for clean UX) and display it using live ticking timers (`Overdue by 2d 3hr`).
+  - **Live Overdue Counter**: Math functions to compute remaining or overdue time and display it using live ticking timers (`Overdue by 2d 3hr`).
   - **UI Refinements**: Built a premium dark glassmorphic design, mobile-friendly navigation buttons, and responsive modal screens.
-  - **Version Archiving**: Instead of overwriting the original work, v1.0 was fully archived into a standalone `/versions/v1.0/` directory structure, allowing users to switch between layouts on the fly.
+  - **Version Archiving**: Standalone `/versions/` directory structure for seamless backwards compatibility.
+
+### Phase 3: v3.0 (Checklists, Notes & Stats)
+* **Goal**: Expand tracking categories beyond numeric bars into checklists and free-form notes.
+* **Features Added**:
+  - **Multi-Type Cards**: Interactive checklists and collapsible rich markdown notes.
+  - **Stats Banner & Filtering**: Dynamic status banner providing quick-filtering by active, overdue, flexible, or completed cards.
+  - **Drain-Border SVG Animation**: Perimeter border ring visualizing time remaining with smooth color transitions.
+
+### Phase 4: v4.0 to v4.3 (Supabase, Theming & Auto-Repeat System)
+* **Goal**: Enterprise-grade database backend, deep custom theming, and automated recurring routines.
+* **Features Added**:
+  - **Supabase Backend**: Real-time Postgres synchronization and secure Row Level Security (RLS).
+  - **Auto-Repeat & Reset System (v4.3)**: Automated daily resets for checklists and deadlines with custom reset times and cycle counts.
+  - **Visual Cycle States**: *Pending Renewal* (amber pulsing ring for overdue tasks awaiting reset) and *Soft Reset* (sky blue steady indicator for completed habits).
+  - **Dynamic Theming**: Cloud-synced custom accent palettes, smart HSL clamping, and 48px glassmorphic backdrops.
 
 ---
 
 ## 🛠 Architectural Blueprint
 
-The application follows a clean **Model-View-Controller (MVC) style** separation of concerns using ES Modules:
+The application follows a clean **Model-View-Controller (MVC) style** separation of concerns using native ES Modules:
 
 ```mermaid
 graph TD
-    UI[HTML Pages & CSS Layouts] <--> Controller[app.js - State & Event Listeners]
-    Controller <--> Auth[auth.js - Sign-In & Guards]
-    Controller <--> DB[db.js - Firestore & Local Storage]
-    Auth <--> Config[firebase-config.js - Credentials]
+    UI[HTML Pages & CSS Layouts] <--> Controller[app.js - State, Event Listeners & Auto-Resets]
+    Controller <--> Auth[auth.js - Supabase Auth & Session Guards]
+    Controller <--> DB[db.js - Supabase Client & Local Storage Mock]
+    Auth <--> Config[supabase-config.js / firebase-config.js]
     DB <--> Config
 ```
 
 ### 1. The Core Components
-- **`firebase-config.js`**: Handles initialization. It checks if the setup exists, exporting a helper flag `isConfigured` so the code does not break if a user clones the project without setting up Firebase.
-- **`auth.js`**: Manages auth routing. If a user is not authenticated and is not in guest mode, it automatically redirects them back to `index.html`.
-- **`db.js`**: Simplifies CRUD database operations. It transparently swaps between Firestore (cloud database) and `localStorage` (local sandbox) based on config and session flags, so the rest of your app doesn't have to worry about where the data is stored.
-- **`app.js`**: Binds database states to UI changes. Handles updating trackers, calculating remaining time percentages, rendering progress lines, and managing ticking intervals.
+- **`supabase-config.js` / `firebase-config.js`**: Handles credentials initialization with zero leaks (gitignored).
+- **`auth.js`**: Manages authentication routing and session verification via Supabase GoTrue client.
+- **`db.js`**: Unified abstraction layer seamlessly switching between Supabase Cloud and browser LocalStorage mock.
+- **`app.js`**: Main DOM controller, scroll controllers, timer intervals, and auto-repeat cycle evaluations.
 
 ---
 
 ## 🔒 Security & Performance Considerations
 
 1. **API Key Safety**:
-   - `firebase-config.js` is excluded from git tracking using `.gitignore` to prevent private Firebase project keys from leaking online.
-   - For public convenience, `firebase-config.template.js` is provided as a template.
-2. **ES Module Imports**:
-   - The application relies on CDN imports (`https://www.gstatic.com/firebasejs/9.23.0/...`) to fetch Firebase packages directly in the browser. This eliminates the need for build tools like Webpack or Vite, keeping deployment fast and simple.
+   - Private keys reside in `.gitignore` files, protected against public commits.
+   - GitHub Pages deployments utilize GitHub Repository Secrets to populate configurations safely in CI/CD.
+2. **ES Module Architecture**:
+   - Zero compile/build steps; runs natively in modern browsers with maximum loading speed.
 3. **Data Security**:
-   - Guest data is completely isolated in the user's browser client (`localStorage`), keeping it private.
-   - Firebase data uses Firebase Security Rules to restrict document read/write access to the authenticated owner.
+   - Row Level Security (RLS) ensures each authenticated user strictly accesses their own rows.
+   - Guest data remains completely isolated on the local client device.
 
 ---
 
 ## 💡 Key Accomplishments to Share
-When describing this project, here are the main milestones you achieved:
-- **Created a modular, zero-build progressive web app**: Runs instantly on standard browsers and static hosting sites (like GitHub Pages) without needing compile steps.
-- **Engineered an offline-to-online data sync migration flow**: Users starting without logging in don't lose their data—logging in later automatically migrates local sandbox data to the Cloud Firestore database.
-- **Implemented live timezone-aware status checks**: Handles target dates, ticking intervals, and relative time expressions seamlessly.
+- **Zero-build progressive web app**: Fully offline-capable, responsive, and installable on Android, iOS, Windows, and macOS.
+- **Intelligent Habit Auto-Resets**: Automates daily routines with distinct visual cycle states (Pending Renewal vs Soft Reset).
+- **Offline-to-online auto migration**: Zero data loss when transitioning from Guest sandbox mode to authenticated accounts.
+- **Live timezone-aware calculations**: Accurate down to the millisecond across global timezones.

@@ -7,7 +7,7 @@
   &nbsp;•&nbsp;
   <a href="https://github.com/Anandavnish/ProgressShelf">GitHub Repo</a>
   &nbsp;•&nbsp;
-  <img src="https://img.shields.io/badge/version-v4.2-38BDF8?style=flat-square" alt="v4.2"/>
+  <img src="https://img.shields.io/badge/version-v4.3-38BDF8?style=flat-square" alt="v4.3"/>
   &nbsp;•&nbsp;
   <img src="https://img.shields.io/badge/license-MIT-4ADE80?style=flat-square" alt="MIT"/>
 </p>
@@ -20,14 +20,15 @@ Built with zero build tools. Runs instantly on any static host.
 
 ---
 
-## 🌟 What's New in v4.0
+## 🌟 What's New in v4.3
 
-- **Supabase Backend Migration** — Fully migrated authentication and database management from Firebase to **Supabase**. Secure data is fetched directly using Supabase client libraries under strict Row Level Security (RLS) policies.
-- **Dynamic Controls Dashboard** — Added a layout controls bar right below the stats banner, offering quick access to version selection, GitHub repository links, manual Service Worker refresh, and bulk edit actions.
-- **Bulk Deletion Manager** — Select multiple progress cards, checklists, or notes to delete them in one single batch. Repurposes the sort selection container dynamically to display the selected count and handle the bulk action.
-- **Terrace Updates Overlay** — Built a beautiful, glassmorphic Updates overlay screen ("Terrace") displaying the detailed release changelog from v1.0 to v4.0. Supports native-like mobile back gesture navigation using the HTML5 History API.
-- **Sequential Scrolling Headers** — Scrolling down auto-hides headers sequentially (Controls row ➔ Stats banner ➔ Mobile subbar) to maximize screen space on phones. Scrolling up reveals them in reverse order.
-- **Resilient Config Extraction** — Extracted private keys and API credentials into gitignored files (`supabase-config.js` and `firebase-config.js`) to secure the project and completely resolve GitHub Secret Scanning Alerts.
+- **Auto-Repeat & Habit Reset System** — Automated daily recurring routines for checklists and deadlines with configurable reset times (e.g. 06:00 AM) and optional total cycle counts.
+- **Intelligent Visual Cycle States** — Dynamic visual feedback for recurring cards:
+  - *Pending Renewal* (amber pulsing ring & status badge for overdue tasks awaiting the scheduled daily reset time).
+  - *Soft Reset* (calm sky blue steady indicator for completed habits awaiting the next daily cycle).
+- **Glassmorphism 48px Blur & Theme Polish** — Enhanced dropdown menu backdrops to 48px blur with 70% opacity in light mode for crystal-clear readability, and decoupled theme accents to preserve text contrast.
+- **Full-Width Sticky Header Backdrops** — Extended sticky dashboard controls to span the full viewport width smoothly on widescreen displays.
+- **About Page Redesign & Markdown Renderer** — Sleek container-based About page powered by an inline Markdown parser rendering features, PWA triggers, and feedback links.
 
 ---
 
@@ -48,16 +49,21 @@ Built with zero build tools. Runs instantly on any static host.
 - **Dynamic Status Badges**: Live-updating countdown labels (`2 days 3 hrs left` or `Overdue by 45 mins`).
 - **Animated SVG Border**: Deadline border ring that drains clockwise and shifts color from green → red as time runs out.
 
-### 4. Stats Banner & Filtering 📊
+### 4. Auto-Repeat & Daily Habit Resets 🔁
+- **Daily Checklist Reset**: Recurring checklists automatically uncheck all items at your chosen daily time for effortless daily routines and workouts.
+- **Deadline Auto-Renewal**: Deadlines advance by 24-hour cycles upon reset while respecting optional repeat limits.
+- **Smart Cycle Feedback**: Distinct visual cues for *Pending Renewal* (amber pulse) and *Soft Reset* (sky blue steady).
+
+### 5. Stats Banner & Filtering 📊
 - Always-visible summary strip displaying counts for: All Trackers, Active Deadlines, Overdue, Completed, and Flexible Goals (no deadline).
 - Click any stat button to instantly filter the dashboard to that category.
 
-### 5. Global Search 🔍
+### 6. Global Search 🔍
 - Live search bar in the navbar filters cards by title in real time.
 - A helper notification appears when matches exist in other filter categories, with a one-click "Clear filters to view" shortcut.
 
-### 6. Flexible Authentication Modes 🔐
-- **Google Sign-In**: Cloud storage synced instantly across all devices via Supabase Auth.
+### 7. Flexible Authentication Modes 🔐
+- **Google Sign-In & Email Auth**: Cloud storage synced instantly across all devices via Supabase Auth.
 - **Local Sandbox (Guest Mode)**: Full functionality without an account. Data is persisted securely in `localStorage` / `sessionStorage`.
 - **Automatic Migration**: Starting as Guest and signing in later seamlessly migrates local trackers to the cloud database.
 
@@ -68,12 +74,12 @@ Built with zero build tools. Runs instantly on any static host.
 | Layer | Technology |
 |---|---|
 | Frontend | Vanilla HTML5, CSS3, ES6 Modules |
-| Auth | Supabase Auth (Google Provider) |
+| Auth | Supabase Auth (Google & Email Providers) |
 | Database | Supabase PostgreSQL (real-time sync, Row Level Security) |
 | Push Notifications | Firebase Cloud Messaging (FCM Client + Service Worker) |
 | Offline | `localStorage` / `sessionStorage` (Guest Mode) |
 | Hosting | GitHub Pages (zero-build static deploy with Actions) |
-| Styling | HSL-based dark theme, glassmorphism (`blur(12px)`), CSS keyframes |
+| Styling | HSL-based dark theme, glassmorphism (`blur(48px)`), CSS keyframes |
 
 ---
 
@@ -134,26 +140,36 @@ ProgressShelf/
 ├── .github/
 │   └── workflows/
 │       ├── deploy.yml            # Automated CI/CD deployment to GitHub Pages (uses secrets)
-│       └── notify.yml            # Background FCM push notification triggers
+│       └── test-notify.yml       # Manual test diagnostic push notification trigger
 ├── supabase/
-│   ├── schema.sql                # Supabase database schema (Row Level Security policies)
+│   ├── schema.sql                # Supabase database schema (RLS policies & repeat JSONB)
 │   └── functions/                # Serverless Edge Functions (e.g. for notifications)
 ├── versions/
 │   ├── v1.0/                     # v1.0 (Basic) — self-contained archive (Firebase)
 │   ├── v2.0/                     # v2.0 (Stable) — deadlines & visual indicators (Firebase)
-│   └── v3.0/                     # v3.0 (Stats) — stats banner & multi-card formats (Firebase)
-├── index.html                    # Main landing page (Google OAuth & Guest option)
-├── dashboard.html                # v4.0 Dashboard — controls dashboard, bulk deletion, updates modal
-├── app.js                        # Main application logic — scrolling headers, rendering, resize handlers
+│   ├── v3.0/                     # v3.0 (Stats) — stats banner & multi-card formats (Firebase)
+│   └── v4.0/                     # v4.0 (Supabase) — Supabase backend migration archive
+├── index.html                    # Main landing page (Google OAuth, Email & Guest option)
+├── dashboard.html                # v4.3 Dashboard — controls dashboard, bulk deletion, auto-resets
+├── about.html                    # About ProgressShelf & feature guide with Markdown renderer
+├── reset-password.html           # Password recovery page
+├── reset-password.js             # Password recovery client controller
+├── app.js                        # Main application logic — scrolling headers, rendering, auto-resets
 ├── auth.js                       # Auth client routing & session handlers (Supabase client)
 ├── db.js                         # Database CRUD abstraction layer (Supabase Client + localStorage)
 ├── firebase-config.js            # Local Firebase FCM config credentials (gitignored)
 ├── firebase-config.example.js    # Example Firebase FCM config template
 ├── supabase-config.js            # Local Supabase DB client configuration (gitignored)
 ├── index.css                     # Design system — styles, cascading filters, animations
-├── sw.js                         # Service Worker — caching, background fetch & FCM listeners
+├── sw.js                         # Service Worker — caching (v183+), background fetch & FCM listeners
 ├── manifest.json                 # PWA application manifest rules
 ├── logo.svg                      # Animated rising-bar chart logo
+├── favicon.svg                   # Website tab icon
+├── badge.png                     # Monochrome status bar notification badge
+├── badge.svg                     # Status bar badge vector
+├── brain.md                      # Comprehensive project blueprint & data models
+├── PROJECT_REPORT.md             # Developer & project report
+├── fcm_notifications_report.md   # FCM notifications report
 └── README.md                     # This file
 ```
 
@@ -172,7 +188,10 @@ ProgressShelf/
 
 | Version | Status | Highlights |
 |---|---|---|
-| **v4.0** | ✅ Latest (root) | Supabase migration, controls dashboard row, bulk deletion manager, What's New (Terrace) screen, sequential scroll headers, glassmorphism alignments |
+| **v4.3** | ✅ Latest (root) | Checklist & Deadline Auto-Repeat, Pending Renewal (amber pulse) & Soft Reset (sky blue) states, 48px glassmorphism blur, header backdrops |
+| **v4.2** | 🗂 Previous | Dynamic theming & custom accent palettes, notification direct view action, About page box redesign, status bar stencil badge |
+| **v4.1** | 🗂 Previous | Demo card backdated rendering fixes, font metrics sync, drain-border fallback refinement |
+| **v4.0** | 🗂 Archived | Supabase migration, controls dashboard row, bulk deletion manager, What's New (Terrace) screen, sequential scroll headers |
 | **v3.0** | 🗂 Archived | Checklist & Note tracker types, Stats banner, Global search, Inline delete, Animated deadline SVG border (Firebase) |
 | **v2.0** | 🗂 Archived | Deadlines, live overdue counter, glassmorphic UI overhaul (Firebase) |
 | **v1.0** | 🗂 Archived | Single-level progress bars, Guest mode, Firebase auth (Firebase) |
@@ -186,3 +205,4 @@ This project is open-source and available under the **MIT License**.
 ---
 
 *Built by [Anand Avnish](https://github.com/Anandavnish) with AI assistance (Antigravity, Claude & Gemini).*
+

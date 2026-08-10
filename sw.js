@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v166';
+const CACHE_NAME = 'progressshelf-cache-v183';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
