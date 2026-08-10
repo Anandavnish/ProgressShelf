@@ -2541,10 +2541,11 @@ body {
   }
 }
 
-/* Fullscreen Modal for Create & Edit Modals on Phone Size Screens (<= 600px), centered popup on tablet/laptop */
+/* Fullscreen Modal for Create, Edit, and non-Goal Update Modals on Phone Size Screens (<= 600px) */
 @media (max-width: 600px) {
   #modal-create,
-  #modal-edit {
+  #modal-edit,
+  #modal-update:not([data-card-type="goal"]) {
     padding: 0 !important;
     align-items: stretch !important;
     justify-content: stretch !important;
@@ -2554,7 +2555,8 @@ body {
   }
 
   #modal-create .modal-container,
-  #modal-edit .modal-container {
+  #modal-edit .modal-container,
+  #modal-update:not([data-card-type="goal"]) .modal-container {
     width: 100vw !important;
     max-width: 100vw !important;
     height: 100vh !important;
@@ -2572,12 +2574,14 @@ body {
   }
 
   #modal-create.active .modal-container,
-  #modal-edit.active .modal-container {
+  #modal-edit.active .modal-container,
+  #modal-update:not([data-card-type="goal"]).active .modal-container {
     transform: none !important;
   }
 
   #modal-create .modal-container form,
-  #modal-edit .modal-container form {
+  #modal-edit .modal-container form,
+  #modal-update:not([data-card-type="goal"]) .modal-container form {
     display: flex !important;
     flex-direction: column !important;
     flex: 1 1 auto !important;
@@ -2587,7 +2591,8 @@ body {
   }
 
   #modal-create .modal-header,
-  #modal-edit .modal-header {
+  #modal-edit .modal-header,
+  #modal-update:not([data-card-type="goal"]) .modal-header {
     flex-shrink: 0 !important;
     padding: 16px 20px !important;
     padding-top: max(16px, env(safe-area-inset-top)) !important;
@@ -2599,13 +2604,15 @@ body {
   }
 
   #modal-create .modal-title,
-  #modal-edit .modal-title {
+  #modal-edit .modal-title,
+  #modal-update:not([data-card-type="goal"]) .modal-title {
     font-size: 1.15rem !important;
     font-weight: 700 !important;
   }
 
   #modal-create .btn-close-modal,
-  #modal-edit .btn-close-modal {
+  #modal-edit .btn-close-modal,
+  #modal-update:not([data-card-type="goal"]) .btn-close-modal {
     padding: 8px !important;
     margin-right: -8px !important;
     font-size: 1.6rem !important;
@@ -2618,7 +2625,8 @@ body {
   }
 
   #modal-create .modal-body,
-  #modal-edit .modal-body {
+  #modal-edit .modal-body,
+  #modal-update:not([data-card-type="goal"]) .modal-body {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     padding: 20px 16px !important;
@@ -2628,7 +2636,8 @@ body {
   }
 
   #modal-create .modal-footer,
-  #modal-edit .modal-footer {
+  #modal-edit .modal-footer,
+  #modal-update:not([data-card-type="goal"]) .modal-footer {
     flex-shrink: 0 !important;
     padding: 14px 16px !important;
     padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;
@@ -2638,25 +2647,43 @@ body {
   }
 
   #modal-create .modal-footer .btn,
-  #modal-edit .modal-footer .btn {
+  #modal-edit .modal-footer .btn,
+  #modal-update:not([data-card-type="goal"]) .modal-footer .btn {
     flex: 1 1 auto;
     text-align: center;
     justify-content: center;
   }
 
-  /* Keep Update Progress modal as a compact popup dialog on phone */
-  #modal-update {
+  /* Keep Update Progress modal for Goal cards as a compact popup dialog on phone */
+  #modal-update[data-card-type="goal"] {
     padding: 16px !important;
     align-items: center !important;
     justify-content: center !important;
+    background-color: rgba(10, 12, 16, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
   }
 
-  #modal-update .modal-container {
+  #modal-update[data-card-type="goal"] .modal-container {
     width: 100% !important;
     max-width: 440px !important;
-    border-radius: 16px !important;
+    height: auto !important;
     max-height: 90vh !important;
     max-height: 90dvh !important;
+    border-radius: 16px !important;
+    border: 1px solid var(--card-border) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
+    margin: auto !important;
+  }
+
+  #modal-update[data-card-type="goal"] .modal-header {
+    padding: 20px 24px !important;
+    padding-top: 20px !important;
+  }
+
+  #modal-update[data-card-type="goal"] .modal-footer {
+    padding: 20px 24px !important;
+    padding-bottom: 20px !important;
   }
 
   #update-actions-standard {

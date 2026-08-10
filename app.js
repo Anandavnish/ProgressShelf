@@ -3716,6 +3716,7 @@ function openUpdateModal(bar) {
   updateActionsStandard.classList.remove("hidden");
 
   const barType = bar.type || "goal";
+  if (modalUpdate) modalUpdate.setAttribute("data-card-type", barType);
   toggleUpdateTypeFields(barType);
 
   if (barType === "goal") {
