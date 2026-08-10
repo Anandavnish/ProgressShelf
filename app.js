@@ -1882,7 +1882,12 @@ function createCardElement(bar) {
   card.className = "card-progress";
   card.setAttribute("data-bar-id", bar.id);
 
-  // Calculate completion percentage and update theme color
+  // Calculate completion percentage
+  const percent = bar.targetSmallest > 0
+    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+    : 0;
+
+  // Apply theme color to card progress bar
   applyCardProgressColor(card, bar);
 
   // Set timestamp reference for the 5-minute background check
