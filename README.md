@@ -26,6 +26,7 @@ Built with zero build tools. Runs instantly on any static host.
 - **Intelligent Visual Cycle States** — Dynamic visual feedback for recurring cards:
   - *Pending Renewal* (amber pulsing ring & status badge for overdue tasks awaiting the scheduled daily reset time).
   - *Soft Reset* (calm sky blue steady indicator for completed habits awaiting the next daily cycle).
+- **App Font Customizer & Typography Engine** — Choose your preferred typeface directly in the profile menu: **Default (Outfit)**, **Space Mono** (the tech monospace inspired by Smash.am), or **JetBrains Mono**. Preferences persist across sessions and sync to Supabase with zero FOUT.
 - **Glassmorphism 48px Blur & Theme Polish** — Enhanced dropdown menu backdrops to 48px blur with 70% opacity in light mode for crystal-clear readability, and decoupled theme accents to preserve text contrast.
 - **Full-Width Sticky Header Backdrops** — Extended sticky dashboard controls to span the full viewport width smoothly on widescreen displays.
 - **About Page Redesign & Markdown Renderer** — Sleek container-based About page powered by an inline Markdown parser rendering features, PWA triggers, and feedback links.
@@ -54,15 +55,20 @@ Built with zero build tools. Runs instantly on any static host.
 - **Deadline Auto-Renewal**: Deadlines advance by 24-hour cycles upon reset while respecting optional repeat limits.
 - **Smart Cycle Feedback**: Distinct visual cues for *Pending Renewal* (amber pulse) and *Soft Reset* (sky blue steady).
 
-### 5. Stats Banner & Filtering 📊
+### 5. App Typography & Custom Font Setting 🔤
+- Switch between **Default (Outfit)**, **Space Mono** (Smash.am goal style), and **JetBrains Mono** directly from the profile dropdown.
+- Zero-FOUT early head execution ensures instant typography without visual jumps on page load.
+- Preferences automatically sync to the cloud via Supabase `user_settings`.
+
+### 6. Stats Banner & Filtering 📊
 - Always-visible summary strip displaying counts for: All Trackers, Active Deadlines, Overdue, Completed, and Flexible Goals (no deadline).
 - Click any stat button to instantly filter the dashboard to that category.
 
-### 6. Global Search 🔍
+### 7. Global Search 🔍
 - Live search bar in the navbar filters cards by title in real time.
 - A helper notification appears when matches exist in other filter categories, with a one-click "Clear filters to view" shortcut.
 
-### 7. Flexible Authentication Modes 🔐
+### 8. Flexible Authentication Modes 🔐
 - **Google Sign-In & Email Auth**: Cloud storage synced instantly across all devices via Supabase Auth.
 - **Local Sandbox (Guest Mode)**: Full functionality without an account. Data is persisted securely in `localStorage` / `sessionStorage`.
 - **Automatic Migration**: Starting as Guest and signing in later seamlessly migrates local trackers to the cloud database.

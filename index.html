@@ -39,6 +39,19 @@
         const b = parseInt(accent.slice(5,7), 16);
         document.documentElement.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.18)`);
       }
+
+      // Apply Font Setting instantly
+      const font = localStorage.getItem('app-font-family') || 'outfit';
+      if (font === 'space-mono') {
+        document.documentElement.style.setProperty('--font-family', "'Space Mono', monospace");
+        document.documentElement.classList.add('font-space-mono');
+      } else if (font === 'jetbrains-mono') {
+        document.documentElement.style.setProperty('--font-family', "'JetBrains Mono', monospace");
+        document.documentElement.classList.add('font-jetbrains-mono');
+      } else {
+        document.documentElement.style.setProperty('--font-family', "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+        document.documentElement.classList.add('font-outfit');
+      }
     })();
   </script>
 </head>

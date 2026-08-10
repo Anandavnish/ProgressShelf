@@ -38,9 +38,20 @@ CREATE TABLE fcm_tokens (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- User Settings table (Theme, Accent, Font & Preferences)
+CREATE TABLE user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  accent_color TEXT,
+  custom_accents JSONB,
+  font_family TEXT,
+  preferred_sort TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- RLS Policies
 ALTER TABLE trackers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fcm_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users own their trackers" ON trackers
   FOR ALL USING (auth.uid() = user_id);
@@ -48,13 +59,18 @@ CREATE POLICY "Users own their trackers" ON trackers
 CREATE POLICY "Users own their tokens" ON fcm_tokens
   FOR ALL USING (auth.uid() = user_id);
 
+CREATE POLICY "Users own their settings" ON user_settings
+  FOR ALL USING (auth.uid() = user_id);
+
 -- Explicitly grant permissions to API roles
 GRANT ALL ON TABLE public.trackers TO postgres, anon, authenticated, service_role;
 GRANT ALL ON TABLE public.fcm_tokens TO postgres, anon, authenticated, service_role;
+GRANT ALL ON TABLE public.user_settings TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
 
 -- Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE trackers;
+ALTER PUBLICATION supabase_realtime ADD TABLE user_settings;
 
 -- Run notify edge function every 1 minute
 SELECT cron.schedule(

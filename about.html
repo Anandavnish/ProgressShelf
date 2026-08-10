@@ -34,6 +34,19 @@
       } else {
         document.documentElement.classList.add('dark-theme');
       }
+
+      // Apply Font Setting instantly
+      const font = localStorage.getItem('app-font-family') || 'outfit';
+      if (font === 'space-mono') {
+        document.documentElement.style.setProperty('--font-family', "'Space Mono', monospace");
+        document.documentElement.classList.add('font-space-mono');
+      } else if (font === 'jetbrains-mono') {
+        document.documentElement.style.setProperty('--font-family', "'JetBrains Mono', monospace");
+        document.documentElement.classList.add('font-jetbrains-mono');
+      } else {
+        document.documentElement.style.setProperty('--font-family', "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+        document.documentElement.classList.add('font-outfit');
+      }
     })();
   </script>
 </head>
@@ -83,6 +96,9 @@ Checklists and deadlines can reset automatically at your chosen daily time. Chec
 
 ### Notifications, your way
 Set an alert at an exact deadline, a fixed time before it, or as a percentage of time remaining — whatever matches how you actually think about time.
+
+### Typography, your way
+Switch seamlessly between modern sans (**Outfit**), bold tech monospace (**Space Mono** — inspired by Smash.am), and developer monospace (**JetBrains Mono**) from the profile menu. Your font preference syncs across all your devices automatically.
 
 ### Built to bend
 Nothing is locked in once saved — edit any card, any field, at any stage. Input fields are forgiving too: type 1.5 in an hours field and it's read as 1 hr 30 min.

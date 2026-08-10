@@ -368,3 +368,18 @@ export async function updateUserThemePreference(themeMode, accentColor, customAc
     console.error("Failed to update user theme preference:", err);
   }
 }
+
+/**
+ * Persists the user's font family preference to Supabase user_settings.
+ * @param {string} fontFamily 'outfit' | 'space-mono' | 'jetbrains-mono'
+ */
+export async function updateUserFontPreference(fontFamily) {
+  if (!isConfigured || isGuestMode()) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await updateUserSettings(user.id, { font_family: fontFamily });
+  } catch (err) {
+    console.error("Failed to update user font preference:", err);
+  }
+}

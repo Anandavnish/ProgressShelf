@@ -111,9 +111,18 @@ interface RepeatConfig {
 }
 ```
 
-### B. Device Registration Schema
-FCM tokens are stored in the Supabase `fcm_tokens` table mapped to authenticated user IDs to support multi-device push delivery:
+### B. User Settings & Device Registration Schema
+User settings and preferences (accent color, custom palette, font family) and FCM tokens are persisted in Supabase:
 ```typescript
+interface UserSettings {
+  user_id: string;               // Auth user UUID
+  accent_color?: string;         // Active hex accent color
+  custom_accents?: string[];     // User-saved custom hex swatches (up to 4)
+  font_family?: 'outfit' | 'space-mono' | 'jetbrains-mono'; // Chosen global typography
+  preferred_sort?: string;       // Saved sort filter
+  updated_at: string;
+}
+
 interface DeviceToken {
   id: string;                    // Supabase row UUID
   user_id: string;               // Auth user UUID
@@ -126,7 +135,18 @@ interface DeviceToken {
 
 ## 4. Key Architectural Workflows
 
-### A. Auto-Repeat & Reset System (Pending Renewal vs Soft Reset)
+### A. Typography & Font Customization Engine
+ProgressShelf allows users to switch the app's entire typeface dynamically:
+1. **Font Options**:
+   - **Default (Outfit)**: Clean, modern geometric sans-serif (`'Outfit', sans-serif`).
+   - **Space Mono**: Bold, stylized neo-brutalist monospace typeface (`'Space Mono', monospace` — inspired by Smash.am).
+   - **JetBrains Mono**: Sleek developer monospace typeface (`'JetBrains Mono', monospace`).
+2. **Zero-FOUT (Flash of Unstyled Text) Execution**:
+   - An inline script in `<head>` runs synchronously before DOM paint, reading `localStorage['app-font-family']` and immediately binding `--font-family` and matching class (`font-outfit`, `font-space-mono`, `font-jetbrains-mono`).
+3. **Cross-Device Real-Time Sync**:
+   - Choosing a font updates `localStorage` and triggers `updateUserFontPreference(fontId)`, writing to Supabase `user_settings`. All other open sessions receive real-time postgres updates via `subscribeToUserSettings()` and update instantly.
+
+### B. Auto-Repeat & Reset System (Pending Renewal vs Soft Reset)
 ProgressShelf supports automated daily recurring routines for both checklists and deadlines:
 1. **Reset Trigger & Evaluation Loop:** The client evaluates active trackers periodically (on page load, ticking intervals, visibility change, and real-time subscription events) via `evaluateAutoResets()`.
 2. **Case 1: Pending Renewal State (`.pending-renewal`)**:

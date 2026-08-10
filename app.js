@@ -1,5 +1,5 @@
 import { isConfigured } from "./supabase-config.js?v=2.3";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference } from "./auth.js?v=2.3";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference } from "./auth.js?v=2.4";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=2.3";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
@@ -5197,7 +5197,7 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
-  // Sync Theme Preferences from DB
+  // Sync Theme & Font Preferences from DB
   if (user) {
     const settings = await getUserSettings(user.uid);
     if (settings) {
@@ -5212,6 +5212,13 @@ initAuthProtection(async (user) => {
         try {
           localStorage.setItem('app-custom-accents', JSON.stringify(settings.custom_accents));
         } catch(e) {}
+      }
+
+      if (settings.font_family) {
+        localStorage.setItem('app-font-family', settings.font_family);
+        if (typeof window.applyFontFamily === 'function') {
+          window.applyFontFamily(settings.font_family);
+        }
       }
     }
 
@@ -5233,6 +5240,13 @@ initAuthProtection(async (user) => {
             window.updateAccentFromSync(localStorage.getItem('app-accent-color'));
           }
         } catch(e) {}
+      }
+
+      if (newSettings.font_family) {
+        localStorage.setItem('app-font-family', newSettings.font_family);
+        if (typeof window.applyFontFamily === 'function') {
+          window.applyFontFamily(newSettings.font_family);
+        }
       }
     });
   }
@@ -7409,6 +7423,7 @@ const terraceUpdates = [
 * **Intelligent Visual Cycle States**:
   - **Pending Renewal (Amber Pulse)**: Cards that pass their deadline glow with a warm amber border and pulsing status badge while awaiting the scheduled daily reset time.
   - **Soft Reset (Sky Blue)**: Completed checklists and goals before the deadline remain calm with a serene sky-blue accent until the next daily cycle begins.
+* **App Font Customizer**: Select your preferred typography style directly in the profile menu — choose between **Default (Outfit)**, **Space Mono** (the punchy tech monospace seen on Smash.am), or **JetBrains Mono**. Preferences persist across sessions and sync to Supabase.
 * **Deep Glassmorphism Polish**: Increased dropdown menu backdrops to 48px blur with 70% opacity in light mode for enhanced contrast and depth.
 * **Header Backdrop Stretch**: Extended sticky dashboard controls to span the full viewport width smoothly on widescreen displays.
 * **Global Theme Decoupling**: Refined UI elements to decouple fixed accents from dynamic themes, ensuring crystal-clear text readability across all custom accent colors.
@@ -8408,6 +8423,76 @@ function initAccentColor() {
 }
 
 initAccentColor();
+
+// ==========================================
+// Font Family Setting Controller
+// ==========================================
+const FONT_STORAGE_KEY = 'app-font-family';
+const FONTS_CONFIG = {
+  'outfit': {
+    family: "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    className: 'font-outfit',
+    name: 'Default (Outfit)'
+  },
+  'space-mono': {
+    family: "'Space Mono', monospace",
+    className: 'font-space-mono',
+    name: 'Space Mono'
+  },
+  'jetbrains-mono': {
+    family: "'JetBrains Mono', monospace",
+    className: 'font-jetbrains-mono',
+    name: 'JetBrains Mono'
+  }
+};
+
+function applyFontFamily(fontId) {
+  const selected = FONTS_CONFIG[fontId] || FONTS_CONFIG['outfit'];
+  const effectiveId = FONTS_CONFIG[fontId] ? fontId : 'outfit';
+
+  document.documentElement.classList.remove('font-outfit', 'font-space-mono', 'font-jetbrains-mono');
+  document.documentElement.classList.add(selected.className);
+  document.documentElement.style.setProperty('--font-family', selected.family);
+
+  // Sync active UI buttons in profile dropdown
+  document.querySelectorAll('.font-picker-item').forEach(item => {
+    if (item.getAttribute('data-font') === effectiveId) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+function initFontFamily() {
+  const savedFont = localStorage.getItem(FONT_STORAGE_KEY) || 'outfit';
+  applyFontFamily(savedFont);
+
+  // Bind click handlers to font picker items
+  document.querySelectorAll('.font-picker-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fontId = item.getAttribute('data-font');
+      if (!fontId || !FONTS_CONFIG[fontId]) return;
+
+      localStorage.setItem(FONT_STORAGE_KEY, fontId);
+      applyFontFamily(fontId);
+
+      // Save to Supabase user_settings if authenticated
+      if (typeof updateUserFontPreference === 'function') {
+        updateUserFontPreference(fontId);
+      }
+
+      const fontName = FONTS_CONFIG[fontId].name;
+      showToast(`Font set to ${fontName}`, 'info');
+    });
+  });
+
+  // Expose globally for realtime sync
+  window.applyFontFamily = applyFontFamily;
+}
+
+initFontFamily();
 
 // Global listeners for closing dropdown menus
 function closeAllMenus() {
