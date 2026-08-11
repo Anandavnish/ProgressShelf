@@ -1540,7 +1540,12 @@ function updateCardElement(card, bar) {
     card.classList.remove("pulse-glow");
   }
 
-  // Calculate completion percentage and update theme color
+  // Calculate completion percentage
+  const percent = bar.targetSmallest > 0
+    ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
+    : 0;
+
+  // Apply theme color to card progress bar
   applyCardProgressColor(card, bar);
 
   // Update title
@@ -2412,7 +2417,13 @@ function renderDashboard(bars) {
           // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
           expectedElements.push(oldCard);
         } else {
-          const updated = updateCardElement(oldCard, bar);
+          let updated = false;
+          try {
+            updated = updateCardElement(oldCard, bar);
+          } catch (e) {
+            console.warn("updateCardElement failed for card, rebuilding card element:", e);
+            updated = false;
+          }
           if (updated) {
             expectedElements.push(oldCard);
           } else {

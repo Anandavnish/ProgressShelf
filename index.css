@@ -713,6 +713,10 @@ body, .navbar, .mobile-subbar, .stats-banner, .stats-btn, .card-progress, .about
   display: none;
 }
 
+html {
+  font-size: 93.75%; /* Lower default font size by 1 unit (16px -> 15px base) */
+}
+
 /* Base resets */
 * {
   box-sizing: border-box;

@@ -79,6 +79,7 @@ export async function signOut() {
     console.warn('FCM token cleanup failed:', e);
   } finally {
     // Step 2: Always clear local state regardless of FCM cleanup result
+    localStorage.removeItem('ps_cached_user');
     localStorage.removeItem('ps_fcm_token');
     localStorage.removeItem('ps_guest_bars');
     sessionStorage.removeItem('password_setup_pending');
@@ -97,6 +98,7 @@ export async function signOut() {
 export async function logout() {
   if (!isConfigured) {
     localStorage.removeItem("progress_shelf_demo");
+    localStorage.removeItem("ps_cached_user");
     window.location.href = "index.html";
     return;
   }
@@ -251,9 +253,25 @@ export function initAuthProtection(onUserActive) {
     return Promise.resolve(null);
   }
 
+  // Helper to read cached user profile from localStorage
+  const getCachedUser = () => {
+    try {
+      const raw = localStorage.getItem("ps_cached_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch(e) {
+      return null;
+    }
+  };
+
   // Check initial session state
   return supabase.auth.getSession().then(({ data: { session } }) => {
-    const user = session ? mapSupabaseUser(session.user) : null;
+    let user = session ? mapSupabaseUser(session.user) : null;
+    if (user) {
+      localStorage.setItem("ps_cached_user", JSON.stringify(user));
+    } else {
+      user = getCachedUser();
+    }
+
     const isGuest = isGuestMode();
     const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
@@ -285,15 +303,19 @@ export function initAuthProtection(onUserActive) {
       // Ignore INITIAL_SESSION to prevent duplicate startup checks or race conditions
       if (event === 'INITIAL_SESSION') return;
 
-      const user = session ? mapSupabaseUser(session.user) : null;
+      let user = session ? mapSupabaseUser(session.user) : null;
+      if (user) {
+        localStorage.setItem("ps_cached_user", JSON.stringify(user));
+      }
       const isGuest = isGuestMode();
       const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
       if (event === 'SIGNED_OUT') {
+        localStorage.removeItem("ps_cached_user");
         if (isDashboard && !isGuest) {
           window.location.href = "index.html";
         }
-      } else if (event === 'SIGNED_IN') {
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (navigator.storage && navigator.storage.persist) {
           navigator.storage.persist().then((granted) => {
             console.log('[Auth] Persistent storage granted:', granted);
@@ -306,6 +328,10 @@ export function initAuthProtection(onUserActive) {
         }
       }
     });
+
+    return user;
+  });
+}
 
     return user;
   });

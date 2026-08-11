@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v185';
+const CACHE_NAME = 'progressshelf-cache-v186';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -77,9 +77,15 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch((err) => {
-          // If offline and navigate request fails, return offline fallback from cache
+          // If offline and navigate request fails, return cached page (prioritizing dashboard.html if target)
           if (event.request.mode === 'navigate') {
-            return caches.match('./', { ignoreSearch: true });
+            const reqUrl = event.request.url || "";
+            if (reqUrl.includes("dashboard.html")) {
+              return caches.match("dashboard.html", { ignoreSearch: true }).then(r => r || caches.match("./", { ignoreSearch: true }));
+            }
+            return caches.match(event.request, { ignoreSearch: true })
+              .then(r => r || caches.match("dashboard.html", { ignoreSearch: true }))
+              .then(r => r || caches.match("./", { ignoreSearch: true }));
           }
           console.warn('[Service Worker] Fetch failed, using cache:', err);
         });
