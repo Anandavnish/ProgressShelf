@@ -333,10 +333,6 @@ export function initAuthProtection(onUserActive) {
   });
 }
 
-    return user;
-  });
-}
-
 /**
  * Handles account deletion logic on the client side.
  */

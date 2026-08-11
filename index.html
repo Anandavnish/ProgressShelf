@@ -53,6 +53,14 @@
         document.documentElement.style.setProperty('--font-family', "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
         document.documentElement.classList.add('font-outfit');
       }
+
+      // Fast redirect for active session / guest user before rendering landing card
+      const cachedUser = localStorage.getItem('ps_cached_user');
+      const isGuest = sessionStorage.getItem('guest_mode') === 'true';
+      const isPending = sessionStorage.getItem('password_setup_pending') === 'true';
+      if ((cachedUser || isGuest) && !isPending) {
+        window.location.replace("dashboard.html");
+      }
     })();
   </script>
 </head>
