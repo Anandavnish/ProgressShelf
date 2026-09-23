@@ -7,7 +7,7 @@
   &nbsp;•&nbsp;
   <a href="https://github.com/Anandavnish/ProgressShelf">GitHub Repo</a>
   &nbsp;•&nbsp;
-  <img src="https://img.shields.io/badge/version-v4.4-38BDF8?style=flat-square" alt="v4.4"/>
+  <img src="https://img.shields.io/badge/version-v4.5-38BDF8?style=flat-square" alt="v4.5"/>
   &nbsp;•&nbsp;
   <img src="https://img.shields.io/badge/license-MIT-4ADE80?style=flat-square" alt="MIT"/>
 </p>
@@ -17,6 +17,14 @@
 **ProgressShelf** is a modern, responsive personal progress tracking dashboard that lets you track habits, courses, readings, custom goals, checklists, and quick notes — all in one place, one animated progress bar at a time.
 
 Built with zero build tools. Runs instantly on any static host.
+
+---
+
+## 🌟 What's New in v4.5
+
+- **Perimeter Bar Crumbling & Breaking Animation** — Active deadline and reset timer drain borders now feature a tactile particle disintegration effect where tiny chips and specks peel off the receding edge.
+- **Continuous 'Break and Disappear' Cadence** — Staggered chips and micro-specks gently tumble backward along the trail, shrinking and dissolving seamlessly into thin air with zero popping or flicker.
+- **Dynamic Tangent Trail Alignment** — Real-time vector calculation dynamically aligns particle drift along the receding bar path on all 4 card edges and around rounded corners.
 
 ---
 
@@ -203,7 +211,8 @@ ProgressShelf/
 
 | Version | Status | Highlights |
 |---|---|---|
-| **v4.4** | ✅ Latest (root) | Custom creation date & time, collapsible settings card, dynamic drain-timer recalculation |
+| **v4.5** | ✅ Latest (root) | Perimeter bar crumbling & breaking animation, natural particle disintegration trail |
+| **v4.4** | 🗂 Previous | Custom creation date & time, collapsible settings card, dynamic drain-timer recalculation |
 | **v4.3** | 🗂 Previous | Checklist & Deadline Auto-Repeat, Pending Renewal (amber pulse) & Soft Reset (sky blue) states, 48px glassmorphism blur, header backdrops |
 | **v4.2** | 🗂 Previous | Dynamic theming & custom accent palettes, notification direct view action, About page box redesign, status bar stencil badge |
 | **v4.1** | 🗂 Previous | Demo card backdated rendering fixes, font metrics sync, drain-border fallback refinement |

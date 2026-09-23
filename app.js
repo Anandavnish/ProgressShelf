@@ -726,6 +726,90 @@ function applyCardProgressColor(card, bar) {
   card.style.setProperty("--bar-color", barColor);
 }
 
+function createDeadlineBreakGroup(svgNS) {
+  const g = document.createElementNS(svgNS, 'g');
+  g.classList.add('deadline-break-group');
+
+  const breakHead = document.createElementNS(svgNS, 'g');
+  breakHead.classList.add('deadline-bar-break');
+  breakHead.innerHTML = `
+    <!-- Tiny bar fragments that break off the receding edge -->
+    <rect class="break-piece chip-1" x="-1.4" y="-1.1" width="2.8" height="2.2" rx="0.5" fill="currentColor"></rect>
+    <rect class="break-piece chip-2" x="-1.1" y="-1.0" width="2.2" height="2.0" rx="0.5" fill="currentColor"></rect>
+    <rect class="break-piece chip-3" x="-1.0" y="-0.9" width="2.0" height="1.8" rx="0.4" fill="currentColor"></rect>
+    <rect class="break-piece chip-4" x="-0.9" y="-0.8" width="1.8" height="1.6" rx="0.4" fill="currentColor"></rect>
+
+    <!-- Tiny specks/crumbs drifting and dissolving as pieces break -->
+    <circle class="break-piece speck-1" cx="0" cy="0" r="1.1" fill="currentColor"></circle>
+    <circle class="break-piece speck-2" cx="0" cy="0" r="0.9" fill="currentColor"></circle>
+    <circle class="break-piece speck-3" cx="0" cy="0" r="1.2" fill="currentColor"></circle>
+    <circle class="break-piece speck-4" cx="0" cy="0" r="0.8" fill="currentColor"></circle>
+    <circle class="break-piece speck-5" cx="0" cy="0" r="1.0" fill="currentColor"></circle>
+  `;
+  g.appendChild(breakHead);
+  return g;
+}
+
+function updateDeadlineBreak(svg, barEl, visibleLength, perimeter, color) {
+  if (!svg) return;
+  let group = svg.querySelector('.deadline-break-group');
+
+  if (visibleLength <= 0 || !perimeter || color === 'transparent') {
+    if (group) group.style.display = 'none';
+    return;
+  }
+
+  if (!group) {
+    group = createDeadlineBreakGroup('http://www.w3.org/2000/svg');
+    svg.appendChild(group);
+  }
+
+  if (typeof barEl.getPointAtLength !== 'function') {
+    group.style.display = 'none';
+    return;
+  }
+
+  try {
+    const pt = barEl.getPointAtLength(visibleLength);
+    if (!pt || isNaN(pt.x) || isNaN(pt.y)) {
+      group.style.display = 'none';
+      return;
+    }
+
+    // Tangent angle along path at the tip so particles always break backwards along the trail
+    let p1, p2;
+    if (visibleLength >= 2) {
+      p1 = barEl.getPointAtLength(visibleLength - 2);
+      p2 = pt;
+    } else {
+      p1 = pt;
+      p2 = barEl.getPointAtLength(Math.min(perimeter, visibleLength + 2));
+    }
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const angle = (Math.atan2(dy, dx) * 180 / Math.PI) || 0;
+
+    group.style.display = '';
+    const breakHead = group.querySelector('.deadline-bar-break');
+    if (breakHead) {
+      // Unwind angle to prevent 360-degree flip spins across the 180/-180 boundary
+      let targetAngle = angle;
+      if (typeof breakHead._lastAngle === 'number') {
+        let diff = (targetAngle - breakHead._lastAngle) % 360;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        targetAngle = breakHead._lastAngle + diff;
+      }
+      breakHead._lastAngle = targetAngle;
+
+      breakHead.style.transform = `translate(${pt.x.toFixed(1)}px, ${pt.y.toFixed(1)}px) rotate(${targetAngle.toFixed(1)}deg)`;
+      breakHead.style.color = color;
+    }
+  } catch (e) {
+    group.style.display = 'none';
+  }
+}
+
 function applyDeadlineTick(barEl) {
   const card = barEl.closest('.card-progress');
   const bar = card ? card._barData : null;
@@ -743,6 +827,8 @@ function applyDeadlineTick(barEl) {
     barEl.setAttribute('stroke', 'transparent');
     const perimeter = Number(barEl.dataset.perimeter) || 0;
     barEl.setAttribute('stroke-dashoffset', perimeter);
+    const svg = barEl.closest('svg') || card?.querySelector('.deadline-svg');
+    updateDeadlineBreak(svg, barEl, 0, perimeter, 'transparent');
     return;
   }
 
@@ -787,6 +873,8 @@ function applyDeadlineTick(barEl) {
       card.classList.add('pending-reset-soft');
       card.style.setProperty("--bar-color", "var(--color-pending-reset-soft, #0EA5E9)");
     }
+    const svg = barEl.closest('svg') || card?.querySelector('.deadline-svg');
+    updateDeadlineBreak(svg, barEl, visibleLength, perimeter, '#0EA5E9');
     return;
   }
 
@@ -816,6 +904,8 @@ function applyDeadlineTick(barEl) {
       card.classList.add('pending-renewal');
       card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
     }
+    const svg = barEl.closest('svg') || card?.querySelector('.deadline-svg');
+    updateDeadlineBreak(svg, barEl, visibleLength, perimeter, '#F59E0B');
   } else if (isOverdue) {
     // Overdue non-renewing card: no SVG border line or red blink. Text/title label is enough.
     barEl.setAttribute('stroke', 'transparent');
@@ -827,6 +917,8 @@ function applyDeadlineTick(barEl) {
       card.classList.add('overdue');
       applyCardProgressColor(card, bar);
     }
+    const svg = barEl.closest('svg') || card?.querySelector('.deadline-svg');
+    updateDeadlineBreak(svg, barEl, 0, perimeter, 'transparent');
   } else {
     // Active deadline: green/yellow/orange drain towards deadline
     const percentLeft = total > 0 ? Math.max(0, Math.min(100, (timeLeft / total) * 100)) : 0;
@@ -836,12 +928,15 @@ function applyDeadlineTick(barEl) {
     const isLight = document.documentElement.classList.contains('light-theme');
     const lightness = isLight ? 38 : 55;
     const hue = (percentLeft * 1.2).toFixed(0);
-    barEl.setAttribute('stroke', `hsl(${hue}, 80%, ${lightness}%)`);
+    const strokeColor = `hsl(${hue}, 80%, ${lightness}%)`;
+    barEl.setAttribute('stroke', strokeColor);
     barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
     if (card) {
       card.classList.remove('pending-renewal', 'pending-reset-soft', 'overdue');
       applyCardProgressColor(card, bar);
     }
+    const svg = barEl.closest('svg') || card?.querySelector('.deadline-svg');
+    updateDeadlineBreak(svg, barEl, visibleLength, perimeter, strokeColor);
   }
 }
 
@@ -929,6 +1024,10 @@ function attachDeadlineBorder(card, bar) {
 
   svg.appendChild(track);
   svg.appendChild(barEl);
+
+  const breakGroup = createDeadlineBreakGroup(svgNS);
+  svg.appendChild(breakGroup);
+
   card.appendChild(svg);
 
   resizeDeadlineSVG(card, barEl, track);
@@ -7956,9 +8055,21 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.4 (Latest)",
+    version: "v4.5 (Latest)",
     date: "September 23, 2026",
     isLatest: true,
+    title: "Perimeter Bar Crumbling & Breaking Animation (Sparkle Effect)",
+    content: `
+### Key Features & Updates
+* **Natural Bar Crumbling Particle Effect**: Draining perimeter bars for active deadlines and daily reset cycles now feature a tactile crumbling animation where tiny chips and specks peel off the receding edge.
+* **Continuous 'Break and Disappear' Cadence**: Staggered chips and micro-specks gently tumble backward along the trail, shrinking and dissolving seamlessly with zero popping or flicker.
+* **Tangent Trail Alignment**: Real-time vector calculation dynamically aligns particle drift along the receding bar path on all 4 card edges and around rounded corners.
+`
+  },
+  {
+    version: "v4.4",
+    date: "September 23, 2026",
+    isLatest: false,
     title: "Custom Creation Date, Dynamic Drain Timers & UI Settings Polish",
     content: `
 ### Key Features & Updates
