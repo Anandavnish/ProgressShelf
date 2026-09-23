@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=6.32">
+  <link rel="stylesheet" href="index.css?v=6.34">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -223,7 +223,7 @@
         <!-- Version Selector -->
         <div class="version-selector">
           <select class="version-select" onchange="location = this.value;">
-            <option value="" disabled selected>v4.3 (Latest)</option>
+            <option value="" disabled selected>v4.4 (Latest)</option>
             <option value="versions/v4.0/dashboard.html">v4.0 (Supabase)</option>
             <option value="versions/v3.0/dashboard.html">v3.0 (Firebase)</option>
             <option value="versions/v2.0/dashboard.html">v2.0 (Stable)</option>
@@ -554,6 +554,41 @@
               </div>
             </div>
 
+            <!-- Created Date & Time (Settings Card) -->
+            <details class="advanced-date-details" id="create-date-details">
+              <summary class="advanced-date-summary">
+                <div class="advanced-date-summary-left">
+                  <span class="advanced-date-icon-wrap">
+                    <svg class="advanced-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </span>
+                  <div class="advanced-date-text">
+                    <span class="advanced-date-title">Custom Creation Date</span>
+                    <span class="advanced-date-desc">Backdate or configure initial timestamp</span>
+                  </div>
+                </div>
+                <div class="advanced-date-summary-right">
+                  <span class="advanced-date-badge">Optional</span>
+                  <svg class="advanced-date-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+              </summary>
+              <div class="advanced-date-content" id="create-created-at-group">
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="create-created-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="create-created-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
+                  Leave empty for current time. If time is omitted, defaults to 12:00 PM.
+                </span>
+              </div>
+            </details>
+
             <!-- Deadline selection (optional) -->
             <div class="form-group deadline-box" id="deadline-group">
               <label class="form-label">
@@ -584,6 +619,7 @@
                   <input type="date" class="form-input form-input-date" id="deadline-date" placeholder="Select date" autocomplete="one-time-code">
                   <input type="time" class="form-input form-input-time" id="deadline-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block;">If time is omitted, defaults to 11:59 PM. If date is omitted, defaults to today.</span>
               </div>
 
               <!-- Section divider -->
@@ -806,6 +842,41 @@
               </div>
             </div>
 
+            <!-- Created Date & Time (Settings Card) -->
+            <details class="advanced-date-details" id="edit-date-details">
+              <summary class="advanced-date-summary">
+                <div class="advanced-date-summary-left">
+                  <span class="advanced-date-icon-wrap">
+                    <svg class="advanced-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </span>
+                  <div class="advanced-date-text">
+                    <span class="advanced-date-title">Custom Creation Date</span>
+                    <span class="advanced-date-desc">Adjust or backdate creation timestamp</span>
+                  </div>
+                </div>
+                <div class="advanced-date-summary-right">
+                  <span class="advanced-date-badge">Optional</span>
+                  <svg class="advanced-date-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+              </summary>
+              <div class="advanced-date-content" id="edit-created-at-group">
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="edit-created-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="edit-created-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
+                  Defaults to initial creation time. If time is omitted, defaults to 12:00 PM.
+                </span>
+              </div>
+            </details>
+
             <!-- Deadline selection (optional) -->
             <div class="form-group deadline-box" id="edit-deadline-group">
               <label class="form-label">
@@ -836,6 +907,7 @@
                   <input type="date" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" autocomplete="one-time-code">
                   <input type="time" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block;">If time is omitted, defaults to 11:59 PM. If date is omitted, defaults to today.</span>
               </div>
 
               <!-- Section divider -->
@@ -1066,7 +1138,7 @@
           <span class="footer-bullet">•</span>
           <a href="about.html">About</a>
           <span class="footer-bullet">•</span>
-          <span class="footer-version">v4.3</span>
+          <span class="footer-version">v4.4</span>
         </p>
         <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
       </div>
@@ -1190,6 +1262,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=10.36"></script>
+  <script type="module" src="app.js?v=11.1"></script>
 </body>
 </html>

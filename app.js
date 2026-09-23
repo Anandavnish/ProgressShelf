@@ -1,6 +1,6 @@
-import { isConfigured } from "./supabase-config.js?v=2.3";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference } from "./auth.js?v=2.4";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=2.4";
+import { isConfigured } from "./supabase-config.js?v=3.0";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference } from "./auth.js?v=3.0";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=3.0";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
@@ -186,6 +186,36 @@ function getDeadlineMs(bar) {
     : Number(bar.deadlineAt);
 }
 
+function getDeadlineSetMs(bar, deadlineMs = getDeadlineMs(bar)) {
+  if (!bar) return Date.now();
+  const setMs = typeof bar.deadlineSetAt?.toDate === 'function'
+    ? bar.deadlineSetAt.toDate().getTime()
+    : (Number(bar.deadlineSetAt) || null);
+
+  if (setMs) return setMs;
+
+  const resetState = getResetState(bar);
+  if (resetState && resetState.type !== 'none' && resetState.prevAlarmTime) {
+    return resetState.prevAlarmTime;
+  }
+
+  const createdMs = typeof bar.createdAt?.toDate === 'function'
+    ? bar.createdAt.toDate().getTime()
+    : (Number(bar.createdAt) || null);
+
+  const now = Date.now();
+  if (createdMs && deadlineMs && createdMs < deadlineMs) {
+    const remaining = Math.max(0, deadlineMs - now);
+    const elapsed = Math.max(0, now - createdMs);
+    // Use createdAt if elapsed time is reasonable relative to the deadline window
+    if (elapsed <= Math.max(86400000, remaining * 3)) {
+      return createdMs;
+    }
+  }
+
+  return now;
+}
+
 // ==========================================
 // Daily Clock-Time Reset Alarm Engine
 // ==========================================
@@ -226,8 +256,29 @@ function getNextAlarmTime(resetTime, now = Date.now()) {
 function getResetState(bar, now = Date.now()) {
   if (!bar) return { type: 'none' };
   
-  const chkEnabled = Boolean(bar.checklistResetEnabled || (bar.repeat && bar.repeat.checklistResetEnabled));
-  const dlnEnabled = Boolean(bar.deadlineResetEnabled || (bar.repeat && bar.repeat.deadlineResetEnabled));
+  const hasDeadline = Boolean(getDeadlineMs(bar));
+  const isChecklist = (bar.type || 'goal') === 'checklist';
+
+  let chkEnabled = Boolean(bar.checklistResetEnabled || (bar.repeat && bar.repeat.checklistResetEnabled));
+  let dlnEnabled = Boolean(bar.deadlineResetEnabled || (bar.repeat && bar.repeat.deadlineResetEnabled));
+
+  // Legacy repeat.enabled support
+  if (bar.repeat && (bar.repeat.enabled || bar.repeat.autoRepeat)) {
+    if (isChecklist) chkEnabled = true;
+    if (hasDeadline) dlnEnabled = true;
+  }
+
+  // If a card has a deadline and has checklist reset enabled, deadline reset is also active for that deadline
+  if (hasDeadline && chkEnabled) {
+    dlnEnabled = true;
+  }
+
+  // If a card has a deadline and has a reset schedule configured, deadline reset is active
+  if (hasDeadline && (bar.resetTime || (bar.repeat && bar.repeat.resetTime))) {
+    if (chkEnabled || dlnEnabled || (bar.repeat && (bar.repeat.checklistResetEnabled !== false && bar.repeat.deadlineResetEnabled !== false))) {
+      dlnEnabled = true;
+    }
+  }
 
   const rawCount = bar.resetCount !== undefined 
     ? bar.resetCount 
@@ -259,11 +310,16 @@ function getResetState(bar, now = Date.now()) {
 }
 
 function getResetSummaryText(bar) {
-  return '';
+  if (!bar) return '';
+  const resetState = getResetState(bar);
+  if (resetState.type === 'none') return '';
+  return formatResetSummaryText(resetState.resetTime, resetState.resetCount);
 }
 
 function shouldTriggerAlarmReset(bar, now = Date.now()) {
   if (!bar || !bar.id) return false;
+  if (activeResets.has(bar.id)) return false;
+
   const resetState = getResetState(bar, now);
   if (resetState.type === 'none') return false;
 
@@ -275,7 +331,34 @@ function shouldTriggerAlarmReset(bar, now = Date.now()) {
     lastResetAt = typeof createdAt === 'number' ? createdAt : new Date(createdAt).getTime();
   }
 
-  return resetState.prevAlarmTime > lastResetAt && resetState.prevAlarmTime <= now;
+  // The scheduled alarm time must have arrived/passed since the last reset
+  const alarmHasPassed = resetState.prevAlarmTime > lastResetAt && resetState.prevAlarmTime <= now;
+  if (!alarmHasPassed) return false;
+
+  const deadlineMs = getDeadlineMs(bar);
+  const isDlnOverdue = Boolean(deadlineMs && deadlineMs <= now);
+
+  // 1. If deadline-only reset: only reset if the deadline has expired and reached resetTime
+  if (resetState.type === 'deadline') {
+    if (!isDlnOverdue) return false;
+    return true;
+  }
+
+  // 2. If checklist-only reset: daily routine resets at alarm time
+  if (resetState.type === 'checklist') {
+    return true;
+  }
+
+  // 3. If both checklist and deadline reset:
+  if (resetState.type === 'both') {
+    // If deadline has expired, trigger renewal & reset
+    if (isDlnOverdue) return true;
+    // If deadline is not yet expired, trigger if checklist has completed/done items to reset daily
+    if (bar.items && bar.items.some(item => item.done)) return true;
+    return false;
+  }
+
+  return false;
 }
 
 const activeResets = new Set();
@@ -300,24 +383,41 @@ async function triggerBarReset(bar) {
     let isDeadlineEnabled = isDln && (newResetCount === null || newResetCount > 0);
 
     // Advance deadline if deadline reset is enabled
+    let targetDeadlineTime = bar.deadlineTime || (bar.repeat && bar.repeat.deadlineTime) || null;
     let nextDeadlineMs = getDeadlineMs(bar);
-    let originalDuration = 0;
-    if (bar.deadlineAt && bar.deadlineSetAt) {
-      originalDuration = getDeadlineMs(bar) - Number(bar.deadlineSetAt);
-    }
-    if (originalDuration <= 0) {
-      originalDuration = 24 * 60 * 60 * 1000;
-    }
+    const deadlineMs = nextDeadlineMs;
+    const isDlnOverdue = Boolean(deadlineMs && deadlineMs <= now);
+    const shouldAdvanceDeadline = isDln && Boolean(deadlineMs);
 
-    if (isDln) {
-      nextDeadlineMs = now + originalDuration;
+    if (shouldAdvanceDeadline) {
+      let origHours, origMins, origSecs = 0, origMs = 0;
+      if (targetDeadlineTime && targetDeadlineTime.includes(':')) {
+        const [h, m] = targetDeadlineTime.split(':').map(Number);
+        origHours = h;
+        origMins = m;
+      } else {
+        const origDate = new Date(deadlineMs);
+        origHours = origDate.getHours();
+        origMins = origDate.getMinutes();
+        origSecs = origDate.getSeconds();
+        origMs = origDate.getMilliseconds();
+        targetDeadlineTime = `${String(origHours).padStart(2, '0')}:${String(origMins).padStart(2, '0')}`;
+      }
+
+      let nextD = new Date(deadlineMs);
+      // Advance by 24h day-by-day increments while strictly carrying the original deadline clock time
+      while (nextD.getTime() <= now) {
+        nextD.setDate(nextD.getDate() + 1);
+        nextD.setHours(origHours, origMins, origSecs, origMs);
+      }
+      nextDeadlineMs = nextD.getTime();
     }
 
     // Recalculate notifications
     let newNotifyAt = null;
     let newNotified = false;
     let newDeadlineNotified = false;
-    if (bar.notifyAt && getDeadlineMs(bar) && nextDeadlineMs) {
+    if (bar.notifyAt && getDeadlineMs(bar) && nextDeadlineMs && shouldAdvanceDeadline) {
       if (bar.notifyPercent !== null && bar.notifyPercent !== undefined) {
         const totalDuration = nextDeadlineMs - now;
         const offsetMs = totalDuration * (Number(bar.notifyPercent) / 100);
@@ -331,7 +431,7 @@ async function triggerBarReset(bar) {
         }
       }
     }
-    if (bar.alertAtDeadline) newDeadlineNotified = false;
+    if (bar.alertAtDeadline && shouldAdvanceDeadline) newDeadlineNotified = false;
 
     let updatedItems = bar.items ? JSON.parse(JSON.stringify(bar.items)) : null;
     if (isChk) {
@@ -342,6 +442,37 @@ async function triggerBarReset(bar) {
 
     const resetTime = bar.resetTime || (bar.repeat && bar.repeat.resetTime) || "00:00";
 
+    // Optimistically update local bar object immediately so UI updates without delay
+    bar.lastResetAt = now;
+    bar.resetCount = newResetCount;
+    bar.checklistResetEnabled = isChecklistEnabled;
+    bar.checklistResetCount = newResetCount;
+    bar.deadlineResetEnabled = isDeadlineEnabled;
+    bar.deadlineResetCount = newResetCount;
+    if (bar.repeat) {
+      bar.repeat.resetTime = resetTime;
+      bar.repeat.resetCount = newResetCount;
+      bar.repeat.checklistResetEnabled = isChecklistEnabled;
+      bar.repeat.deadlineResetEnabled = isDeadlineEnabled;
+      bar.repeat.lastResetAt = now;
+      bar.repeat.deadlineTime = targetDeadlineTime;
+    }
+    if (isChk && (bar.type || 'goal') === 'checklist') {
+      bar.items = updatedItems;
+      bar.completed = false;
+      bar.currentSmallest = 0;
+      if (updatedItems) bar.targetSmallest = updatedItems.length;
+    }
+    if (shouldAdvanceDeadline) {
+      bar.deadlineAt = nextDeadlineMs;
+      bar.deadlineSetAt = now;
+      bar.deadlineTime = targetDeadlineTime;
+      bar.notifyAt = newNotifyAt;
+      bar.notified = newNotified;
+      bar.deadlineNotified = newDeadlineNotified;
+    }
+    renderDashboard(currentBars);
+
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
     await editBar(targetUid, bar.id, {
       title: bar.title,
@@ -349,11 +480,12 @@ async function triggerBarReset(bar) {
       currentSmallest: isChk ? 0 : bar.currentSmallest,
       items: updatedItems,
       completed: isChk ? false : bar.completed,
-      deadlineAt: isDln ? nextDeadlineMs : getDeadlineMs(bar),
-      updateDeadline: isDln,
-      notifyAt: newNotifyAt,
-      notified: newNotified,
-      deadlineNotified: newDeadlineNotified,
+      deadlineAt: shouldAdvanceDeadline ? nextDeadlineMs : getDeadlineMs(bar),
+      updateDeadline: shouldAdvanceDeadline,
+      deadlineSetAt: shouldAdvanceDeadline ? now : (bar.deadlineSetAt || null),
+      notifyAt: shouldAdvanceDeadline ? newNotifyAt : bar.notifyAt,
+      notified: shouldAdvanceDeadline ? newNotified : bar.notified,
+      deadlineNotified: shouldAdvanceDeadline ? newDeadlineNotified : bar.deadlineNotified,
       checklistResetEnabled: isChecklistEnabled,
       checklistResetCount: newResetCount,
       deadlineResetEnabled: isDeadlineEnabled,
@@ -366,7 +498,8 @@ async function triggerBarReset(bar) {
         resetCount: newResetCount,
         checklistResetEnabled: isChecklistEnabled,
         deadlineResetEnabled: isDeadlineEnabled,
-        lastResetAt: now
+        lastResetAt: now,
+        deadlineTime: targetDeadlineTime
       }
     });
 
@@ -377,6 +510,16 @@ async function triggerBarReset(bar) {
     return false;
   } finally {
     setTimeout(() => activeResets.delete(bar.id), 2000);
+  }
+}
+
+async function evaluateAutoResets(bars) {
+  if (!bars || !Array.isArray(bars) || bars.length === 0) return;
+  const now = Date.now();
+  for (const bar of bars) {
+    if (shouldTriggerAlarmReset(bar, now)) {
+      await triggerBarReset(bar);
+    }
   }
 }
 
@@ -590,15 +733,11 @@ function applyDeadlineTick(barEl) {
 
   const isCompleted = isTrackerCompleted(bar);
 
-  barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
-
-  if (card) {
-    card.classList.remove('pending-renewal', 'pending-reset-soft', 'overdue');
-  }
-
   // Guard: if tracker is completed, skip all overdue/pending-reset styling entirely
   if (isCompleted) {
+    barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
     if (card) {
+      card.classList.remove('pending-renewal', 'pending-reset-soft', 'overdue');
       applyCardProgressColor(card, bar);
     }
     barEl.setAttribute('stroke', 'transparent');
@@ -607,13 +746,28 @@ function applyDeadlineTick(barEl) {
     return;
   }
 
-  const deadlineMs = Number(barEl.dataset.deadlineMs);
-  const deadlineSetMs = Number(barEl.dataset.deadlineSetMs);
-  const perimeter = Number(barEl.dataset.perimeter);
-  if (!perimeter) return;
-
+  const deadlineMs = getDeadlineMs(bar) || 0;
+  const deadlineSetMs = getDeadlineSetMs(bar, deadlineMs);
   const now = Date.now();
   const resetState = getResetState(bar, now); 
+
+  if (!deadlineMs && resetState.type === 'none') {
+    card?.querySelector('.deadline-svg')?.remove();
+    return;
+  }
+
+  barEl.dataset.deadlineMs = deadlineMs || 0;
+  barEl.dataset.deadlineSetMs = deadlineSetMs || 0;
+
+  let perimeter = Number(barEl.dataset.perimeter);
+  if (!perimeter && card) {
+    const trackEl = card.querySelector('.deadline-track');
+    if (trackEl && card.offsetWidth && card.offsetHeight) {
+      resizeDeadlineSVG(card, barEl, trackEl);
+      perimeter = Number(barEl.dataset.perimeter);
+    }
+  }
+  if (!perimeter) return;
 
   if (resetState.type === 'checklist' && !deadlineMs) {
     // Checklist-only card with daily alarm: soft blue drain border towards nextAlarmTime
@@ -624,30 +778,41 @@ function applyDeadlineTick(barEl) {
     barEl.setAttribute('stroke-dasharray', `${visibleLength} ${perimeter}`);
     barEl.setAttribute('stroke-dashoffset', 0);
     barEl.setAttribute('stroke', '#0EA5E9');
-    barEl.classList.add('deadline-pending-reset-soft');
-    if (card) {
+    if (!barEl.classList.contains('deadline-pending-reset-soft')) {
+      barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal');
+      barEl.classList.add('deadline-pending-reset-soft');
+    }
+    if (card && !card.classList.contains('pending-reset-soft')) {
+      card.classList.remove('overdue', 'pending-renewal');
       card.classList.add('pending-reset-soft');
       card.style.setProperty("--bar-color", "var(--color-pending-reset-soft, #0EA5E9)");
     }
     return;
   }
 
-  const total = deadlineMs - deadlineSetMs;
+  const total = Math.max(1000, deadlineMs - deadlineSetMs);
   const timeLeft = deadlineMs - now;
   const isOverdue = timeLeft <= 0;
-  const isPending = isOverdue && (resetState.type === 'both' || resetState.type === 'deadline');
+  const isPending = isOverdue && (resetState.type !== 'none');
 
   if (isPending) {
-    // Overdue card waiting for daily reset alarm: amber drain border towards nextAlarmTime
-    const cycleTotal = Math.max(1, resetState.nextAlarmTime - resetState.prevAlarmTime);
+    // Overdue card waiting for renewal alarm: amber drain border towards nextAlarmTime
+    const waitStart = (deadlineMs && deadlineMs > resetState.prevAlarmTime && deadlineMs < resetState.nextAlarmTime)
+      ? deadlineMs
+      : resetState.prevAlarmTime;
+    const cycleTotal = Math.max(1000, resetState.nextAlarmTime - waitStart);
     const alarmTimeLeft = Math.max(0, resetState.nextAlarmTime - now);
     const drainPercent = Math.max(0, Math.min(100, (alarmTimeLeft / cycleTotal) * 100));
     const visibleLength = (perimeter * drainPercent / 100);
     barEl.setAttribute('stroke-dasharray', `${visibleLength} ${perimeter}`);
     barEl.setAttribute('stroke-dashoffset', 0);
     barEl.setAttribute('stroke', '#F59E0B');
-    barEl.classList.add('deadline-pending-renewal');
-    if (card) {
+    if (!barEl.classList.contains('deadline-pending-renewal')) {
+      barEl.classList.remove('deadline-overdue', 'deadline-pending-reset-soft');
+      barEl.classList.add('deadline-pending-renewal');
+    }
+    if (card && !card.classList.contains('pending-renewal')) {
+      card.classList.remove('overdue', 'pending-reset-soft');
       card.classList.add('pending-renewal');
       card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
     }
@@ -658,6 +823,8 @@ function applyDeadlineTick(barEl) {
     barEl.setAttribute('stroke-dashoffset', 0);
     barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
     if (card) {
+      card.classList.remove('pending-renewal', 'pending-reset-soft');
+      card.classList.add('overdue');
       applyCardProgressColor(card, bar);
     }
   } else {
@@ -670,7 +837,9 @@ function applyDeadlineTick(barEl) {
     const lightness = isLight ? 38 : 55;
     const hue = (percentLeft * 1.2).toFixed(0);
     barEl.setAttribute('stroke', `hsl(${hue}, 80%, ${lightness}%)`);
+    barEl.classList.remove('deadline-overdue', 'deadline-pending-renewal', 'deadline-pending-reset-soft');
     if (card) {
+      card.classList.remove('pending-renewal', 'pending-reset-soft', 'overdue');
       applyCardProgressColor(card, bar);
     }
   }
@@ -744,15 +913,7 @@ function attachDeadlineBorder(card, bar) {
   const resetState = getResetState(bar);
   if (!deadlineMs && resetState.type === 'none') return;
 
-  let deadlineSetMs = typeof bar.deadlineSetAt?.toDate === 'function'
-    ? bar.deadlineSetAt.toDate().getTime()
-    : (Number(bar.deadlineSetAt) || null);
-
-  if (!deadlineSetMs) {
-    deadlineSetMs = typeof bar.createdAt?.toDate === 'function'
-      ? bar.createdAt.toDate().getTime()
-      : (Number(bar.createdAt) || Date.now());
-  }
+  const deadlineSetMs = getDeadlineSetMs(bar, deadlineMs);
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -1784,7 +1945,7 @@ function updateCardElement(card, bar) {
       card.classList.remove("pending-renewal", "pending-reset-soft");
     } else if (dMs) {
       const { label, isOverdue } = formatTimeLeft(dMs);
-      const isPending = isOverdue && (resetState.type === 'both' || resetState.type === 'deadline');
+      const isPending = isOverdue && (resetState.type !== 'none');
 
       labelEl.setAttribute("data-completed", "false");
       labelEl.setAttribute("data-deadline-ms", dMs);
@@ -1798,12 +1959,17 @@ function updateCardElement(card, bar) {
       if (isPending) {
         const { durationText: resetDuration } = formatTimeLeft(resetState.nextAlarmTime);
         const resetTimeFormatted = formatClockTime(resetState.resetTime);
-        deadlineText = `Overdue · Resets at ${resetTimeFormatted} (in ${resetDuration})`;
+        deadlineText = `Renews in ${resetDuration} (at ${resetTimeFormatted})`;
         labelEl.title = `Resets at ${resetTimeFormatted}`;
-        card.classList.add("pending-renewal");
-        card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
-        labelEl.classList.add("pending-renewal");
-        labelEl.classList.remove("overdue", "pending-reset-soft");
+        if (!card.classList.contains("pending-renewal")) {
+          card.classList.remove("overdue", "pending-reset-soft");
+          card.classList.add("pending-renewal");
+          card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
+        }
+        if (!labelEl.classList.contains("pending-renewal")) {
+          labelEl.classList.remove("overdue", "pending-reset-soft");
+          labelEl.classList.add("pending-renewal");
+        }
       } else if (isOverdue) {
         card.classList.remove("pending-renewal", "pending-reset-soft");
         labelEl.classList.remove("pending-renewal", "pending-reset-soft");
@@ -1856,14 +2022,7 @@ function updateCardElement(card, bar) {
         const barEl = svg.querySelector(".deadline-bar");
         if (barEl) {
           barEl.dataset.deadlineMs = dMs || 0;
-          let deadlineSetMs = typeof bar.deadlineSetAt?.toDate === 'function'
-            ? bar.deadlineSetAt.toDate().getTime()
-            : (Number(bar.deadlineSetAt) || null);
-          if (!deadlineSetMs) {
-            deadlineSetMs = typeof bar.createdAt?.toDate === 'function'
-              ? bar.createdAt.toDate().getTime()
-              : (Number(bar.createdAt) || Date.now());
-          }
+          const deadlineSetMs = getDeadlineSetMs(bar, dMs);
           barEl.dataset.deadlineSetMs = deadlineSetMs;
           applyDeadlineTick(barEl);
         }
@@ -2036,15 +2195,17 @@ function createCardElement(bar) {
         `;
       } else if (dMs) {
         const { label, isOverdue } = formatTimeLeft(dMs);
-        const isPending = isOverdue && (resetState.type === 'both' || resetState.type === 'deadline');
+        const isPending = isOverdue && (resetState.type !== 'none');
         const overdueClass = isPending ? ' pending-renewal' : (isOverdue ? ' overdue' : '');
         let deadlineText = label;
         let tooltipAttr = '';
         if (isPending) {
           const { durationText: resetDuration } = formatTimeLeft(resetState.nextAlarmTime);
           const resetTimeFormatted = formatClockTime(resetState.resetTime);
-          deadlineText = `Overdue · Resets at ${resetTimeFormatted} (in ${resetDuration})`;
+          deadlineText = `Renews in ${resetDuration} (at ${resetTimeFormatted})`;
           tooltipAttr = ` title="Resets at ${escapeHtml(resetTimeFormatted)}"`;
+          card.classList.add("pending-renewal");
+          card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
         }
         const bellHtml = hasActiveNotification(bar) ? `
           <span class="active-notification-bell" title="active notification" style="display: inline-flex; align-items: center; color: var(--warning); cursor: help;">
@@ -2061,6 +2222,8 @@ function createCardElement(bar) {
           </div>
         `;
       } else if (hasResetAlarm && resetState.type === 'checklist') {
+        card.classList.add("pending-reset-soft");
+        card.style.setProperty("--bar-color", "var(--color-pending-reset-soft, #0EA5E9)");
         const { durationText: resetDuration } = formatTimeLeft(resetState.nextAlarmTime);
         const resetTimeFormatted = formatClockTime(resetState.resetTime);
         return `
@@ -2188,9 +2351,6 @@ function createCardElement(bar) {
             completed,
             updateDeadline: false
           });
-          if (completed && currentBar.repeat && currentBar.repeat.enabled) {
-            triggerBarReset(currentBar);
-          }
           setTimeout(() => {
             const count = pendingLocalWrites.get(currentBar.id) || 0;
             if (count <= 1) {
@@ -2512,16 +2672,22 @@ setInterval(() => {
 
 // Background timer to tick deadline SVG paths and labels every second
 setInterval(() => {
+  document.querySelectorAll('.card-progress').forEach(card => {
+    const bar = card._barData;
+    if (!bar) return;
+    const deadlineMs = getDeadlineMs(bar);
+    const resetState = getResetState(bar, Date.now());
+    if ((deadlineMs || resetState.type !== 'none') && !card.querySelector('.deadline-svg') && !isTrackerCompleted(bar)) {
+      attachDeadlineBorder(card, bar);
+    }
+  });
+
   document.querySelectorAll('.deadline-bar').forEach(barEl => {
     applyDeadlineTick(barEl);
   });
 
   // Check auto-resets for all cards (whether deadline-based or checklist-based)
-  currentBars.forEach(bar => {
-    if (bar && bar.repeat && bar.repeat.enabled) {
-      triggerBarReset(bar);
-    }
-  });
+  evaluateAutoResets(currentBars);
 
   document.querySelectorAll('.card-deadline-label').forEach(labelEl => {
     const card = labelEl.closest('.card-progress');
@@ -2537,12 +2703,16 @@ setInterval(() => {
         card.querySelector(".deadline-svg")?.remove();
       }
       if (!labelEl.querySelector('.badge-completed')) {
-        labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>`;
+        const resetState = bar ? getResetState(bar, Date.now()) : { type: 'none' };
+        const resetTimeFormatted = resetState.type !== 'none' ? formatClockTime(resetState.resetTime) : '';
+        const resetNote = resetTimeFormatted ? ` <span style="font-size:0.75rem; color:var(--text-muted); margin-left:auto;">Resets at ${resetTimeFormatted}</span>` : '';
+        labelEl.innerHTML = `<span class="badge-completed">✓ Completed</span>${resetNote}`;
       }
       return;
     }
 
-    const deadlineMs = Number(labelEl.dataset.deadlineMs);
+    const deadlineMs = bar ? (getDeadlineMs(bar) || 0) : Number(labelEl.dataset.deadlineMs);
+    labelEl.dataset.deadlineMs = deadlineMs || '';
     const percent = Number(labelEl.dataset.percent || 0);
     const resetState = bar ? getResetState(bar, Date.now()) : { type: 'none' };
     const resetSummary = bar ? getResetSummaryText(bar) : '';
@@ -2581,32 +2751,36 @@ setInterval(() => {
         }
 
         const result = formatTimeLeft(deadlineMs);
-        const isPending = result.isOverdue && (resetState.type === 'both' || resetState.type === 'deadline');
+        const isPending = result.isOverdue && (resetState.type !== 'none');
 
         let deadlineText = result.label;
         if (isPending) {
           const { durationText: resetDuration } = formatTimeLeft(resetState.nextAlarmTime);
           const resetTimeFormatted = formatClockTime(resetState.resetTime);
-          deadlineText = `Overdue · Resets at ${resetTimeFormatted} (in ${resetDuration})`;
+          deadlineText = `Renews in ${resetDuration} (at ${resetTimeFormatted})`;
           labelEl.title = `Resets at ${resetTimeFormatted}`;
 
-          if (card) {
+          if (card && !card.classList.contains("pending-renewal")) {
             card.classList.add("pending-renewal");
             card.classList.remove("overdue", "pending-reset-soft");
             card.style.setProperty("--bar-color", "var(--color-pending-renew, #F59E0B)");
           }
-          labelEl.classList.add("pending-renewal");
-          labelEl.classList.remove("overdue", "pending-reset-soft");
+          if (!labelEl.classList.contains("pending-renewal")) {
+            labelEl.classList.add("pending-renewal");
+            labelEl.classList.remove("overdue", "pending-reset-soft");
+          }
         } else if (result.isOverdue) {
-          if (card) {
-            card.classList.remove("pending-renewal", "pending-reset-soft", "overdue");
+          if (card && card.classList.contains("pending-renewal")) {
+            card.classList.remove("pending-renewal", "pending-reset-soft");
             applyCardProgressColor(card, bar);
           }
-          labelEl.classList.remove("pending-renewal", "pending-reset-soft");
+          if (labelEl.classList.contains("pending-renewal")) {
+            labelEl.classList.remove("pending-renewal", "pending-reset-soft");
+          }
           labelEl.classList.add("overdue");
           labelEl.removeAttribute('title');
         } else {
-          if (card) {
+          if (card && (card.classList.contains("pending-renewal") || card.classList.contains("overdue"))) {
             card.classList.remove("pending-renewal", "pending-reset-soft", "overdue");
             applyCardProgressColor(card, bar);
           }
@@ -3421,12 +3595,56 @@ if (btnCreateAddItem && createChecklistItemInput) {
   });
 }
 
+function parseCustomCreatedAt(dateVal, timeVal) {
+  const dVal = (dateVal || "").trim();
+  const tVal = (timeVal || "").trim();
+  if (!dVal && !tVal) return null;
+  let datePart = dVal;
+  let timePart = tVal;
+  if (!datePart && timePart) {
+    const d = new Date();
+    datePart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  if (datePart && !timePart) {
+    timePart = "12:00";
+  }
+  const parsed = new Date(`${datePart}T${timePart}:00`);
+  const ms = parsed.getTime();
+  return isNaN(ms) ? null : ms;
+}
+
+function parseDeadlineDateTime(dateVal, timeVal) {
+  const dVal = (dateVal || "").trim();
+  const tVal = (timeVal || "").trim();
+  if (!dVal && !tVal) return null;
+  let datePart = dVal;
+  let timePart = tVal;
+  if (!datePart && timePart) {
+    const d = new Date();
+    datePart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  if (datePart && !timePart) {
+    timePart = "23:59:59";
+  } else if (timePart && timePart.split(':').length === 2) {
+    timePart += ":00";
+  }
+  const parsed = new Date(`${datePart}T${timePart}`);
+  const ms = parsed.getTime();
+  return isNaN(ms) ? null : ms;
+}
+
 function openCreateModal() {
   formCreate.reset();
   const dateInput = document.getElementById('deadline-date');
   const timeInput = document.getElementById('deadline-time');
   if (dateInput) dateInput.value = "";
   if (timeInput) timeInput.value = "";
+  const createdDateInput = document.getElementById('create-created-date');
+  const createdTimeInput = document.getElementById('create-created-time');
+  if (createdDateInput) createdDateInput.value = "";
+  if (createdTimeInput) createdTimeInput.value = "";
+  const createDateDetails = document.getElementById('create-date-details');
+  if (createDateDetails) createDateDetails.removeAttribute('open');
   document.getElementById("create-type-goal").checked = true;
   createChecklistItems = [];
   renderCreateChecklist();
@@ -4063,6 +4281,38 @@ function openEditModal(bar) {
     }
   }
 
+  // Pre-fill created date & time
+  const editCreatedDateInput = document.getElementById('edit-created-date');
+  const editCreatedTimeInput = document.getElementById('edit-created-time');
+  if (editCreatedDateInput && editCreatedTimeInput) {
+    let createdMs = null;
+    if (bar.createdAt) {
+      if (typeof bar.createdAt.toDate === 'function') {
+        createdMs = bar.createdAt.toDate().getTime();
+      } else if (typeof bar.createdAt === 'number') {
+        createdMs = bar.createdAt;
+      } else {
+        createdMs = new Date(bar.createdAt).getTime();
+      }
+    }
+    if (createdMs && !isNaN(createdMs)) {
+      const cd = new Date(createdMs);
+      const yyyy = cd.getFullYear();
+      const mm = String(cd.getMonth() + 1).padStart(2, '0');
+      const dd = String(cd.getDate()).padStart(2, '0');
+      const hh = String(cd.getHours()).padStart(2, '0');
+      const min = String(cd.getMinutes()).padStart(2, '0');
+      editCreatedDateInput.value = `${yyyy}-${mm}-${dd}`;
+      editCreatedTimeInput.value = `${hh}:${min}`;
+    } else {
+      editCreatedDateInput.value = "";
+      editCreatedTimeInput.value = "";
+    }
+  }
+
+  const editDateDetails = document.getElementById('edit-date-details');
+  if (editDateDetails) editDateDetails.removeAttribute('open');
+
   // Clear relative inputs and checkbox first
   document.getElementById('edit-deadline-hrs').value = "";
   document.getElementById('edit-deadline-mins').value = "";
@@ -4156,7 +4406,9 @@ function openEditModal(bar) {
     time: document.getElementById('edit-deadline-time').value || "",
     hrs: "",
     mins: "",
-    clearChecked: false
+    clearChecked: false,
+    createdDate: editCreatedDateInput ? editCreatedDateInput.value : "",
+    createdTime: editCreatedTimeInput ? editCreatedTimeInput.value : ""
   };
 
   openModal(modalEdit);
@@ -4171,7 +4423,7 @@ function openEditModal(bar) {
 formCreate.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  if (!currentUser) return;
+  if (!currentUser && !isGuestMode()) return;
 
   const title = document.getElementById("bar-title").value.trim();
   const type = document.querySelector('input[name="create-tracker-type"]:checked').value;
@@ -4270,6 +4522,12 @@ formCreate.addEventListener("submit", async (e) => {
     }
   }
 
+  // Handle Custom Created Date/Time in Create mode
+  const createdDateInput = document.getElementById('create-created-date');
+  const createdTimeInput = document.getElementById('create-created-time');
+  const customCreatedAt = parseCustomCreatedAt(createdDateInput?.value, createdTimeInput?.value);
+  const createdAt = (customCreatedAt !== null) ? customCreatedAt : Date.now();
+
   // Handle Deadline calculation in Create mode
   const dateInput = document.getElementById('deadline-date');
   const timeInput = document.getElementById('deadline-time');
@@ -4278,10 +4536,9 @@ formCreate.addEventListener("submit", async (e) => {
 
   let deadlineAt = null;
 
-  if (dateInput?.value) {
-    const timeVal = timeInput?.value || "23:59";
-    const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
-    deadlineAt = deadlineDate.getTime();
+  const parsedDeadline = parseDeadlineDateTime(dateInput?.value, timeInput?.value);
+  if (parsedDeadline !== null) {
+    deadlineAt = parsedDeadline;
     if (deadlineAt <= Date.now()) {
       showToast("Deadline must be in the future.", "error");
       return;
@@ -4296,6 +4553,13 @@ formCreate.addEventListener("submit", async (e) => {
       return;
     }
   }
+
+  if (deadlineAt && customCreatedAt && deadlineAt <= customCreatedAt) {
+    showToast("Deadline must be after the created date.", "error");
+    return;
+  }
+
+  const deadlineSetAt = deadlineAt ? ((hrsInput?.value || minsInput?.value) ? Date.now() : (customCreatedAt || Date.now())) : null;
 
   if (currentBars.length >= 85) {
     showToast(
@@ -4353,7 +4617,9 @@ formCreate.addEventListener("submit", async (e) => {
       items,
       text,
       completed,
+      createdAt,
       deadlineAt,
+      deadlineSetAt,
       notifyAt,
       notified,
       notifyPercent,
@@ -4372,7 +4638,7 @@ formCreate.addEventListener("submit", async (e) => {
 formEdit.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  if (!currentUser || !selectedBar) return;
+  if ((!currentUser && !isGuestMode()) || !selectedBar) return;
 
   const title = document.getElementById("edit-bar-title").value.trim();
   const barType = selectedBar.type || "goal";
@@ -4435,6 +4701,18 @@ formEdit.addEventListener("submit", async (e) => {
     }
   }
 
+  // Handle Custom Created Date/Time in Edit mode
+  const editCreatedDateInput = document.getElementById('edit-created-date');
+  const editCreatedTimeInput = document.getElementById('edit-created-time');
+  const customCreatedAt = parseCustomCreatedAt(editCreatedDateInput?.value, editCreatedTimeInput?.value);
+
+  const origCreatedAt = selectedBar.createdAt 
+    ? (typeof selectedBar.createdAt.toDate === 'function' ? selectedBar.createdAt.toDate().getTime() : Number(selectedBar.createdAt))
+    : null;
+
+  const newCreatedAt = customCreatedAt !== null ? customCreatedAt : origCreatedAt;
+  const isCreatedAtChanged = newCreatedAt !== null && (origCreatedAt === null || Math.abs(newCreatedAt - origCreatedAt) > 1000);
+
   // Handle Deadline calculation in Edit mode
   const dateInput = document.getElementById('edit-deadline-date');
   const timeInput = document.getElementById('edit-deadline-time');
@@ -4458,26 +4736,51 @@ formEdit.addEventListener("submit", async (e) => {
     updateDeadline = true;
     if (clearCheckbox?.checked) {
       deadlineAt = null;
-    } else if (dateInput?.value) {
-      const timeVal = timeInput?.value || "23:59";
-      const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
-      deadlineAt = deadlineDate.getTime();
-      if (deadlineAt <= Date.now()) {
-        showToast("Deadline must be in the future.", "error");
-        return;
-      }
-    } else if (hrsInput?.value || minsInput?.value) {
-      const hrs = parseFloat(hrsInput.value) || 0;
-      const mins = parseFloat(minsInput.value) || 0;
-      if (hrs > 0 || mins > 0) {
-        deadlineAt = Date.now() + (hrs * 3600000) + (mins * 60000);
-      } else {
-        showToast("Deadline duration must be greater than 0.", "error");
-        return;
-      }
     } else {
-      // Inputs cleared but clear checkbox not ticked: remove the deadline
-      deadlineAt = null;
+      const parsedDeadline = parseDeadlineDateTime(dateInput?.value, timeInput?.value);
+      if (parsedDeadline !== null) {
+        deadlineAt = parsedDeadline;
+        if (deadlineAt <= Date.now()) {
+          showToast("Deadline must be in the future.", "error");
+          return;
+        }
+      } else if (hrsInput?.value || minsInput?.value) {
+        const hrs = parseFloat(hrsInput.value) || 0;
+        const mins = parseFloat(minsInput.value) || 0;
+        if (hrs > 0 || mins > 0) {
+          deadlineAt = Date.now() + (hrs * 3600000) + (mins * 60000);
+        } else {
+          showToast("Deadline duration must be greater than 0.", "error");
+          return;
+        }
+      } else {
+        // Inputs cleared but clear checkbox not ticked: remove the deadline
+        deadlineAt = null;
+      }
+    }
+  }
+
+  if (deadlineAt && newCreatedAt && deadlineAt <= newCreatedAt) {
+    showToast("Deadline must be after the created date.", "error");
+    return;
+  }
+
+  let newDeadlineSetAt = undefined;
+  if (isDeadlineTouched) {
+    if (clearCheckbox?.checked || !deadlineAt) {
+      newDeadlineSetAt = null;
+    } else if (hrsInput?.value || minsInput?.value) {
+      newDeadlineSetAt = Date.now();
+    } else if (dateInput?.value || timeInput?.value) {
+      if (isCreatedAtChanged && newCreatedAt) {
+        newDeadlineSetAt = newCreatedAt;
+      } else {
+        newDeadlineSetAt = Date.now();
+      }
+    }
+  } else if (isCreatedAtChanged) {
+    if (deadlineAt && newCreatedAt && newCreatedAt < deadlineAt) {
+      newDeadlineSetAt = newCreatedAt;
     }
   }
 
@@ -4544,7 +4847,7 @@ formEdit.addEventListener("submit", async (e) => {
         handleFCMSession(targetUid);
       }
     }
-    await editBar(targetUid, selectedBar.id, {
+    const updates = {
       title,
       levels: barType === "goal" ? levels : null,
       targetSmallest,
@@ -4560,7 +4863,43 @@ formEdit.addEventListener("submit", async (e) => {
       alertAtDeadline,
       deadlineNotified,
       repeat
-    });
+    };
+    if (newDeadlineSetAt !== undefined) {
+      updates.deadlineSetAt = newDeadlineSetAt;
+    }
+    if (isCreatedAtChanged) {
+      updates.createdAt = newCreatedAt;
+    }
+    await editBar(targetUid, selectedBar.id, updates);
+
+    // Optimistically update local selectedBar and currentBars entry
+    selectedBar.title = title;
+    selectedBar.levels = barType === "goal" ? levels : null;
+    selectedBar.targetSmallest = targetSmallest;
+    selectedBar.currentSmallest = currentSmallest;
+    selectedBar.items = barType === "checklist" ? items : null;
+    selectedBar.text = barType === "note" ? text : null;
+    selectedBar.completed = completed;
+    selectedBar.deadlineAt = deadlineAt;
+    if (newDeadlineSetAt !== undefined) {
+      selectedBar.deadlineSetAt = newDeadlineSetAt;
+    }
+    if (isCreatedAtChanged) {
+      selectedBar.createdAt = newCreatedAt;
+    }
+    selectedBar.notifyAt = notifyAt;
+    selectedBar.notified = notified;
+    selectedBar.notifyPercent = notifyPercent;
+    selectedBar.alertAtDeadline = alertAtDeadline;
+    selectedBar.deadlineNotified = deadlineNotified;
+    selectedBar.repeat = repeat;
+    selectedBar.lastUpdated = Date.now();
+
+    const localBar = currentBars.find(b => b.id === selectedBar.id);
+    if (localBar) {
+      Object.assign(localBar, selectedBar);
+    }
+    renderDashboard(currentBars);
     showToast(`Successfully updated tracker "${title}"!`, "success");
   } catch (error) {
     console.error("Error editing progress bar:", error);
@@ -4572,7 +4911,7 @@ formEdit.addEventListener("submit", async (e) => {
 formUpdate.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  if (!currentUser || !selectedBar) return;
+  if ((!currentUser && !isGuestMode()) || !selectedBar) return;
 
   const barId = updateBarIdInput.value;
   const barType = selectedBar.type || "goal";
@@ -4661,13 +5000,13 @@ btnDeleteConfirmNo.addEventListener("click", () => {
 });
 
 btnDeleteConfirmYes.addEventListener("click", async () => {
-  if (!currentUser || !selectedBar) return;
+  if ((!currentUser && !isGuestMode()) || !selectedBar) return;
   const barId = selectedBar.id;
   const title = selectedBar.title;
 
   try {
     closeModal(modalUpdate);
-    await deleteBar(isGuestMode() ? null : currentUser.uid, barId);
+    await deleteBar(isGuestMode() ? null : (currentUser ? currentUser.uid : null), barId);
     showToast(`Deleted progress bar "${title}".`, "success");
   } catch (error) {
     showToast("Failed to delete progress bar.", "error");
@@ -4679,12 +5018,24 @@ btnDeleteConfirmYes.addEventListener("click", async () => {
 // ==========================================
 let migrationInProgress = false;
 
+const LEGACY_DEMO_TITLES = ['Romio Update 03/08', 'Daily Standup Checklist', 'IITB Classes'];
+
+function isLegacyDemoCard(bar) {
+  if (!bar) return false;
+  const id = String(bar.id || '');
+  const title = String(bar.title || '').trim();
+  return id.startsWith('demo_') || LEGACY_DEMO_TITLES.includes(title);
+}
+
 async function migrateGuestBarsToSupabase(uid) {
   if (migrationInProgress) return;
   migrationInProgress = true;
 
   const localBars = getLocalBars();
-  if (!localBars || localBars.length === 0) {
+  const userBars = (localBars || []).filter(bar => !isLegacyDemoCard(bar));
+  if (userBars.length === 0) {
+    localStorage.removeItem('progress_shelf_bars');
+    localStorage.removeItem('progress_shelf_failed_migration_bars');
     exitGuestMode();
     migrationInProgress = false;
     return;
@@ -4692,12 +5043,13 @@ async function migrateGuestBarsToSupabase(uid) {
 
   // Clear local bars immediately to prevent concurrent calls from re-triggering migration
   localStorage.removeItem('progress_shelf_bars');
+  localStorage.removeItem('progress_shelf_failed_migration_bars');
   exitGuestMode();
 
   let failCount = 0;
   const failedBars = [];
 
-  for (const bar of localBars) {
+  for (const bar of userBars) {
     try {
       const mapped = {
         title: bar.title,
@@ -4709,10 +5061,15 @@ async function migrateGuestBarsToSupabase(uid) {
         items: bar.items,
         text: bar.text,
         completed: bar.completed,
+        createdAt: bar.createdAt,
         deadlineAt: bar.deadlineAt,
         deadlineSetAt: bar.deadlineSetAt,
         notifyAt: bar.notifyAt,
         notified: bar.notified ?? false,
+        notifyPercent: bar.notifyPercent,
+        alertAtDeadline: bar.alertAtDeadline,
+        deadlineNotified: bar.deadlineNotified,
+        repeat: bar.repeat,
         lastUpdated: bar.lastUpdated
       };
       await createBar(uid, mapped);
@@ -5297,8 +5654,10 @@ initAuthProtection(async (user) => {
     }
   })();
   if (failedMigrationBars.length > 0) {
-    const toRetry = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) < 3);
-    const toKeepInBackup = failedMigrationBars.filter(b => (b._migrationRetryCount || 0) >= 3);
+    // Filter out any legacy demo cards from failed migrations
+    const cleanFailedBars = failedMigrationBars.filter(b => !isLegacyDemoCard(b));
+    const toRetry = cleanFailedBars.filter(b => (b._migrationRetryCount || 0) < 3);
+    const toKeepInBackup = cleanFailedBars.filter(b => (b._migrationRetryCount || 0) >= 3);
 
     if (toRetry.length > 0) {
       // Put retryable cards back into the active migration queue
@@ -5312,18 +5671,23 @@ initAuthProtection(async (user) => {
       } else {
         localStorage.removeItem('progress_shelf_failed_migration_bars');
       }
+    } else {
+      localStorage.removeItem('progress_shelf_failed_migration_bars');
     }
   }
 
   const localBars = getLocalBars();
-  const hasLocalBars = localBars && localBars.length > 0;
+  const userBars = (localBars || []).filter(bar => !isLegacyDemoCard(bar));
+  const hasLocalBars = userBars.length > 0;
 
   authInitialized = true;
 
   // Silent auto-migration if guest logs in or has local bars
   if ((isGuestMode() || hasLocalBars) && user && user.uid !== null) {
-    // Show migration status
-    showToast("Syncing your data to cloud account...", "info");
+    if (hasLocalBars) {
+      // Show migration status
+      showToast("Syncing your data to cloud account...", "info");
+    }
 
     await migrateGuestBarsToSupabase(user.uid);
     // exitGuestMode() already called inside migrateGuestBarsToSupabase
@@ -5376,14 +5740,17 @@ initAuthProtection(async (user) => {
     refreshAllBellStates(cachedBellHealth);
   }
 
-  // Token re-sync and bell health check on tab/PWA foreground
+  // Token re-sync, bell health check, and auto-reset evaluation on tab/PWA foreground
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && currentUser && currentUser.uid && !isGuestMode()) {
-      if (Notification.permission === 'granted') {
-        await handleFCMSession(currentUser.uid);
+    if (document.visibilityState === 'visible') {
+      evaluateAutoResets(currentBars);
+      if (currentUser && currentUser.uid && !isGuestMode()) {
+        if (Notification.permission === 'granted') {
+          await handleFCMSession(currentUser.uid);
+        }
+        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+        refreshAllBellStates(cachedBellHealth);
       }
-      cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-      refreshAllBellStates(cachedBellHealth);
     }
   });
 
@@ -5458,6 +5825,7 @@ initAuthProtection(async (user) => {
     isGuestMode() ? null : user.uid,
     (bars) => {
       renderDashboard(bars);
+      evaluateAutoResets(bars);
       
       // Dynamic Notification Permission Banner check (Rule 3)
       if (user && user.uid && Notification.permission === "default") {
@@ -5617,9 +5985,13 @@ function setupDeadlineMutualExclusion(prefix = "") {
 
   // Validation for today's date vs time
   const validateTime = () => {
-    if (!dateInput.value) return;
-    const todayStr = dateInput.min;
-    if (dateInput.value === todayStr && timeInput?.value) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    const targetDate = dateInput.value || todayStr;
+    if (targetDate === todayStr && timeInput?.value) {
       const now = new Date();
       const currentHrs = now.getHours();
       const currentMins = now.getMinutes();
@@ -5640,7 +6012,20 @@ function setupDeadlineMutualExclusion(prefix = "") {
     validateTime();
   });
 
-  timeInput?.addEventListener('change', validateTime);
+  timeInput?.addEventListener('change', () => {
+    if (timeInput.value) {
+      hrsInput.value = '';
+      minsInput.value = '';
+    }
+    validateTime();
+  });
+
+  timeInput?.addEventListener('input', () => {
+    if (timeInput.value) {
+      hrsInput.value = '';
+      minsInput.value = '';
+    }
+  });
 
   const clearAbsoluteInputs = () => {
     if (hrsInput.value || minsInput.value) {
@@ -5669,17 +6054,19 @@ function checkHasDeadline(prefix = "") {
   if (prefix === "edit-") {
     const clearCheckbox = document.getElementById("edit-deadline-clear");
     if (clearCheckbox && clearCheckbox.checked) return false;
+    if (selectedBar && getDeadlineMs(selectedBar)) return true;
   }
   const dateInput = document.getElementById(prefix + 'deadline-date');
+  const timeInput = document.getElementById(prefix + 'deadline-time');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
   const minsInput = document.getElementById(prefix + 'deadline-mins');
 
-  const hasDate = Boolean(dateInput?.value);
+  const hasSpecific = Boolean(dateInput?.value || timeInput?.value);
   const hrs = parseFloat(hrsInput?.value) || 0;
   const mins = parseFloat(minsInput?.value) || 0;
   const hasDuration = hrs > 0 || mins > 0;
 
-  return hasDate || hasDuration;
+  return hasSpecific || hasDuration;
 }
 
 function updateResetVisibility(prefix = "") {
@@ -5703,25 +6090,11 @@ function updateResetVisibility(prefix = "") {
   const dlnToggle = document.getElementById(prefix + 'deadline-reset-toggle');
 
   if (chkSection) {
-    if (isChecklist) {
-      chkSection.style.display = "";
-    } else {
-      chkSection.style.display = "none";
-      if (chkToggle && chkToggle.checked) {
-        chkToggle.checked = false;
-      }
-    }
+    chkSection.style.display = isChecklist ? "" : "none";
   }
 
   if (dlnSection) {
-    if (hasDeadline) {
-      dlnSection.style.display = "";
-    } else {
-      dlnSection.style.display = "none";
-      if (dlnToggle && dlnToggle.checked) {
-        dlnToggle.checked = false;
-      }
-    }
+    dlnSection.style.display = hasDeadline ? "" : "none";
   }
 
   const hasAnyResetOption = isChecklist || hasDeadline;
@@ -5820,8 +6193,14 @@ function getResetFromModal(prefix = "") {
   const timeInput = document.getElementById(prefix ? 'edit-reset-time' : 'create-reset-time');
   const countInput = document.getElementById(prefix ? 'edit-reset-count' : 'create-reset-count');
 
-  const isChk = Boolean(chkToggle && chkToggle.checked && isChecklist);
-  const isDln = Boolean(dlnToggle && dlnToggle.checked && hasDeadline);
+  let isChk = Boolean(chkToggle && chkToggle.checked && isChecklist);
+  let isDln = Boolean(dlnToggle && dlnToggle.checked && hasDeadline);
+
+  // If a checklist card has a deadline and reset is enabled on either toggle, enable both so the whole tracker auto-renews
+  if (isChecklist && hasDeadline && (isChk || isDln)) {
+    isChk = true;
+    isDln = true;
+  }
 
   if (!isChk && !isDln) return null;
 
@@ -5835,6 +6214,39 @@ function getResetFromModal(prefix = "") {
 
   const resetCount = (countInput?.value && countInput.value.trim() !== '') ? parseInt(countInput.value, 10) : null;
 
+  let lastResetAt = Date.now();
+  if (prefix === "edit-" && selectedBar) {
+    const existing = selectedBar.lastResetAt || (selectedBar.repeat && selectedBar.repeat.lastResetAt);
+    if (existing) lastResetAt = existing;
+  }
+
+  let deadlineTime = null;
+  const dlnDateInput = document.getElementById(prefix + 'deadline-date');
+  const dlnTimeInput = document.getElementById(prefix + 'deadline-time');
+  const dlnHrsInput = document.getElementById(prefix + 'deadline-hrs');
+  const dlnMinsInput = document.getElementById(prefix + 'deadline-mins');
+
+  if (dlnDateInput?.value || dlnTimeInput?.value) {
+    deadlineTime = dlnTimeInput?.value || "23:59";
+  } else if (dlnHrsInput?.value || dlnMinsInput?.value) {
+    const hrs = parseFloat(dlnHrsInput.value) || 0;
+    const mins = parseFloat(dlnMinsInput.value) || 0;
+    if (hrs > 0 || mins > 0) {
+      const targetDate = new Date(Date.now() + (hrs * 3600000) + (mins * 60000));
+      deadlineTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
+    }
+  } else if (prefix === "edit-" && selectedBar) {
+    const dMs = getDeadlineMs(selectedBar);
+    if (selectedBar.deadlineTime) {
+      deadlineTime = selectedBar.deadlineTime;
+    } else if (selectedBar.repeat?.deadlineTime) {
+      deadlineTime = selectedBar.repeat.deadlineTime;
+    } else if (dMs) {
+      const d = new Date(dMs);
+      deadlineTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+  }
+
   return {
     resetTime,
     resetCount,
@@ -5842,7 +6254,8 @@ function getResetFromModal(prefix = "") {
     checklistResetCount: resetCount,
     deadlineResetEnabled: isDln,
     deadlineResetCount: resetCount,
-    lastResetAt: Date.now()
+    lastResetAt,
+    deadlineTime
   };
 }
 
@@ -5924,12 +6337,17 @@ function calculateNotifyAt(prefix) {
   let deadlineAt = null;
   let deadlineSetAt = null;
 
-  if (dateInput?.value) {
-    const timeVal = timeInput?.value || "23:59";
-    const deadlineDate = new Date(`${dateInput.value}T${timeVal}:00`);
-    deadlineAt = deadlineDate.getTime();
+  const createdDateInput = document.getElementById(prefix ? 'edit-created-date' : 'create-created-date');
+  const createdTimeInput = document.getElementById(prefix ? 'edit-created-time' : 'create-created-time');
+  const customCreated = parseCustomCreatedAt(createdDateInput?.value, createdTimeInput?.value);
 
-    if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
+  const parsedDeadline = parseDeadlineDateTime(dateInput?.value, timeInput?.value);
+  if (parsedDeadline !== null) {
+    deadlineAt = parsedDeadline;
+
+    if (customCreated) {
+      deadlineSetAt = customCreated;
+    } else if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
       deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
     } else {
       deadlineSetAt = Date.now();
@@ -5940,12 +6358,7 @@ function calculateNotifyAt(prefix) {
     if (hrs > 0 || mins > 0) {
       const now = Date.now();
       deadlineAt = now + (hrs * 3600000) + (mins * 60000);
-
-      if (prefix === "edit-" && selectedBar && selectedBar.deadlineSetAt) {
-        deadlineSetAt = selectedBar.deadlineSetAt.toDate ? selectedBar.deadlineSetAt.toDate().getTime() : Number(selectedBar.deadlineSetAt);
-      } else {
-        deadlineSetAt = now;
-      }
+      deadlineSetAt = now;
     }
   }
 
@@ -6022,10 +6435,6 @@ function calculateNotifyAt(prefix) {
  * Updates the disabled state and calculated preview inside modals.
  * @param {string} prefix "" or "edit-"
  */
-/**
- * Updates the disabled state and calculated preview inside modals.
- * @param {string} prefix "" or "edit-"
- */
 function updateNotificationPreview(prefix) {
   const section = document.getElementById(prefix + 'notification-section');
   const previewEl = document.getElementById(prefix === "edit-" ? "notify-preview-edit" : "notify-preview-create");
@@ -6047,6 +6456,7 @@ function updateNotificationPreview(prefix) {
   }
 
   const dateInput = document.getElementById(prefix + 'deadline-date');
+  const timeInput = document.getElementById(prefix + 'deadline-time');
   const hrsInput = document.getElementById(prefix + 'deadline-hrs');
   const minsInput = document.getElementById(prefix + 'deadline-mins');
   const clearCheckbox = document.getElementById(prefix + 'deadline-clear');
@@ -6055,7 +6465,7 @@ function updateNotificationPreview(prefix) {
   const notifyMinsInput = document.getElementById(prefix + 'notify-mins');
   const notifyPercentInput = document.getElementById(prefix + 'notify-percent');
 
-  const hasDeadline = (dateInput?.value) ||
+  const hasDeadline = (dateInput?.value) || (timeInput?.value) ||
     (parseFloat(hrsInput?.value) > 0 || parseFloat(minsInput?.value) > 0);
   const isCleared = prefix === "edit-" && clearCheckbox?.checked;
 
@@ -6178,6 +6588,14 @@ function setupNotificationListeners(prefix = "") {
     if (notifyMins) notifyMins.value = "";
     if (notifyPercent) notifyPercent.value = "";
   };
+
+  // Bind change/input listeners for created date/time changes
+  const createdDateInput = document.getElementById(prefix ? 'edit-created-date' : 'create-created-date');
+  const createdTimeInput = document.getElementById(prefix ? 'edit-created-time' : 'create-created-time');
+  createdDateInput?.addEventListener('input', runUpdate);
+  createdDateInput?.addEventListener('change', runUpdate);
+  createdTimeInput?.addEventListener('input', runUpdate);
+  createdTimeInput?.addEventListener('change', runUpdate);
 
   // Bind change/input listeners for deadline changes
   dateInput?.addEventListener('input', () => {
@@ -7538,9 +7956,24 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.3 (Latest)",
-    date: "August 11, 2026",
+    version: "v4.4 (Latest)",
+    date: "September 23, 2026",
     isLatest: true,
+    title: "Custom Creation Date, Dynamic Drain Timers & UI Settings Polish",
+    content: `
+### Key Features & Updates
+* **Custom Creation Date**: Backdate or set custom creation date and time when creating or editing any tracker.
+* **Collapsible Settings Card**: Hides advanced date & time inputs behind an elegant expandable settings card with icons and smooth rotating chevron animations, keeping modal forms clean and focused.
+* **Intelligent Drain-Timer Recalculation**:
+  - Dynamically calculates progress drain timers directly from your chosen custom creation date.
+  - When editing a card's deadline, the drain timer intelligently starts from the modification moment unless an explicit creation date is chosen.
+* **Form & Modal UX Polish**: Auto-collapses advanced settings when opening modals to prevent visual clutter, with full light and dark mode styling.
+`
+  },
+  {
+    version: "v4.3",
+    date: "August 11, 2026",
+    isLatest: false,
     title: "Checklist & Deadline Auto-Repeat, Intelligent Cycle States & UI Polish",
     content: `
 ### Key Features & Updates

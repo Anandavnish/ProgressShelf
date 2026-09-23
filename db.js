@@ -1,71 +1,36 @@
 // db.js
-import { supabase, isConfigured } from "./supabase-config.js?v=2.3";
-import { isGuestMode } from "./auth.js?v=2.3";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.0";
+import { isGuestMode } from "./auth.js?v=3.0";
 
 const writeQueues = new Map(); // barId -> latest pending write promise
+
+const DEMO_CARD_TITLES = ['Romio Update 03/08', 'Daily Standup Checklist', 'IITB Classes'];
+
+function isLegacyDemoCard(bar) {
+  if (!bar) return false;
+  const id = String(bar.id || '');
+  const title = String(bar.title || '').trim();
+  return id.startsWith('demo_') || DEMO_CARD_TITLES.includes(title);
+}
 
 // Helper to get/set local storage bars for Sandbox mode
 export function getLocalBars() {
   const data = localStorage.getItem("progress_shelf_bars");
-  if (!data) {
-    const now = Date.now();
-    const demoBars = [
-      {
-        id: "demo_romio",
-        title: "Romio Update 03/08",
-        type: "note",
-        text: "Check release notes and update dependencies for Romio.",
-        completed: false,
-        created_at: new Date(now - 10 * 86400 * 1000).toISOString(),
-        last_updated: new Date(now - 6 * 86400 * 1000).toISOString(),
-        deadline_at: new Date(now - (6 * 24 * 3600 + 8 * 3600) * 1000).toISOString(),
-        deadline_set_at: new Date(now - 10 * 86400 * 1000).toISOString(),
-        repeat: null
-      },
-      {
-        id: "demo_checklist",
-        title: "Daily Standup Checklist",
-        type: "checklist",
-        items: [
-          { id: 1, text: "Check email & Slack", done: true },
-          { id: 2, text: "Review active PRs", done: true },
-          { id: 3, text: "Submit status update", done: false }
-        ],
-        completed: false,
-        created_at: new Date(now - 5 * 86400 * 1000).toISOString(),
-        last_updated: new Date(now - 1800 * 1000).toISOString(),
-        repeat: {
-          resetTime: "02:02",
-          resetCount: null,
-          checklistResetEnabled: true,
-          deadlineResetEnabled: false,
-          lastResetAt: now - 20 * 3600 * 1000
-        }
-      },
-      {
-        id: "demo_iitb",
-        title: "IITB Classes",
-        type: "checklist",
-        items: [
-          { id: 1, text: "Lecture 1: Intro", done: true },
-          { id: 2, text: "Lecture 2: Architecture", done: true }
-        ],
-        completed: false,
-        created_at: new Date(now - 8 * 86400 * 1000).toISOString(),
-        last_updated: new Date(now - 1 * 86400 * 1000).toISOString(),
-        deadline_at: new Date(now - 2 * 86400 * 1000).toISOString(),
-        deadline_set_at: new Date(now - 8 * 86400 * 1000).toISOString(),
-        repeat: null
-      }
-    ];
-    const mapped = demoBars.map(mapDatabaseRow);
-    localStorage.setItem("progress_shelf_bars", JSON.stringify(mapped));
-    return mapped;
-  }
+  if (!data) return [];
   try {
     const raw = JSON.parse(data);
     let changed = false;
-    const normalized = raw.map(bar => {
+
+    // Filter out any stale demo cards that may have been previously auto-seeded into localStorage
+    const filtered = (Array.isArray(raw) ? raw : []).filter(bar => {
+      if (isLegacyDemoCard(bar)) {
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+
+    const normalized = filtered.map(bar => {
       const origRepeat = JSON.stringify(bar.repeat);
       const norm = normalizeBar(bar);
       if (JSON.stringify(norm.repeat) !== origRepeat) {
@@ -73,13 +38,24 @@ export function getLocalBars() {
       }
       return norm;
     });
-    if (changed) {
-      localStorage.setItem("progress_shelf_bars", JSON.stringify(normalized));
+
+    if (changed || filtered.length !== raw.length) {
+      if (normalized.length === 0) {
+        localStorage.removeItem("progress_shelf_bars");
+      } else {
+        localStorage.setItem("progress_shelf_bars", JSON.stringify(normalized));
+      }
     }
     return normalized;
   } catch (e) {
+    localStorage.removeItem("progress_shelf_bars");
     return [];
   }
+}
+
+function normalizeBar(bar) {
+  if (!bar) return bar;
+  return mapDatabaseRow(bar);
 }
 
 function setLocalBars(bars) {
@@ -107,21 +83,25 @@ function mapDatabaseRow(row) {
     type: row.type,
     preset: row.preset,
     levels: row.levels,
-    targetSmallest: row.target_smallest !== null ? Number(row.target_smallest) : null,
-    currentSmallest: row.current_smallest !== null ? Number(row.current_smallest) : null,
+    targetSmallest: row.target_smallest !== undefined && row.target_smallest !== null
+      ? Number(row.target_smallest)
+      : (row.targetSmallest !== undefined && row.targetSmallest !== null ? Number(row.targetSmallest) : null),
+    currentSmallest: row.current_smallest !== undefined && row.current_smallest !== null
+      ? Number(row.current_smallest)
+      : (row.currentSmallest !== undefined && row.currentSmallest !== null ? Number(row.currentSmallest) : null),
     items: row.items,
     text: row.text,
     completed: row.completed,
-    deadlineAt: row.deadline_at ? new Date(row.deadline_at).getTime() : null,
-    deadlineSetAt: row.deadline_set_at ? new Date(row.deadline_set_at).getTime() : null,
-    notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : null,
+    deadlineAt: row.deadline_at ? new Date(row.deadline_at).getTime() : (row.deadlineAt ? (typeof row.deadlineAt === 'number' ? row.deadlineAt : new Date(row.deadlineAt).getTime()) : null),
+    deadlineSetAt: row.deadline_set_at ? new Date(row.deadline_set_at).getTime() : (row.deadlineSetAt ? (typeof row.deadlineSetAt === 'number' ? row.deadlineSetAt : new Date(row.deadlineSetAt).getTime()) : null),
+    notifyAt: row.notify_at ? new Date(row.notify_at).getTime() : (row.notifyAt ? (typeof row.notifyAt === 'number' ? row.notifyAt : new Date(row.notifyAt).getTime()) : null),
     notified: row.notified,
-    notifyPercent: row.notify_percent !== null ? Number(row.notify_percent) : null,
-    alertAtDeadline: row.alert_at_deadline || false,
-    deadlineNotified: row.deadline_notified || false,
+    notifyPercent: row.notify_percent !== undefined && row.notify_percent !== null ? Number(row.notify_percent) : (row.notifyPercent !== undefined && row.notifyPercent !== null ? Number(row.notifyPercent) : null),
+    alertAtDeadline: row.alert_at_deadline || row.alertAtDeadline || false,
+    deadlineNotified: row.deadline_notified || row.deadlineNotified || false,
     position: row.position !== null && row.position !== undefined ? Number(row.position) : 0,
-    createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.last_updated ? new Date(row.last_updated).getTime() : null),
-    lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : null,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.createdAt ? (typeof row.createdAt === 'number' ? row.createdAt : new Date(row.createdAt).getTime()) : (row.last_updated ? new Date(row.last_updated).getTime() : (row.lastUpdated || Date.now()))),
+    lastUpdated: row.last_updated ? new Date(row.last_updated).getTime() : (row.lastUpdated ? (typeof row.lastUpdated === 'number' ? row.lastUpdated : new Date(row.lastUpdated).getTime()) : null),
     repeat: row.repeat || null
   };
 
@@ -152,13 +132,23 @@ function mapDatabaseRow(row) {
       bar.resetTime = `${hrs}:${mins}`;
     }
 
+    if (rawRepeat.deadlineTime && typeof rawRepeat.deadlineTime === 'string') {
+      bar.deadlineTime = rawRepeat.deadlineTime;
+    } else if (bar.deadlineAt) {
+      const d = new Date(bar.deadlineAt);
+      bar.deadlineTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } else {
+      bar.deadlineTime = null;
+    }
+
     // Persist migrated unified repeat object
     const migratedRepeat = {
       resetTime: bar.resetTime,
       resetCount: bar.resetCount,
       checklistResetEnabled: bar.checklistResetEnabled,
       deadlineResetEnabled: bar.deadlineResetEnabled,
-      lastResetAt: bar.lastResetAt
+      lastResetAt: bar.lastResetAt,
+      deadlineTime: bar.deadlineTime
     };
     bar.repeat = migratedRepeat;
     row.repeat = migratedRepeat;
@@ -170,6 +160,7 @@ function mapDatabaseRow(row) {
     bar.deadlineResetCount = null;
     bar.resetTime = null;
     bar.lastResetAt = null;
+    bar.deadlineTime = null;
   }
 
   return bar;
@@ -208,7 +199,17 @@ export function subscribeToBars(uid, onUpdate, onError) {
 
       if (error) throw error;
 
-      cachedBars = (data || []).map(mapDatabaseRow);
+      const rawBars = (data || []).map(mapDatabaseRow);
+
+      // Auto-cleanup any accidental auto-seeded demo cards in cloud account
+      const demoCardsInCloud = rawBars.filter(b => isLegacyDemoCard(b));
+      if (demoCardsInCloud.length > 0) {
+        console.log(`[Auto-Cleanup] Found ${demoCardsInCloud.length} auto-seeded demo card(s) in cloud. Cleaning up...`);
+        const idsToDelete = demoCardsInCloud.map(b => b.id);
+        deleteMultipleBars(uid, idsToDelete).catch(err => console.error("Error deleting cloud demo cards:", err));
+      }
+
+      cachedBars = rawBars.filter(b => !isLegacyDemoCard(b));
       onUpdate(cachedBars);
     } catch (err) {
       console.error("Error fetching trackers:", err);
@@ -230,6 +231,10 @@ export function subscribeToBars(uid, onUpdate, onError) {
         if (eventType === 'INSERT') {
           if (newRow.user_id === uid) {
             const mapped = mapDatabaseRow(newRow);
+            if (isLegacyDemoCard(mapped)) {
+              deleteMultipleBars(uid, [mapped.id]).catch(err => console.error("Error purging legacy demo card on insert:", err));
+              return;
+            }
             if (!cachedBars.some(b => b.id === mapped.id)) {
               cachedBars.push(mapped);
             }
@@ -267,7 +272,7 @@ export function subscribeToBars(uid, onUpdate, onError) {
  * @returns {Promise<string>} The auto-generated bar ID.
  */
 export async function createBar(uid, {
-  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
+  title, type, preset, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, deadlineSetAt, createdAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
 }) {
   let finalRepeat = null;
   const rawCount = resetCount !== undefined 
@@ -278,13 +283,16 @@ export async function createBar(uid, {
   const isChk = !!(checklistResetEnabled || (repeat && repeat.checklistResetEnabled));
   const isDln = !!(deadlineResetEnabled || (repeat && repeat.deadlineResetEnabled));
 
+  const parsedDeadlineTime = (repeat && repeat.deadlineTime) || null;
+
   if (repeat && typeof repeat === 'object') {
     finalRepeat = {
       resetTime: parsedResetTime,
       resetCount: parsedCount,
       checklistResetEnabled: isChk,
       deadlineResetEnabled: isDln,
-      lastResetAt: repeat.lastResetAt || lastResetAt || Date.now()
+      lastResetAt: repeat.lastResetAt || lastResetAt || Date.now(),
+      deadlineTime: parsedDeadlineTime
     };
   } else if (checklistResetEnabled !== undefined || deadlineResetEnabled !== undefined || resetTime !== undefined || resetCount !== undefined) {
     finalRepeat = {
@@ -292,13 +300,16 @@ export async function createBar(uid, {
       resetCount: parsedCount,
       checklistResetEnabled: isChk,
       deadlineResetEnabled: isDln,
-      lastResetAt: lastResetAt || Date.now()
+      lastResetAt: lastResetAt || Date.now(),
+      deadlineTime: parsedDeadlineTime
     };
   }
 
   if (!isConfigured || isGuestMode()) {
     const bars = getLocalBars();
     const now = Date.now();
+    const effectiveCreatedAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : now;
+    const effectiveDeadlineSetAt = deadlineAt ? (deadlineSetAt ? Number(deadlineSetAt) : effectiveCreatedAt) : null;
     const newBar = {
       id: "bar_" + now + "_" + Math.random().toString(36).substr(2, 9),
       title,
@@ -310,10 +321,11 @@ export async function createBar(uid, {
       items: items || null,
       text: text || null,
       completed: completed || false,
-      createdAt: now,
+      createdAt: effectiveCreatedAt,
       lastUpdated: now,
       deadlineAt: deadlineAt || null,
-      deadlineSetAt: deadlineAt ? (deadlineSetAt || now) : null,
+      deadlineSetAt: effectiveDeadlineSetAt,
+      deadlineTime: finalRepeat ? finalRepeat.deadlineTime : null,
       notifyAt: notifyAt || null,
       notified: notified || false,
       notifyPercent: notifyPercent || null,
@@ -340,6 +352,8 @@ export async function createBar(uid, {
       : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       
     const now = new Date().toISOString();
+    const effectiveCreatedAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : Date.now();
+    const effectiveDeadlineSetAt = deadlineAt ? (deadlineSetAt ? Number(deadlineSetAt) : effectiveCreatedAt) : null;
     const { error } = await supabase.from('trackers').insert({
       id,
       user_id: uid,
@@ -352,8 +366,9 @@ export async function createBar(uid, {
       items: items || null,
       text: text || null,
       completed: completed || false,
+      created_at: new Date(effectiveCreatedAt).toISOString(),
       deadline_at: deadlineAt ? new Date(deadlineAt).toISOString() : null,
-      deadline_set_at: deadlineAt ? (deadlineSetAt ? new Date(deadlineSetAt).toISOString() : now) : null,
+      deadline_set_at: effectiveDeadlineSetAt ? new Date(effectiveDeadlineSetAt).toISOString() : null,
       notify_at: notifyAt ? new Date(notifyAt).toISOString() : null,
       notified: notified || false,
       notify_percent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
@@ -456,7 +471,7 @@ export async function editBar(uid, barId, updates) {
 }
 
 async function _editBarInternal(uid, barId, {
-  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
+  title, levels, targetSmallest, currentSmallest, items, text, completed, deadlineAt, updateDeadline, deadlineSetAt, createdAt, notifyAt, notified, notifyPercent, alertAtDeadline, deadlineNotified, position, resetTime, resetCount, checklistResetEnabled, checklistResetCount, deadlineResetEnabled, deadlineResetCount, lastResetAt, repeat
 }) {
   let finalRepeat = undefined;
   const rawCount = resetCount !== undefined 
@@ -467,6 +482,8 @@ async function _editBarInternal(uid, barId, {
   const isChk = !!(checklistResetEnabled || (repeat && repeat.checklistResetEnabled));
   const isDln = !!(deadlineResetEnabled || (repeat && repeat.deadlineResetEnabled));
 
+  const parsedDeadlineTime = (repeat && repeat.deadlineTime) || null;
+
   if (repeat !== undefined) {
     if (repeat && typeof repeat === 'object') {
       finalRepeat = {
@@ -474,7 +491,8 @@ async function _editBarInternal(uid, barId, {
         resetCount: parsedCount,
         checklistResetEnabled: isChk,
         deadlineResetEnabled: isDln,
-        lastResetAt: repeat.lastResetAt || lastResetAt || null
+        lastResetAt: repeat.lastResetAt || lastResetAt || null,
+        deadlineTime: parsedDeadlineTime
       };
     } else {
       finalRepeat = null;
@@ -485,7 +503,8 @@ async function _editBarInternal(uid, barId, {
       resetCount: parsedCount,
       checklistResetEnabled: isChk,
       deadlineResetEnabled: isDln,
-      lastResetAt: lastResetAt || null
+      lastResetAt: lastResetAt || null,
+      deadlineTime: parsedDeadlineTime
     };
   }
 
@@ -497,14 +516,18 @@ async function _editBarInternal(uid, barId, {
       let newDeadlineAt = original.deadlineAt;
       let newDeadlineSetAt = original.deadlineSetAt;
 
-      if (updateDeadline) {
+      if (deadlineSetAt !== undefined) {
+        newDeadlineSetAt = deadlineSetAt ? Number(deadlineSetAt) : null;
+      } else if (updateDeadline) {
         if (deadlineAt) {
           newDeadlineAt = deadlineAt;
-          newDeadlineSetAt = Date.now();
+          newDeadlineSetAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : (original.deadlineSetAt || Date.now());
         } else {
           newDeadlineAt = null;
           newDeadlineSetAt = null;
         }
+      } else if (createdAt !== undefined && createdAt !== null && newDeadlineAt) {
+        newDeadlineSetAt = Number(createdAt);
       }
 
       const effectiveRepeat = finalRepeat !== undefined ? finalRepeat : original.repeat;
@@ -512,6 +535,7 @@ async function _editBarInternal(uid, barId, {
       bars[idx] = {
         ...original,
         title,
+        createdAt: (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : original.createdAt,
         levels: levels !== undefined ? levels : original.levels,
         targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : null,
         currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : null,
@@ -521,6 +545,7 @@ async function _editBarInternal(uid, barId, {
         lastUpdated: Date.now(),
         deadlineAt: newDeadlineAt,
         deadlineSetAt: newDeadlineSetAt,
+        deadlineTime: effectiveRepeat ? effectiveRepeat.deadlineTime : null,
         notifyAt: notifyAt !== undefined ? notifyAt : original.notifyAt,
         notified: notified !== undefined ? notified : original.notified,
         notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent,
@@ -549,6 +574,7 @@ async function _editBarInternal(uid, barId, {
       last_updated: now
     };
 
+    if (createdAt !== undefined && createdAt !== null) updates.created_at = new Date(createdAt).toISOString();
     if (levels !== undefined) updates.levels = levels;
     if (targetSmallest !== null && targetSmallest !== undefined) updates.target_smallest = Number(targetSmallest);
     if (currentSmallest !== null && currentSmallest !== undefined) updates.current_smallest = Number(currentSmallest);
@@ -566,14 +592,21 @@ async function _editBarInternal(uid, barId, {
       updates.repeat = finalRepeat;
     }
 
-    if (updateDeadline) {
+    if (deadlineSetAt !== undefined) {
+      updates.deadline_set_at = deadlineSetAt ? new Date(deadlineSetAt).toISOString() : null;
+      if (updateDeadline) {
+        updates.deadline_at = deadlineAt ? new Date(deadlineAt).toISOString() : null;
+      }
+    } else if (updateDeadline) {
       if (deadlineAt) {
         updates.deadline_at = new Date(deadlineAt).toISOString();
-        updates.deadline_set_at = now;
+        updates.deadline_set_at = (createdAt !== undefined && createdAt !== null) ? new Date(createdAt).toISOString() : now;
       } else {
         updates.deadline_at = null;
         updates.deadline_set_at = null;
       }
+    } else if (createdAt !== undefined && createdAt !== null) {
+      updates.deadline_set_at = new Date(createdAt).toISOString();
     }
 
     const { error } = await supabase

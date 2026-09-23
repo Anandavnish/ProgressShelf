@@ -1,6 +1,6 @@
 // auth.js
-import { supabase, isConfigured } from "./supabase-config.js?v=2.3";
-import { updateUserSettings } from "./db.js?v=2.4";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.0";
+import { updateUserSettings } from "./db.js?v=3.0";
 
 const isDashboard = window.location.pathname.endsWith("dashboard.html");
 

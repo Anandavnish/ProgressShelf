@@ -5609,3 +5609,167 @@ textarea.form-input-single-line {
   display: inline-block;
   vertical-align: middle;
 }
+
+/* Custom Creation Date Collapsible Settings Card */
+.advanced-date-details {
+  margin-top: 18px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.advanced-date-details:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.advanced-date-details[open] {
+  border-color: rgba(74, 144, 217, 0.4);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.advanced-date-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  transition: background 0.15s ease;
+}
+
+.advanced-date-summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-date-summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+
+.advanced-date-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.advanced-date-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(74, 144, 217, 0.12);
+  color: var(--ui-accent);
+  flex-shrink: 0;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.advanced-date-details:hover .advanced-date-icon-wrap {
+  transform: scale(1.05);
+}
+
+.advanced-date-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.advanced-date-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.advanced-date-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.advanced-date-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.advanced-date-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.advanced-date-chevron {
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.advanced-date-summary:hover .advanced-date-chevron {
+  color: var(--text-primary);
+}
+
+.advanced-date-details[open] .advanced-date-chevron {
+  transform: rotate(180deg);
+  color: var(--ui-accent);
+}
+
+.advanced-date-details[open] .advanced-date-summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.advanced-date-content {
+  padding: 14px;
+  animation: detailsFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes detailsFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Light Theme overrides */
+html.light-theme .advanced-date-details {
+  background: #F8FAFC;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+html.light-theme .advanced-date-details:hover {
+  background: #F1F5F9;
+  border-color: rgba(0, 0, 0, 0.16);
+}
+
+html.light-theme .advanced-date-details[open] {
+  background: #FFFFFF;
+  border-color: var(--ui-accent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+html.light-theme .advanced-date-details[open] .advanced-date-summary {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+html.light-theme .advanced-date-badge {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
