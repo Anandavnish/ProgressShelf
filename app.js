@@ -3988,14 +3988,14 @@ function renderTargetAndCurrentInputs() {
     const targetCol = document.createElement("div");
     targetCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+      <input type="number" step="${stepVal}" min="0" class="form-input form-input-single-line target-val-input" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0">
     `;
     createTargetDynamic.appendChild(targetCol);
 
     const currentCol = document.createElement("div");
     currentCol.innerHTML = `
       <label class="form-row-label">${escapeHtml(level.name)}</label>
-      <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+      <input type="number" step="${stepVal}" min="0" class="form-input form-input-single-line current-val-input" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0">
     `;
     createCurrentDynamic.appendChild(currentCol);
   });
@@ -4338,7 +4338,7 @@ function openEditModal(bar) {
       const targetCol = document.createElement("div");
       targetCol.innerHTML = `
         <label class="form-row-label">${escapeHtml(level.name)}</label>
-        <textarea class="form-input form-input-single-line target-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+        <input type="number" step="${stepVal}" min="0" class="form-input form-input-single-line target-val-input" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0">
       `;
       editTargetDynamic.appendChild(targetCol);
 
@@ -4346,7 +4346,7 @@ function openEditModal(bar) {
         const currentCol = document.createElement("div");
         currentCol.innerHTML = `
           <label class="form-row-label">${escapeHtml(level.name)}</label>
-          <textarea class="form-input form-input-single-line current-val-input" rows="1" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0"></textarea>
+          <input type="number" step="${stepVal}" min="0" class="form-input form-input-single-line current-val-input" inputmode="decimal" data-level-name="${escapeHtml(level.name)}" placeholder="0">
         `;
         editCurrentDynamic.appendChild(currentCol);
       }
