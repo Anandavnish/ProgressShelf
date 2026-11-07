@@ -3861,10 +3861,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .nav-search-container.search-pill-mode .nav-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   opacity: 1;
   pointer-events: auto;
-  padding: 6px 0;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  outline: none;
 }
 
 .nav-search-container.search-pill-mode .nav-search-btn {
@@ -3908,6 +3913,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .nav-search-input::placeholder {
   color: var(--search-muted-icon);
+  text-overflow: ellipsis;
 }
 
 /* Hide WebKit and standard native clear search buttons */
@@ -4012,7 +4018,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     gap: 8px !important;
   }
 
-  /* Mobile view rules for Theme Settings */
+  /* Mobile view rules for Theme Settings and Search Pill */
 @media (max-width: 768px) {
   .profile-theme-section {
     display: block;
@@ -4022,6 +4028,19 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .mobile-subbar .theme-menu-container,
   .mobile-subbar .accent-menu-container {
     display: none !important;
+  }
+  .nav-search-container.search-pill-mode {
+    margin: 0 8px !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    padding: 3px 4px 3px 12px !important;
+    gap: 4px !important;
+  }
+  .nav-search-container.search-pill-mode .nav-search-input {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    padding: 2px 0 !important;
+    font-size: 0.84rem !important;
   }
 }
 
@@ -4034,6 +4053,21 @@ body.is-mobile-layout .navbar .accent-menu-container,
 body.is-mobile-layout .mobile-subbar .theme-menu-container,
 body.is-mobile-layout .mobile-subbar .accent-menu-container {
   display: none !important;
+}
+
+body.is-mobile-layout .nav-search-container.search-pill-mode {
+  margin: 0 8px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  padding: 3px 4px 3px 12px !important;
+  gap: 4px !important;
+}
+
+body.is-mobile-layout .nav-search-container.search-pill-mode .nav-search-input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  padding: 2px 0 !important;
+  font-size: 0.84rem !important;
 }
 
 /* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
@@ -6303,12 +6337,17 @@ html.is-native-app .nav-logo-text {
 html.is-native-app .nav-search-container {
   margin: 0 4px !important;
   flex: 1 1 auto !important;
+  min-width: 0 !important;
+  padding: 3px 4px 3px 12px !important;
+  gap: 4px !important;
 }
 
 html.is-native-app .nav-search-input {
-  height: 34px !important;
-  font-size: 0.82rem !important;
-  padding: 6px 30px 6px 12px !important;
+  height: 100% !important;
+  font-size: 0.84rem !important;
+  padding: 2px 0 !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
 }
 
 html.is-native-app .nav-toolbar {

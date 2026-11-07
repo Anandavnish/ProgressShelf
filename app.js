@@ -1,5 +1,5 @@
 import { isConfigured } from "./supabase-config.js?v=3.0";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.0";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.1";
 import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=3.1";
 // Initialize Firebase FCM if configured (lazy, non-blocking on web, disabled on native)
 const firebaseConfig = window.firebaseConfig || {};
@@ -5464,17 +5464,35 @@ function adjustSearchLayout() {
   searchContainer.classList.add("search-pill-mode");
   searchContainer.classList.remove("expanded");
 
+  // Ensure theme & accent toggles remain in toolbar (never transferred to mobile subbar)
+  const themeToggle = document.querySelector(".theme-menu-container");
+  const accentToggle = document.querySelector(".accent-menu-container");
+  if (themeToggle && themeToggle.parentElement !== toolbar) {
+    if (profileBadge) toolbar.insertBefore(themeToggle, profileBadge);
+    else toolbar.appendChild(themeToggle);
+  }
+  if (accentToggle && accentToggle.parentElement !== toolbar) {
+    if (profileBadge) toolbar.insertBefore(accentToggle, profileBadge);
+    else toolbar.appendChild(accentToggle);
+  }
+
   // Dynamically gather all transferable elements from both potential containers
   const transferItems = [];
-  // Gather from toolbar
+  // Gather from toolbar (exclude profile badge and theme/accent toggles)
   Array.from(toolbar.children).forEach(child => {
-    if (!child.classList.contains("profile-menu-container") && !transferItems.includes(child)) {
+    if (!child.classList.contains("profile-menu-container") &&
+        !child.classList.contains("theme-menu-container") &&
+        !child.classList.contains("accent-menu-container") &&
+        !transferItems.includes(child)) {
       transferItems.push(child);
     }
   });
   // Gather from subbarContainer
   Array.from(subbarContainer.children).forEach(child => {
-    if (!transferItems.includes(child)) {
+    if (child.classList.contains("theme-menu-container") || child.classList.contains("accent-menu-container")) {
+      if (profileBadge) toolbar.insertBefore(child, profileBadge);
+      else toolbar.appendChild(child);
+    } else if (!transferItems.includes(child)) {
       transferItems.push(child);
     }
   });
@@ -5514,6 +5532,8 @@ function adjustSearchLayout() {
   // Total required width: Logo + Min Search Pill Width + Profile Badge + Toolbar width + 50px buffer
   const totalRequiredWidth = logoWidth + searchMinWidth + profileWidth + toolbarWidth + 50;
   const shouldMoveToSubbar = navWidth < totalRequiredWidth;
+
+  document.body.classList.toggle("is-mobile-layout", shouldMoveToSubbar);
 
   if (shouldMoveToSubbar) {
     if (!isCurrentlyInMobileDOM) {
@@ -5592,11 +5612,13 @@ const setupGlobalSearchListener = () => {
 
   const updateSearchPlaceholder = () => {
     if (!searchInput) return;
-    const isLargeScreen = window.innerWidth >= 1024;
-    if (isLargeScreen) {
+    const width = window.innerWidth;
+    if (width >= 1024) {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const shortcutText = isMac ? "⌘F" : "Ctrl+F";
       searchInput.placeholder = `Global Search [${shortcutText}]`;
+    } else if (width < 340) {
+      searchInput.placeholder = "Search";
     } else {
       searchInput.placeholder = "Global Search";
     }
@@ -5704,8 +5726,17 @@ btnProfileBadge?.addEventListener("click", (e) => {
     if (!wasActive) {
       // Position dropdown dynamically relative to the badge to avoid nested backdrop-filter bug
       const rect = btnProfileBadge.getBoundingClientRect();
-      profileDropdown.style.top = `${rect.bottom + window.scrollY + 12}px`;
-      profileDropdown.style.left = `${rect.right + window.scrollX - 220}px`;
+      const dropdownWidth = profileDropdown.offsetWidth || 260;
+      const viewportWidth = window.innerWidth;
+      const padding = 12;
+
+      let left = rect.right + window.scrollX - dropdownWidth;
+      const minLeft = window.scrollX + padding;
+      const maxLeft = window.scrollX + viewportWidth - dropdownWidth - padding;
+      left = Math.max(minLeft, Math.min(left, maxLeft));
+
+      profileDropdown.style.top = `${rect.bottom + window.scrollY + 10}px`;
+      profileDropdown.style.left = `${left}px`;
 
       profileDropdown.classList.add("active");
       if (typeof showBackdrop === 'function') showBackdrop();
@@ -8962,8 +8993,34 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
         item.classList.remove('active');
       }
     });
+    const modeBtns = document.querySelectorAll('.theme-mode-btn');
+    modeBtns.forEach(btn => {
+      if (btn.getAttribute('data-theme') === theme) {
+        btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
+      } else {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+      }
+    });
   };
   window.syncToggleButtons = syncToggleButtons;
+
+  // Bind click handlers to theme options (mobile segmented control)
+  document.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const theme = btn.getAttribute('data-theme');
+      if (!theme) return;
+      localStorage.setItem('app-theme', theme);
+      applyThemeClass(theme);
+      syncToggleButtons(theme);
+      if (typeof updateUserThemePreference === 'function') {
+        const accent = localStorage.getItem('app-accent-color');
+        updateUserThemePreference(theme, accent);
+      }
+    });
+  });
 
   // Toggle menu dropdown open/close
   const btn = document.getElementById('theme-toggle-btn');
@@ -9198,97 +9255,103 @@ function initAccentColor() {
   };
 
   /**
-   * Render swatch buttons into the palette container.
+   * Render swatch buttons into all palette containers (Desktop toolbar & Mobile Profile Dropdown).
    */
   function renderSwatches(activeValue) {
-    const palette = document.getElementById('accent-palette');
-    if (!palette) return;
+    const palettes = document.querySelectorAll('.accent-palette');
+    if (!palettes.length) return;
     
     const customAccents = getCustomAccents();
-    
-    // Clear and re-append predefined colors
-    palette.innerHTML = '';
     const allColors = [...COLORS, ...customAccents.map(hex => processCustomColor(hex))];
 
-    allColors.forEach(color => {
-      const wrapper = document.createElement('div');
-      wrapper.style.position = 'relative';
-      wrapper.style.display = 'inline-block';
-      
-      const btn = document.createElement('button');
-      btn.className = 'accent-swatch' + (color.value === activeValue ? ' active' : '');
-      btn.style.backgroundColor = color.value;
-      btn.title = color.name;
-      btn.setAttribute('aria-label', color.name);
-      
-      btn.addEventListener('click', () => {
-        localStorage.setItem(STORAGE_KEY, color.value);
-        applyAccent(color);
-        renderSwatches(color.value);
-        
-        if (typeof window.applyThemeClass === 'function') {
-          const currentTheme = localStorage.getItem('app-theme') || 'system';
-          if (currentTheme !== 'light') {
-            localStorage.setItem('app-theme', 'light');
-            window.applyThemeClass('light');
-            if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
-          }
-        }
-        
-        if (typeof updateUserThemePreference === 'function') {
-          updateUserThemePreference('light', color.value, getCustomAccents());
-        }
-        
-        const menu = document.getElementById('accent-dropdown-menu');
-        if (typeof closeAllMenus === 'function') {
-          closeAllMenus();
-        } else if (menu) {
-          menu.classList.remove('active');
-        }
-      });
-      
-      wrapper.appendChild(btn);
+    palettes.forEach(palette => {
+      palette.innerHTML = '';
 
-      // Add delete 'x' button for custom colors
-      if (color.isCustom) {
-        const delBtn = document.createElement('button');
-        delBtn.innerHTML = '×';
-        delBtn.className = 'accent-swatch-delete';
-        delBtn.title = 'Delete custom color';
-        delBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          let newAccents = getCustomAccents().filter(h => h !== color.value);
-          saveCustomAccents(newAccents);
-          if (activeValue === color.value) {
-            // Revert to default green if we delete the active color
-            localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
-            applyAccent(DEFAULT_COLOR);
-            activeValue = DEFAULT_COLOR.value;
-            if (typeof updateUserThemePreference === 'function') {
-              updateUserThemePreference('light', DEFAULT_COLOR.value, newAccents);
-            }
-          } else {
-            if (typeof updateUserThemePreference === 'function') {
-              updateUserThemePreference('light', localStorage.getItem(STORAGE_KEY), newAccents);
+      allColors.forEach(color => {
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.display = 'inline-block';
+        
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'accent-swatch' + (color.value === activeValue ? ' active' : '');
+        btn.style.backgroundColor = color.value;
+        btn.title = color.name;
+        btn.setAttribute('aria-label', color.name);
+        
+        btn.addEventListener('click', () => {
+          localStorage.setItem(STORAGE_KEY, color.value);
+          applyAccent(color);
+          renderSwatches(color.value);
+          
+          if (typeof window.applyThemeClass === 'function') {
+            const currentTheme = localStorage.getItem('app-theme') || 'system';
+            if (currentTheme !== 'light') {
+              localStorage.setItem('app-theme', 'light');
+              window.applyThemeClass('light');
+              if (typeof window.syncToggleButtons === 'function') window.syncToggleButtons('light');
             }
           }
-          renderSwatches(activeValue);
+          
+          if (typeof updateUserThemePreference === 'function') {
+            updateUserThemePreference('light', color.value, getCustomAccents());
+          }
+          
+          // Only close desktop dropdown if click was within desktop dropdown
+          const desktopMenu = document.getElementById('accent-dropdown-menu');
+          if (desktopMenu && desktopMenu.contains(btn)) {
+            if (typeof closeAllMenus === 'function') {
+              closeAllMenus();
+            } else {
+              desktopMenu.classList.remove('active');
+            }
+          }
         });
-        wrapper.appendChild(delBtn);
-      }
-      
-      palette.appendChild(wrapper);
+        
+        wrapper.appendChild(btn);
+
+        // Add delete 'x' button for custom colors
+        if (color.isCustom) {
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.innerHTML = '×';
+          delBtn.className = 'accent-swatch-delete';
+          delBtn.title = 'Delete custom color';
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let newAccents = getCustomAccents().filter(h => h !== color.value);
+            saveCustomAccents(newAccents);
+            if (activeValue === color.value) {
+              // Revert to default green if we delete the active color
+              localStorage.setItem(STORAGE_KEY, DEFAULT_COLOR.value);
+              applyAccent(DEFAULT_COLOR);
+              activeValue = DEFAULT_COLOR.value;
+              if (typeof updateUserThemePreference === 'function') {
+                updateUserThemePreference('light', DEFAULT_COLOR.value, newAccents);
+              }
+            } else {
+              if (typeof updateUserThemePreference === 'function') {
+                updateUserThemePreference('light', localStorage.getItem(STORAGE_KEY), newAccents);
+              }
+            }
+            renderSwatches(activeValue);
+          });
+          wrapper.appendChild(delBtn);
+        }
+        
+        palette.appendChild(wrapper);
+      });
     });
 
-    // Hide '+' button if 3 custom colors exist
-    const customPickerBtn = document.querySelector('.custom-accent-btn');
-    if (customPickerBtn) {
+    // Hide '+' button if 4 custom colors exist
+    const customPickerWrappers = document.querySelectorAll('.custom-color-wrapper, .custom-accent-btn');
+    customPickerWrappers.forEach(btn => {
       if (customAccents.length >= 4) {
-        customPickerBtn.style.display = 'none';
+        btn.style.display = 'none';
       } else {
-        customPickerBtn.style.display = 'flex';
+        btn.style.display = 'flex';
       }
-    }
+    });
   }
 
   // Toggle menu dropdown open/close
@@ -9312,10 +9375,10 @@ function initAccentColor() {
     });
   }
 
-  // Custom Color Picker
-  const customPicker = document.getElementById('custom-accent-picker');
-  if (customPicker) {
-    customPicker.addEventListener('change', (e) => {
+  // Custom Color Pickers (Desktop & Mobile Profile Dropdown)
+  const customPickers = document.querySelectorAll('#custom-accent-picker, #profile-custom-accent-picker');
+  customPickers.forEach(picker => {
+    picker.addEventListener('change', (e) => {
       const hex = e.target.value;
       let customAccents = getCustomAccents();
       
@@ -9350,7 +9413,7 @@ function initAccentColor() {
         updateUserThemePreference('light', processedColor.value, customAccents);
       }
     });
-  }
+  });
 
   // Boot: apply saved or default color in light mode, or clear in dark mode, and always render swatches
   const savedColor = localStorage.getItem(STORAGE_KEY);

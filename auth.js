@@ -1,8 +1,8 @@
 // auth.js
 import { supabase, isConfigured } from "./supabase-config.js?v=3.0";
-import { updateUserSettings } from "./db.js?v=3.0";
+import { updateUserSettings } from "./db.js?v=3.1";
 
-const isDashboard = window.location.pathname.endsWith("dashboard.html");
+const isDashboard = window.location.pathname.includes("dashboard") || (typeof document !== 'undefined' && !!document.getElementById("cards-grid"));
 
 const mockUser = {
   uid: "demo-user-123",
@@ -13,7 +13,7 @@ const mockUser = {
 /**
  * Maps Supabase User to Firebase User properties expected by app.js
  */
-function mapSupabaseUser(supabaseUser) {
+export function mapSupabaseUser(supabaseUser) {
   if (!supabaseUser) return null;
   return {
     uid: supabaseUser.id,
@@ -31,8 +31,11 @@ function mapSupabaseUser(supabaseUser) {
  * Initiates the Google Sign-In flow using OAuth redirect.
  */
 export async function signInWithGoogle() {
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
   const pathPrefix = window.location.pathname.includes('/ProgressShelf/') ? '/ProgressShelf/' : '/';
-  const redirectUrl = window.location.origin + pathPrefix + 'dashboard.html';
+  const redirectUrl = isNative
+    ? 'com.progressshelf.app://auth'
+    : (window.location.origin + pathPrefix + 'dashboard.html');
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -82,6 +85,8 @@ export async function signOut() {
     localStorage.removeItem('ps_cached_user');
     localStorage.removeItem('ps_fcm_token');
     localStorage.removeItem('ps_guest_bars');
+    localStorage.removeItem('ps_guest_mode');
+    sessionStorage.removeItem('guest_mode');
     sessionStorage.removeItem('password_setup_pending');
     // Step 3: Sign out from Supabase
     if (isConfigured) {
@@ -99,6 +104,8 @@ export async function logout() {
   if (!isConfigured) {
     localStorage.removeItem("progress_shelf_demo");
     localStorage.removeItem("ps_cached_user");
+    localStorage.removeItem("ps_guest_mode");
+    sessionStorage.removeItem("guest_mode");
     window.location.href = "index.html";
     return;
   }
@@ -107,16 +114,26 @@ export async function logout() {
 
 // Guest mode: set when user clicks "Continue without login"
 export function enterGuestMode() {
-  sessionStorage.setItem('guest_mode', 'true');
+  try {
+    localStorage.setItem('ps_guest_mode', 'true');
+    sessionStorage.setItem('guest_mode', 'true');
+  } catch (e) {}
   window.location.href = 'dashboard.html';
 }
 
 export function isGuestMode() {
-  return sessionStorage.getItem('guest_mode') === 'true';
+  try {
+    return localStorage.getItem('ps_guest_mode') === 'true' || sessionStorage.getItem('guest_mode') === 'true';
+  } catch (e) {
+    return false;
+  }
 }
 
 export function exitGuestMode() {
-  sessionStorage.removeItem('guest_mode');
+  try {
+    localStorage.removeItem('ps_guest_mode');
+    sessionStorage.removeItem('guest_mode');
+  } catch (e) {}
 }
 
 /**
@@ -263,33 +280,54 @@ export function initAuthProtection(onUserActive) {
     }
   };
 
-  // Check initial session state
-  return supabase.auth.getSession().then(({ data: { session } }) => {
+  const isGuest = isGuestMode();
+  const cachedUser = getCachedUser();
+  const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
+
+  let initialDispatched = false;
+
+  // Cache-first fast startup: on dashboard, immediately dispatch cached user or guest
+  // with zero network calls blocking first paint
+  if (isDashboard && (cachedUser || isGuest) && !isPasswordSetupPending) {
+    initialDispatched = true;
+    if (onUserActive) {
+      onUserActive(isGuest ? { uid: null, displayName: "Guest" } : cachedUser);
+    }
+  }
+
+  // Validate session with Supabase in the background
+  if (!supabase || !supabase.auth) {
+    return Promise.resolve(null);
+  }
+
+  return supabase.auth.getSession()
+    .catch((err) => {
+      console.warn('[Auth] getSession failed or timed out:', err);
+      return { data: { session: null } };
+    })
+    .then(({ data: { session } = {} }) => {
     let user = session ? mapSupabaseUser(session.user) : null;
     if (user) {
       localStorage.setItem("ps_cached_user", JSON.stringify(user));
-    } else {
-      user = getCachedUser();
+    } else if (!isGuest) {
+      localStorage.removeItem("ps_cached_user");
     }
-
-    const isGuest = isGuestMode();
-    const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
     if (user) {
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist().then((granted) => {
           console.log('[Auth] Persistent storage granted:', granted);
-        });
+        }).catch(() => {});
       }
       if (!isDashboard && !isPasswordSetupPending) {
         window.location.href = "dashboard.html";
-      } else if (onUserActive) {
+      } else if (onUserActive && (!initialDispatched || user.uid !== cachedUser?.uid)) {
         onUserActive(user);
       }
     } else if (isGuest) {
       if (!isDashboard) {
         window.location.href = "dashboard.html";
-      } else if (onUserActive) {
+      } else if (onUserActive && !initialDispatched) {
         onUserActive({ uid: null, displayName: "Guest" });
       }
     } else {
@@ -420,3 +458,109 @@ export async function updateUserFontPreference(fontFamily) {
     console.error("Failed to update user font preference:", err);
   }
 }
+
+/**
+ * Handles incoming deep link URL (from appUrlOpen or getLaunchUrl)
+ * Parses tokens or OAuth authorization code, establishes Supabase session,
+ * caches user profile, and navigates to dashboard.
+ */
+export async function handleAppUrl(url) {
+  if (!url || !isConfigured) return;
+  console.log('[Auth] Handling deep link URL:', url);
+
+  const hashIndex = url.indexOf('#');
+  const queryIndex = url.indexOf('?');
+
+  const params = new URLSearchParams();
+  if (queryIndex !== -1) {
+    const queryPart = (hashIndex !== -1 && hashIndex > queryIndex)
+      ? url.substring(queryIndex + 1, hashIndex)
+      : url.substring(queryIndex + 1);
+    new URLSearchParams(queryPart).forEach((v, k) => params.set(k, v));
+  }
+  if (hashIndex !== -1) {
+    new URLSearchParams(url.substring(hashIndex + 1)).forEach((v, k) => params.set(k, v));
+  }
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const code = params.get('code');
+  const errorDescription = params.get('error_description') || params.get('error');
+
+  if (errorDescription) {
+    console.error('[Auth] OAuth error returned in URL:', errorDescription);
+    throw new Error(errorDescription);
+  }
+
+  if (accessToken && refreshToken) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken
+    });
+    if (error) throw error;
+    if (data?.session?.user) {
+      const user = mapSupabaseUser(data.session.user);
+      localStorage.setItem('ps_cached_user', JSON.stringify(user));
+      exitGuestMode();
+      if (!isDashboard) {
+        window.location.href = 'dashboard.html';
+      } else {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+      return user;
+    }
+  } else if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    if (data?.session?.user) {
+      const user = mapSupabaseUser(data.session.user);
+      localStorage.setItem('ps_cached_user', JSON.stringify(user));
+      exitGuestMode();
+      if (!isDashboard) {
+        window.location.href = 'dashboard.html';
+      } else {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+      return user;
+    }
+  }
+}
+
+/**
+ * Registers native Capacitor deep link listeners for custom scheme (com.progressshelf.app)
+ * and universal links.
+ */
+export function setupDeepLinkListener() {
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+  if (!isNative) return;
+
+  const appPlugin = window.Capacitor?.Plugins?.App;
+  if (!appPlugin) return;
+
+  try {
+    appPlugin.addListener('appUrlOpen', async (data) => {
+      try {
+        if (data && data.url) {
+          await handleAppUrl(data.url);
+        }
+      } catch (err) {
+        console.error('[Auth] Deep link handle error:', err);
+      }
+    });
+  } catch (e) {
+    console.warn('[Auth] Failed to register appUrlOpen listener:', e);
+  }
+
+  if (typeof appPlugin.getLaunchUrl === 'function') {
+    appPlugin.getLaunchUrl().then(async (launchData) => {
+      if (launchData && launchData.url) {
+        await handleAppUrl(launchData.url);
+      }
+    }).catch(err => console.warn('[Auth] getLaunchUrl notice:', err));
+  }
+}
+

@@ -3,3 +3,17 @@ firebase-config.js
 
 node_modules/
 functions/node_modules/
+
+# Capacitor & Android build artifacts
+www/
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+android/Captures/
+android/.externalNativeBuild/
+android/.cxx/
+*.apk
+!ProgressShelf.apk
+*.aab

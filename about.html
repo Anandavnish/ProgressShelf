@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com/">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>About ProgressShelf</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="index.css?v=6.34">
@@ -120,8 +120,9 @@ Got an idea or found something broken? [Write to us] — it opens your email app
   </script>
 
   <script>
-    // Register Service Worker for PWA capabilities
-    if ('serviceWorker' in navigator) {
+    const isNativePlatform = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+    // Register Service Worker for PWA capabilities (Web only)
+    if (!isNativePlatform && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(err => {
         console.warn('Service Worker registration failed inside about.html:', err);
       });
@@ -163,16 +164,16 @@ Got an idea or found something broken? [Write to us] — it opens your email app
         return;
       }
 
-      // Desktop fallback
+      // Direct APK download fallback
       try {
-        const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
         const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
+        link.href = "https://github.com/Anandavnish/ProgressShelf/raw/main/ProgressShelf.apk";
         link.download = "ProgressShelf.apk";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
       } catch (err) {
         alert("Failed to start download.");
       }

@@ -1,32 +1,68 @@
 // login.js
-import { isConfigured } from "./supabase-config.js?v=3.0";
-import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp, isGuestMode } from "./auth.js?v=3.0";
+import { isConfigured, supabase } from "./supabase-config.js?v=3.0";
+import { loginWithGoogle, initAuthProtection, enterGuestMode, signUpWithOtp, verifyOtpCode, updateUserPassword, hasActiveSession, signInWithEmail, checkEmailExists, sendPasswordResetOtp, verifyPasswordResetOtp, isGuestMode, setupDeepLinkListener } from "./auth.js?v=3.1";
 
 const configBanner = document.getElementById("config-banner");
 const googleLoginBtn = document.getElementById("btn-google-login");
 const guestBtn = document.getElementById("btn-guest");
 const errorMsg = document.getElementById("error-message");
 
+// Register deep link listener for native app callbacks
+setupDeepLinkListener();
+
+// Safely unhide the landing page and dismiss native splash
+function revealLoginPage() {
+  document.body.classList.remove("auth-checking");
+  const logo = document.querySelector(".logo-svg-large");
+  if (logo) logo.classList.remove("logo-loading");
+  if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.SplashScreen) {
+    window.Capacitor.Plugins.SplashScreen.hide().catch(() => {});
+  }
+}
+
+// Setup native status bar on landing page with dynamic theme sync
+if (typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+  const { StatusBar } = window.Capacitor.Plugins || {};
+  if (StatusBar) {
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    const updateStatusBarStyle = () => {
+      const isDark = document.documentElement.classList.contains('dark-theme');
+      StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: isDark ? '#0D1117' : '#FFFFFF' }).catch(() => {});
+    };
+    updateStatusBarStyle();
+    const observer = new MutationObserver(updateStatusBarStyle);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      document.documentElement.classList.toggle('dark-theme', e.matches);
+      document.documentElement.classList.toggle('light-theme', !e.matches);
+      updateStatusBarStyle();
+    });
+  }
+}
+
 // Initialize Auth listener to redirect if user is already logged in
 if (isConfigured) {
   initAuthProtection().then((user) => {
     const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
     if (!user && !isGuestMode()) {
-      document.body.classList.remove("auth-checking");
-      const logo = document.querySelector(".logo-svg-large");
-      if (logo) logo.classList.remove("logo-loading");
+      revealLoginPage();
     } else if (user && isPasswordSetupPending) {
-      document.body.classList.remove("auth-checking");
-      const logo = document.querySelector(".logo-svg-large");
-      if (logo) logo.classList.remove("logo-loading");
+      revealLoginPage();
     }
+  }).catch((err) => {
+    console.warn("[Login] Auth protection error, revealing page:", err);
+    revealLoginPage();
   });
+
+  // Fail-safe: ensure landing page is never trapped by slow network
+  setTimeout(() => {
+    revealLoginPage();
+  }, 1000);
 } else {
   // Show setup warning if configuration file is missing/dummy
   configBanner.classList.remove("hidden");
-  document.body.classList.remove("auth-checking");
-  const logo = document.querySelector(".logo-svg-large");
-  if (logo) logo.classList.remove("logo-loading");
+  revealLoginPage();
 }
 
 // Display any redirect errors
@@ -37,22 +73,39 @@ if (savedError) {
   sessionStorage.removeItem("auth_error");
 }
 
+const originalGoogleBtnHtml = googleLoginBtn.innerHTML;
+
+// Reset Google sign-in button if user switches back to the app without completing OAuth
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+    setTimeout(async () => {
+      try {
+        if (isConfigured && supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) return; // user is signed in, redirect will occur
+        }
+      } catch (e) {}
+      googleLoginBtn.style.pointerEvents = "all";
+      googleLoginBtn.innerHTML = originalGoogleBtnHtml;
+    }, 1200);
+  }
+});
+
 // Handle Google Login Button Trigger
 googleLoginBtn.addEventListener("click", async () => {
   errorMsg.classList.add("hidden");
   googleLoginBtn.style.pointerEvents = "none";
-  const originalHtml = googleLoginBtn.innerHTML;
   googleLoginBtn.innerHTML = "Signing in...";
   
   try {
     await loginWithGoogle();
-    // Redirect is handled by onAuthStateChanged / initAuthProtection in auth.js
+    // Redirect is handled by onAuthStateChanged / initAuthProtection / handleAppUrl
   } catch (error) {
     console.error(error);
     errorMsg.textContent = error.message || "Failed to authenticate. Please try again.";
     errorMsg.classList.remove("hidden");
     googleLoginBtn.style.pointerEvents = "all";
-    googleLoginBtn.innerHTML = originalHtml;
+    googleLoginBtn.innerHTML = originalGoogleBtnHtml;
   }
 });
 
@@ -686,8 +739,39 @@ if (linkSignupSkipPassword) {
   });
 }
 
-// Service Worker Registration with Update Reload logic
-if ('serviceWorker' in navigator) {
+// Native-aware setup for login/landing page
+const isNativePlatform = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+
+if (isNativePlatform) {
+  const { App, StatusBar, SplashScreen } = window.Capacitor.Plugins || {};
+
+  if (StatusBar) {
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    const isDark = document.documentElement.classList.contains('dark-theme');
+    StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' }).catch(() => {});
+  }
+
+  // Hide splash screen once landing screen is mounted
+  if (SplashScreen) {
+    SplashScreen.hide().catch(() => {});
+  }
+
+  if (App) {
+    App.addListener('backButton', () => {
+      // If modal-auth is open, close it first
+      const modalAuth = document.getElementById('modal-auth');
+      if (modalAuth && !modalAuth.classList.contains('hidden')) {
+        modalAuth.classList.add('hidden');
+        return;
+      }
+      // Exit app from landing screen
+      App.exitApp();
+    });
+  }
+}
+
+// Service Worker Registration with Update Reload logic (Web only)
+if (!isNativePlatform && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
       .then((reg) => {
@@ -708,10 +792,15 @@ if ('serviceWorker' in navigator) {
   });
 
   // Automatically refresh the page when the service worker updates and takes control
+  const hadControllerOnLoad = !!navigator.serviceWorker.controller;
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadControllerOnLoad) return;
+    if (sessionStorage.getItem('sw_refreshed_recently')) return;
     if (!refreshing) {
       refreshing = true;
+      sessionStorage.setItem('sw_refreshed_recently', 'true');
+      setTimeout(() => sessionStorage.removeItem('sw_refreshed_recently'), 20000);
       window.location.reload();
     }
   });

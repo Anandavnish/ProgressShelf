@@ -62,18 +62,55 @@ function setLocalBars(bars) {
   localStorage.setItem("progress_shelf_bars", JSON.stringify(bars));
 }
 
-// Listeners collection for Sandbox updates
-let mockListeners = [];
+// Helper to get/set locally cached bars for authenticated users (cache-first startup)
+export function getCachedUserBars(uid) {
+  if (!uid) return [];
+  try {
+    const raw = localStorage.getItem(`ps_cached_bars_${uid}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn("Failed to read cached user bars:", e);
+    return [];
+  }
+}
 
-function triggerMockUpdate() {
-  const bars = getLocalBars();
-  mockListeners.forEach(listener => {
+export function setCachedUserBars(uid, bars) {
+  if (!uid || !bars) return;
+  try {
+    localStorage.setItem(`ps_cached_bars_${uid}`, JSON.stringify(bars));
+  } catch (e) {
+    console.warn("Failed to write cached user bars:", e);
+  }
+}
+
+// Active in-memory state and listeners collection for instant optimistic updates
+let activeUid = null;
+let activeBarsState = [];
+let activeBarsListeners = new Set();
+
+function notifyActiveListeners() {
+  const snapshot = [...activeBarsState];
+  activeBarsListeners.forEach(listener => {
     try {
-      listener(bars);
+      listener(snapshot);
     } catch (e) {
-      console.error("Mock listener update failed", e);
+      console.error("Bars listener update failed", e);
     }
   });
+}
+
+function persistActiveBars() {
+  if (activeUid) {
+    setCachedUserBars(activeUid, activeBarsState);
+  } else {
+    setLocalBars(activeBarsState);
+  }
+}
+
+function triggerMockUpdate() {
+  notifyActiveListeners();
 }
 
 function mapDatabaseRow(row) {
@@ -174,28 +211,45 @@ function mapDatabaseRow(row) {
  * @returns {Function} Unsubscribe function to stop listening.
  */
 export function subscribeToBars(uid, onUpdate, onError) {
-  if (!isConfigured || isGuestMode()) {
-    mockListeners.push(onUpdate);
-    // Trigger initial load callback asynchronously
-    setTimeout(() => {
-      onUpdate(getLocalBars());
-    }, 100);
+  activeUid = (!isConfigured || isGuestMode() || !uid) ? null : uid;
+  activeBarsListeners.add(onUpdate);
+
+  if (!activeUid) {
+    activeBarsState = getLocalBars();
+    // Trigger initial load callback immediately for zero startup latency
+    try {
+      onUpdate([...activeBarsState]);
+    } catch (e) {
+      console.warn("Error rendering local bars:", e);
+    }
 
     // Return unsubscribe callback
     return () => {
-      mockListeners = mockListeners.filter(l => l !== onUpdate);
+      activeBarsListeners.delete(onUpdate);
     };
   }
 
-  let cachedBars = [];
+  // 1. Cache-first: read last cached data from local storage and render UI immediately
+  const localCached = getCachedUserBars(activeUid);
+  activeBarsState = (localCached && localCached.length > 0) ? [...localCached] : [];
+  if (activeBarsState.length > 0) {
+    try {
+      onUpdate([...activeBarsState]);
+    } catch (e) {
+      console.warn("Error rendering cached bars:", e);
+    }
+  }
 
-  // Initial fetch and callback helper
+  // 2. Fetch from Supabase in the background
+  let isFetching = false;
   const fetchInitial = async () => {
+    if (isFetching) return;
+    isFetching = true;
     try {
       const { data, error } = await supabase
         .from('trackers')
         .select('*')
-        .eq('user_id', uid);
+        .eq('user_id', activeUid);
 
       if (error) throw error;
 
@@ -206,62 +260,127 @@ export function subscribeToBars(uid, onUpdate, onError) {
       if (demoCardsInCloud.length > 0) {
         console.log(`[Auto-Cleanup] Found ${demoCardsInCloud.length} auto-seeded demo card(s) in cloud. Cleaning up...`);
         const idsToDelete = demoCardsInCloud.map(b => b.id);
-        deleteMultipleBars(uid, idsToDelete).catch(err => console.error("Error deleting cloud demo cards:", err));
+        deleteMultipleBars(activeUid, idsToDelete).catch(err => console.error("Error deleting cloud demo cards:", err));
       }
 
-      cachedBars = rawBars.filter(b => !isLegacyDemoCard(b));
-      onUpdate(cachedBars);
+      const freshBars = rawBars.filter(b => !isLegacyDemoCard(b));
+
+      // Reconcile with any optimistic in-memory bars that may not have reached Supabase yet (created within last 15s)
+      const now = Date.now();
+      const optimisticPending = activeBarsState.filter(localBar => {
+        const isRecent = localBar.createdAt && (now - localBar.createdAt < 15000);
+        const inFresh = freshBars.some(fb => fb.id === localBar.id);
+        return isRecent && !inFresh;
+      });
+
+      const merged = [...freshBars, ...optimisticPending];
+
+      // Update the UI only if data changed or first load had no cache
+      const hasChanged = JSON.stringify(activeBarsState) !== JSON.stringify(merged);
+      if (hasChanged || activeBarsState.length === 0) {
+        activeBarsState = merged;
+        persistActiveBars();
+        notifyActiveListeners();
+      }
     } catch (err) {
       console.error("Error fetching trackers:", err);
-      if (onError) onError(err);
+      if (activeBarsState.length === 0 && onError) {
+        onError(err);
+      }
+    } finally {
+      isFetching = false;
     }
   };
 
-  // Perform initial fetch
+  // Perform initial fetch in background
   fetchInitial();
 
-  // Subscribe to real-time changes
+  // 3. Subscribe to real-time changes
   const channel = supabase
-    .channel(`trackers-user-${uid}`)
+    .channel(`trackers-user-${activeUid}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'trackers' },
       (payload) => {
         const { eventType, new: newRow, old: oldRow } = payload;
         
         if (eventType === 'INSERT') {
-          if (newRow.user_id === uid) {
+          if (newRow.user_id === activeUid) {
             const mapped = mapDatabaseRow(newRow);
             if (isLegacyDemoCard(mapped)) {
-              deleteMultipleBars(uid, [mapped.id]).catch(err => console.error("Error purging legacy demo card on insert:", err));
+              deleteMultipleBars(activeUid, [mapped.id]).catch(err => console.error("Error purging legacy demo card on insert:", err));
               return;
             }
-            if (!cachedBars.some(b => b.id === mapped.id)) {
-              cachedBars.push(mapped);
+            const existingIdx = activeBarsState.findIndex(b => b.id === mapped.id);
+            if (existingIdx !== -1) {
+              // Bar already exists locally from optimistic add; update with canonical server data
+              activeBarsState[existingIdx] = { ...activeBarsState[existingIdx], ...mapped };
+              persistActiveBars();
+            } else {
+              // Bar added from another client/session
+              activeBarsState.push(mapped);
+              persistActiveBars();
+              notifyActiveListeners();
             }
           }
         } else if (eventType === 'UPDATE') {
-          if (newRow.user_id === uid) {
+          if (newRow.user_id === activeUid) {
             const mapped = mapDatabaseRow(newRow);
-            const idx = cachedBars.findIndex(b => b.id === mapped.id);
+            const idx = activeBarsState.findIndex(b => b.id === mapped.id);
             if (idx !== -1) {
-              cachedBars[idx] = mapped;
+              activeBarsState[idx] = { ...activeBarsState[idx], ...mapped };
             } else {
-              cachedBars.push(mapped);
+              activeBarsState.push(mapped);
             }
+            persistActiveBars();
+            notifyActiveListeners();
           }
         } else if (eventType === 'DELETE') {
-          const deleteId = oldRow.id;
-          cachedBars = cachedBars.filter(b => b.id !== deleteId);
+          const deleteId = oldRow?.id;
+          if (deleteId) {
+            const prevLen = activeBarsState.length;
+            activeBarsState = activeBarsState.filter(b => b.id !== deleteId);
+            if (activeBarsState.length !== prevLen) {
+              persistActiveBars();
+              notifyActiveListeners();
+            }
+          }
         }
-        
-        onUpdate(cachedBars);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        // Fast resync on connection establish or reconnect to guarantee no missed events
+        fetchInitial();
+      }
+    });
+
+  // Re-sync on tab visibility change or when device returns online
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      fetchInitial();
+    }
+  };
+  const onOnline = () => {
+    fetchInitial();
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', onOnline);
+  }
 
   // Return unsubscribe callback
   return () => {
+    activeBarsListeners.delete(onUpdate);
     supabase.removeChannel(channel);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', onOnline);
+    }
   };
 }
 
@@ -305,7 +424,7 @@ export async function createBar(uid, {
     };
   }
 
-  if (!isConfigured || isGuestMode()) {
+  if (!isConfigured || isGuestMode() || !uid) {
     const bars = getLocalBars();
     const now = Date.now();
     const effectiveCreatedAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : now;
@@ -342,18 +461,55 @@ export async function createBar(uid, {
     };
     bars.push(newBar);
     setLocalBars(bars);
-    triggerMockUpdate();
+    activeBarsState = bars;
+    notifyActiveListeners();
     return newBar.id;
   }
 
+  const id = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+    ? crypto.randomUUID() 
+    : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+  const now = Date.now();
+  const effectiveCreatedAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : now;
+  const effectiveDeadlineSetAt = deadlineAt ? (deadlineSetAt ? Number(deadlineSetAt) : effectiveCreatedAt) : null;
+  const newBar = {
+    id,
+    title,
+    type: type || "goal",
+    preset: preset || null,
+    levels: levels || null,
+    targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : 1,
+    currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : 0,
+    items: items || null,
+    text: text || null,
+    completed: completed || false,
+    createdAt: effectiveCreatedAt,
+    lastUpdated: now,
+    deadlineAt: deadlineAt || null,
+    deadlineSetAt: effectiveDeadlineSetAt,
+    deadlineTime: finalRepeat ? finalRepeat.deadlineTime : null,
+    notifyAt: notifyAt || null,
+    notified: notified || false,
+    notifyPercent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
+    alertAtDeadline: alertAtDeadline || false,
+    deadlineNotified: deadlineNotified || false,
+    repeat: finalRepeat,
+    resetTime: finalRepeat ? finalRepeat.resetTime : null,
+    resetCount: finalRepeat ? finalRepeat.resetCount : null,
+    lastResetAt: finalRepeat ? finalRepeat.lastResetAt : null,
+    checklistResetEnabled: finalRepeat ? finalRepeat.checklistResetEnabled : false,
+    checklistResetCount: finalRepeat ? finalRepeat.resetCount : null,
+    deadlineResetEnabled: finalRepeat ? finalRepeat.deadlineResetEnabled : false,
+    deadlineResetCount: finalRepeat ? finalRepeat.resetCount : null
+  };
+
+  // Optimistic UI write (0ms lag)
+  activeBarsState.push(newBar);
+  persistActiveBars();
+  notifyActiveListeners();
+
   try {
-    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) 
-      ? crypto.randomUUID() 
-      : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-    const now = new Date().toISOString();
-    const effectiveCreatedAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : Date.now();
-    const effectiveDeadlineSetAt = deadlineAt ? (deadlineSetAt ? Number(deadlineSetAt) : effectiveCreatedAt) : null;
     const { error } = await supabase.from('trackers').insert({
       id,
       user_id: uid,
@@ -361,8 +517,8 @@ export async function createBar(uid, {
       type: type || "goal",
       preset: preset || null,
       levels: levels || null,
-      target_smallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : 1,
-      current_smallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : 0,
+      target_smallest: newBar.targetSmallest,
+      current_smallest: newBar.currentSmallest,
       items: items || null,
       text: text || null,
       completed: completed || false,
@@ -371,16 +527,19 @@ export async function createBar(uid, {
       deadline_set_at: effectiveDeadlineSetAt ? new Date(effectiveDeadlineSetAt).toISOString() : null,
       notify_at: notifyAt ? new Date(notifyAt).toISOString() : null,
       notified: notified || false,
-      notify_percent: notifyPercent !== undefined && notifyPercent !== null ? Number(notifyPercent) : null,
+      notify_percent: newBar.notifyPercent,
       alert_at_deadline: alertAtDeadline || false,
       deadline_notified: deadlineNotified || false,
       repeat: finalRepeat,
-      last_updated: now
+      last_updated: new Date(now).toISOString()
     });
     if (error) throw error;
     return id;
   } catch (error) {
-    console.error("Error creating progress bar:", error);
+    console.error("Error creating progress bar in cloud, rolling back:", error);
+    activeBarsState = activeBarsState.filter(b => b.id !== id);
+    persistActiveBars();
+    notifyActiveListeners();
     throw error;
   }
 }
@@ -393,29 +552,45 @@ export async function createBar(uid, {
  * @param {boolean} completed Whether the tracker is marked complete.
  */
 export async function updateBarProgress(uid, barId, currentSmallest, completed) {
-  if (!isConfigured || isGuestMode()) {
+  const now = Date.now();
+  if (!isConfigured || isGuestMode() || !uid) {
     const bars = getLocalBars();
     const barIndex = bars.findIndex(b => b.id === barId);
     if (barIndex !== -1) {
       bars[barIndex].currentSmallest = Number(currentSmallest);
       bars[barIndex].completed = completed;
-      bars[barIndex].lastUpdated = Date.now();
+      bars[barIndex].lastUpdated = now;
       if (completed) {
         bars[barIndex].notifyAt = null;
       }
       setLocalBars(bars);
-      triggerMockUpdate();
+      activeBarsState = bars;
+      notifyActiveListeners();
     } else {
       throw new Error(`Bar not found: ${barId}`);
     }
     return;
   }
 
+  // Optimistic local update (0ms lag)
+  const idx = activeBarsState.findIndex(b => b.id === barId);
+  const prevBar = idx !== -1 ? { ...activeBarsState[idx] } : null;
+  if (idx !== -1) {
+    activeBarsState[idx].currentSmallest = Number(currentSmallest);
+    activeBarsState[idx].completed = completed;
+    activeBarsState[idx].lastUpdated = now;
+    if (completed) {
+      activeBarsState[idx].notifyAt = null;
+    }
+    persistActiveBars();
+    notifyActiveListeners();
+  }
+
   try {
     const updates = {
       current_smallest: Number(currentSmallest),
       completed: completed,
-      last_updated: new Date().toISOString()
+      last_updated: new Date(now).toISOString()
     };
     if (completed) {
       updates.notify_at = null;
@@ -428,6 +603,11 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
     if (error) throw error;
   } catch (error) {
     console.error("Error updating progress bar:", error);
+    if (idx !== -1 && prevBar) {
+      activeBarsState[idx] = prevBar;
+      persistActiveBars();
+      notifyActiveListeners();
+    }
     throw error;
   }
 }
@@ -438,12 +618,19 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
  * @param {string} barId The ID of the progress bar document.
  */
 export async function deleteBar(uid, barId) {
-  if (!isConfigured || isGuestMode()) {
+  if (!isConfigured || isGuestMode() || !uid) {
     const bars = getLocalBars().filter(b => b.id !== barId);
     setLocalBars(bars);
-    triggerMockUpdate();
+    activeBarsState = bars;
+    notifyActiveListeners();
     return;
   }
+
+  // Optimistic local delete (0ms lag)
+  const originalBars = [...activeBarsState];
+  activeBarsState = activeBarsState.filter(b => b.id !== barId);
+  persistActiveBars();
+  notifyActiveListeners();
 
   try {
     const { error } = await supabase
@@ -454,6 +641,9 @@ export async function deleteBar(uid, barId) {
     if (error) throw error;
   } catch (error) {
     console.error("Error deleting progress bar:", error);
+    activeBarsState = originalBars;
+    persistActiveBars();
+    notifyActiveListeners();
     throw error;
   }
 }
@@ -508,7 +698,7 @@ async function _editBarInternal(uid, barId, {
     };
   }
 
-  if (!isConfigured || isGuestMode()) {
+  if (!isConfigured || isGuestMode() || !uid) {
     const bars = getLocalBars();
     const idx = bars.findIndex(b => b.id === barId);
     if (idx !== -1) {
@@ -562,9 +752,69 @@ async function _editBarInternal(uid, barId, {
         deadlineResetCount: effectiveRepeat ? effectiveRepeat.resetCount : null
       };
       setLocalBars(bars);
-      triggerMockUpdate();
+      activeBarsState = bars;
+      notifyActiveListeners();
     }
     return;
+  }
+
+  // Cloud Mode: Optimistic local edit (0ms lag)
+  const idx = activeBarsState.findIndex(b => b.id === barId);
+  const originalBar = idx !== -1 ? { ...activeBarsState[idx] } : null;
+
+  if (idx !== -1) {
+    const original = activeBarsState[idx];
+    let newDeadlineAt = original.deadlineAt;
+    let newDeadlineSetAt = original.deadlineSetAt;
+
+    if (deadlineSetAt !== undefined) {
+      newDeadlineSetAt = deadlineSetAt ? Number(deadlineSetAt) : null;
+    } else if (updateDeadline) {
+      if (deadlineAt) {
+        newDeadlineAt = deadlineAt;
+        newDeadlineSetAt = (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : (original.deadlineSetAt || Date.now());
+      } else {
+        newDeadlineAt = null;
+        newDeadlineSetAt = null;
+      }
+    } else if (createdAt !== undefined && createdAt !== null && newDeadlineAt) {
+      newDeadlineSetAt = Number(createdAt);
+    }
+
+    const effectiveRepeat = finalRepeat !== undefined ? finalRepeat : original.repeat;
+
+    activeBarsState[idx] = {
+      ...original,
+      title: title !== undefined ? title : original.title,
+      createdAt: (createdAt !== undefined && createdAt !== null) ? Number(createdAt) : original.createdAt,
+      levels: levels !== undefined ? levels : original.levels,
+      targetSmallest: targetSmallest !== null && targetSmallest !== undefined ? Number(targetSmallest) : original.targetSmallest,
+      currentSmallest: currentSmallest !== null && currentSmallest !== undefined ? Number(currentSmallest) : original.currentSmallest,
+      items: items !== undefined ? items : original.items,
+      text: text !== undefined ? text : original.text,
+      completed: completed !== undefined ? completed : original.completed,
+      lastUpdated: Date.now(),
+      deadlineAt: newDeadlineAt,
+      deadlineSetAt: newDeadlineSetAt,
+      deadlineTime: effectiveRepeat ? effectiveRepeat.deadlineTime : null,
+      notifyAt: notifyAt !== undefined ? notifyAt : original.notifyAt,
+      notified: notified !== undefined ? notified : original.notified,
+      notifyPercent: notifyPercent !== undefined ? notifyPercent : original.notifyPercent,
+      alertAtDeadline: alertAtDeadline !== undefined ? alertAtDeadline : original.alertAtDeadline,
+      deadlineNotified: deadlineNotified !== undefined ? deadlineNotified : original.deadlineNotified,
+      position: position !== undefined ? position : original.position,
+      repeat: effectiveRepeat,
+      resetTime: effectiveRepeat ? effectiveRepeat.resetTime : null,
+      resetCount: effectiveRepeat ? effectiveRepeat.resetCount : null,
+      lastResetAt: effectiveRepeat ? effectiveRepeat.lastResetAt : null,
+      checklistResetEnabled: effectiveRepeat ? effectiveRepeat.checklistResetEnabled : false,
+      checklistResetCount: effectiveRepeat ? effectiveRepeat.resetCount : null,
+      deadlineResetEnabled: effectiveRepeat ? effectiveRepeat.deadlineResetEnabled : false,
+      deadlineResetCount: effectiveRepeat ? effectiveRepeat.resetCount : null
+    };
+
+    persistActiveBars();
+    notifyActiveListeners();
   }
 
   try {
@@ -617,6 +867,11 @@ async function _editBarInternal(uid, barId, {
     if (error) throw error;
   } catch (error) {
     console.error("Error editing bar:", error);
+    if (idx !== -1 && originalBar) {
+      activeBarsState[idx] = originalBar;
+      persistActiveBars();
+      notifyActiveListeners();
+    }
     throw error;
   }
 }
@@ -626,10 +881,15 @@ async function _editBarInternal(uid, barId, {
  * @param {string} uid User ID to delete data for.
  */
 export async function deleteUserData(uid) {
-  if (!isConfigured || isGuestMode()) {
+  activeBarsState = [];
+  if (!isConfigured || isGuestMode() || !uid) {
     localStorage.removeItem("progress_shelf_bars");
+    notifyActiveListeners();
     return;
   }
+
+  setCachedUserBars(uid, []);
+  notifyActiveListeners();
 
   try {
     const { error } = await supabase
@@ -718,12 +978,22 @@ export async function checkFCMTokenExists(uid, token) {
  * @param {Array<string>} barIds Array of progress bar IDs.
  */
 export async function deleteMultipleBars(uid, barIds) {
-  if (!isConfigured || isGuestMode()) {
-    const bars = getLocalBars().filter(b => !barIds.includes(b.id));
+  if (!barIds || barIds.length === 0) return;
+  const idSet = new Set(barIds);
+
+  if (!isConfigured || isGuestMode() || !uid) {
+    const bars = getLocalBars().filter(b => !idSet.has(b.id));
     setLocalBars(bars);
-    triggerMockUpdate();
+    activeBarsState = bars;
+    notifyActiveListeners();
     return;
   }
+
+  // Cloud Mode: Optimistic local batch delete (0ms lag)
+  const originalBars = [...activeBarsState];
+  activeBarsState = activeBarsState.filter(b => !idSet.has(b.id));
+  persistActiveBars();
+  notifyActiveListeners();
 
   try {
     const { error } = await supabase
@@ -734,6 +1004,9 @@ export async function deleteMultipleBars(uid, barIds) {
     if (error) throw error;
   } catch (error) {
     console.error("Error deleting multiple progress bars:", error);
+    activeBarsState = originalBars;
+    persistActiveBars();
+    notifyActiveListeners();
     throw error;
   }
 }
