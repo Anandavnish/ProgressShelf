@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=6.38">
+  <link rel="stylesheet" href="index.css?v=6.41">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -367,11 +367,37 @@
 
       <!-- Controls Row (Sort & APK & Edit) -->
       <div class="dashboard-controls">
-        <button id="btn-apk-download" class="btn-apk-download" title="Download Android APK">
-          <svg class="apk-icon" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
-            <path d="M40-240q9-107 65.5-197T256-580l-74-128q-6-9-3-19t13-15q8-5 18-2t16 12l74 128q86-36 180-36t180 36l74-128q6-9 16-12t18 2q10 5 13 15t-3 19l-74 128q94 53 150.5 143T920-240H40Zm240-110q21 0 35.5-14.5T330-400q0-21-14.5-35.5T280-450q-21 0-35.5 14.5T230-400q0 21 14.5 35.5T280-350Zm400 0q21 0 35.5-14.5T730-400q0-21-14.5-35.5T680-450q-21 0-35.5 14.5T630-400q0 21 14.5 35.5T680-350Z"/>
-          </svg>
-        </button>
+        <div class="controls-left-group">
+          <button id="btn-apk-download" class="btn-apk-download" title="Download Android APK">
+            <svg class="apk-icon" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
+              <path d="M40-240q9-107 65.5-197T256-580l-74-128q-6-9-3-19t13-15q8-5 18-2t16 12l74 128q86-36 180-36t180 36l74-128q6-9 16-12t18 2q10 5 13 15t-3 19l-74 128q94 53 150.5 143T920-240H40Zm240-110q21 0 35.5-14.5T330-400q0-21-14.5-35.5T280-450q-21 0-35.5 14.5T230-400q0 21 14.5 35.5T280-350Zm400 0q21 0 35.5-14.5T730-400q0-21-14.5-35.5T680-450q-21 0-35.5 14.5T630-400q0 21 14.5 35.5T680-350Z"/>
+            </svg>
+          </button>
+
+          <!-- View Mode Toggle (Grid vs Orbit) -->
+          <div class="view-mode-toggle" id="view-mode-toggle" role="group" aria-label="View Mode">
+            <button id="btn-view-grid" class="view-toggle-btn active" title="Grid View" aria-pressed="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              <span class="view-toggle-label">Grid</span>
+            </button>
+            <button id="btn-view-orbit" class="view-toggle-btn" title="Circular Orbit View" aria-pressed="false">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <circle cx="12" cy="12" r="8" stroke-dasharray="3.5 2.5"></circle>
+                <circle cx="12" cy="4" r="1.5" fill="currentColor"></circle>
+                <circle cx="20" cy="12" r="1.5" fill="currentColor"></circle>
+                <circle cx="12" cy="20" r="1.5" fill="currentColor"></circle>
+                <circle cx="4" cy="12" r="1.5" fill="currentColor"></circle>
+              </svg>
+              <span class="view-toggle-label">Orbit</span>
+            </button>
+          </div>
+        </div>
 
         <div class="controls-right-group">
           <button id="btn-toggle-edit" class="btn-toggle-edit" title="Edit / Bulk Delete">
@@ -427,6 +453,158 @@
           <div class="skeleton-percent"></div>
           <div class="skeleton-bar"></div>
           <div class="skeleton-label"></div>
+        </div>
+      </div>
+
+      <!-- Circular Orbit View Container -->
+      <div id="orbit-view" class="orbit-view hidden" aria-label="Circular Orbit View">
+        <!-- Floating Navigation & Zoom HUD -->
+        <div class="orbit-hud" id="orbit-hud">
+          <button id="btn-orbit-zoom-in" class="orbit-hud-btn" title="Zoom In (+)" aria-label="Zoom In">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button id="btn-orbit-zoom-out" class="orbit-hud-btn" title="Zoom Out (-)" aria-label="Zoom Out">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button id="btn-orbit-recenter" class="orbit-hud-btn" title="Recenter View" aria-label="Recenter View">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M3 12h3m12 0h3M12 3v3m0 12v3"></path>
+            </svg>
+          </button>
+          <div class="orbit-hud-divider"></div>
+          <button id="btn-orbit-play-pause" class="orbit-hud-btn" title="Toggle Orbit Motion" aria-label="Toggle Orbit Motion">
+            <svg id="orbit-icon-pause" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <svg id="orbit-icon-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6 4 20 12 6 20 6 4"></polygon>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Orbit Full Card Centered Modal Overlay -->
+        <div id="orbit-card-modal" class="orbit-card-modal-overlay hidden" aria-modal="true" role="dialog">
+          <div class="orbit-card-modal-backdrop" id="orbit-card-modal-backdrop"></div>
+          <div class="orbit-card-modal-panel">
+            <button id="btn-orbit-card-close" class="orbit-card-modal-close" aria-label="Close card panel">&times;</button>
+            <div id="orbit-card-modal-content" class="orbit-card-modal-content"></div>
+          </div>
+        </div>
+
+        <!-- Orbit Viewport & Pannable / Zoomable World Canvas -->
+        <div id="orbit-viewport" class="orbit-viewport" tabindex="0" role="region" aria-label="Orbit Canvas">
+          <div id="orbit-world" class="orbit-world">
+            <!-- Decorative Orbit Guide Rings (Multi-Ring Concentric Circles) -->
+            <div id="orbit-guide-rings-container" class="orbit-guide-rings-container">
+              <div id="orbit-guide-ring" class="orbit-guide-ring"></div>
+            </div>
+
+            <!-- Central Buttons Hub (3 Center-Aligned Lines: Line 1 = 2 buttons, Line 2 = 2 buttons, Line 3 = 1 button) -->
+            <div id="orbit-center-hub" class="orbit-center-hub">
+              <!-- Line 1: Trackers, Active Deadlines -->
+              <div class="orbit-hub-row orbit-hub-row-1">
+                <button class="orbit-stat-btn active" data-filter="all" id="orbit-btn-stat-all" aria-pressed="true">
+                  <div class="orbit-stat-icon val-blue">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                      <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z" />
+                      <circle cx="18" cy="18" r="3" fill="currentColor" opacity="0.2" />
+                      <path d="M16 18l1.5 1.5L20 16" />
+                    </svg>
+                  </div>
+                  <div class="orbit-stat-meta">
+                    <span id="orbit-stat-total" class="orbit-stat-num">0</span>
+                    <span class="orbit-stat-label">Trackers</span>
+                  </div>
+                </button>
+
+                <button class="orbit-stat-btn" data-filter="deadlines" id="orbit-btn-stat-deadlines" aria-pressed="false">
+                  <div class="orbit-stat-icon val-orange">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <circle cx="17" cy="17" r="3" fill="currentColor" opacity="0.2" />
+                      <polyline points="17 15 17 17 18.5 18" />
+                    </svg>
+                  </div>
+                  <div class="orbit-stat-meta">
+                    <span id="orbit-stat-deadlines" class="orbit-stat-num">0</span>
+                    <span class="orbit-stat-label">Active Deadlines</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Line 2: Completed, Overdue -->
+              <div class="orbit-hub-row orbit-hub-row-2">
+                <button class="orbit-stat-btn" data-filter="completed" id="orbit-btn-stat-completed" aria-pressed="false">
+                  <div class="orbit-stat-icon val-green">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M8 12l3 3 5-5" />
+                    </svg>
+                  </div>
+                  <div class="orbit-stat-meta">
+                    <span id="orbit-stat-completed" class="orbit-stat-num">0</span>
+                    <span class="orbit-stat-label">Completed</span>
+                  </div>
+                </button>
+
+                <button class="orbit-stat-btn" data-filter="overdue" id="orbit-btn-stat-overdue" aria-pressed="false">
+                  <div class="orbit-stat-icon val-red">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="13" r="8" />
+                      <path d="M5 3L2 6" />
+                      <path d="M19 3l3 3" />
+                      <path d="M12 9v4" />
+                      <path d="M12 16h.01" stroke-width="3" />
+                    </svg>
+                  </div>
+                  <div class="orbit-stat-meta">
+                    <span id="orbit-stat-overdue" class="orbit-stat-num">0</span>
+                    <span class="orbit-stat-label">Overdue</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Line 3: Flexible Goals -->
+              <div class="orbit-hub-row orbit-hub-row-3">
+                <button class="orbit-stat-btn" data-filter="flexible" id="orbit-btn-stat-flexible" aria-pressed="false">
+                  <div class="orbit-stat-icon val-purple">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2" />
+                      <path d="M12 2v2m0 16v2m-10-10h2m16 0h2" />
+                    </svg>
+                  </div>
+                  <div class="orbit-stat-meta">
+                    <span id="orbit-stat-flexible" class="orbit-stat-num">0</span>
+                    <span class="orbit-stat-label">Flexible Goals</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Surrounding Orbit Cards Ring -->
+            <div id="orbit-cards-container" class="orbit-cards-container">
+              <!-- Cards rendered dynamically -->
+            </div>
+
+            <!-- Orbit Empty State -->
+            <div id="orbit-empty-state" class="orbit-empty-state hidden">
+              <div class="orbit-empty-content">
+                <p id="orbit-empty-text">No trackers match this filter.</p>
+                <button id="btn-orbit-add-tracker" class="orbit-btn-add-tracker">+ Add New Tracker</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -1185,6 +1363,74 @@
     </button>
     <div class="dropdown-divider"></div>
 
+    <!-- Theme Settings (Mobile View) -->
+    <div class="profile-theme-section" id="profile-theme-section">
+      <div class="dropdown-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.77" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <span>Theme</span>
+      </div>
+      <div class="theme-mode-segmented" role="group" aria-label="Theme Mode">
+        <button type="button" class="theme-mode-btn" data-theme="system" title="System default">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span>Auto</span>
+        </button>
+        <button type="button" class="theme-mode-btn" data-theme="light" title="Light theme">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.77" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <span>Light</span>
+        </button>
+        <button type="button" class="theme-mode-btn" data-theme="dark" title="Dark theme">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span>Dark</span>
+        </button>
+      </div>
+
+      <!-- Accent Color Selection for Mobile (active in Light mode) -->
+      <div class="dropdown-theme-section profile-dropdown-theme-section" id="profile-dropdown-theme-section">
+        <div class="dropdown-section-label">Theme Color</div>
+        <div class="profile-accent-wrapper">
+          <div class="accent-palette" id="profile-accent-palette">
+            <!-- Swatches dynamically injected by renderSwatches -->
+          </div>
+          <div class="custom-color-wrapper profile-custom-color-wrapper">
+            <label for="profile-custom-accent-picker" class="custom-color-btn" title="Pick Custom Color">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </label>
+            <input type="color" id="profile-custom-accent-picker" class="custom-accent-picker">
+          </div>
+        </div>
+      </div>
+      <div class="dropdown-divider"></div>
+    </div>
+
     <!-- App Font Setting -->
     <div class="dropdown-section-title">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1262,6 +1508,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=11.4"></script>
+  <script type="module" src="app.js?v=11.6"></script>
 </body>
 </html>

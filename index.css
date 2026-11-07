@@ -36,6 +36,8 @@ html.font-jetbrains-mono {
   --card-bg: var(--bg-card);
   --card-border: var(--border-color);
   --card-progress-border: var(--card-border);
+  --orbit-node-track: rgba(255, 255, 255, 0.12);
+  --orbit-guide-line: rgba(255, 255, 255, 0.22);
 
   --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --border-radius: 12px;
@@ -279,6 +281,8 @@ html.light-theme {
   --card-bg: var(--bg-card);
   --card-border: var(--border-color);
   --about-bg: var(--bg-card);
+  --orbit-node-track: rgba(0, 0, 0, 0.1);
+  --orbit-guide-line: rgba(0, 0, 0, 0.18);
 
   /* Overrides for Light Mode variables */
   --white: #FFFFFF;
@@ -730,6 +734,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-family);
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   line-height: 1.5;
   overflow-x: hidden;
   display: flex;
@@ -889,9 +894,10 @@ body {
   justify-content: center;
   align-items: center;
   flex: 1;
-  padding: 24px;
+  padding: max(24px, calc(16px + env(safe-area-inset-top, 0px))) max(20px, calc(16px + env(safe-area-inset-right, 0px))) max(24px, calc(16px + env(safe-area-inset-bottom, 0px))) max(20px, calc(16px + env(safe-area-inset-left, 0px)));
   position: relative;
   background: radial-gradient(circle at 50% -20%, rgba(74, 144, 217, 0.15) 0%, rgba(13, 17, 23, 0) 60%);
+  box-sizing: border-box;
 }
 
 .landing-card {
@@ -1129,7 +1135,7 @@ body {
   -webkit-backdrop-filter: blur(24px);
   background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--card-border);
-  padding: 12px 24px;
+  padding: max(14px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) 14px max(24px, env(safe-area-inset-left, 0px));
   will-change: transform;
 }
 
@@ -1349,6 +1355,13 @@ body {
     height: 32px !important;
     border: 2px solid var(--card-border) !important;
   }
+  .profile-dropdown {
+    width: min(280px, calc(100vw - 24px)) !important;
+    max-height: calc(100dvh - 75px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 14px;
+  }
 }
 
 .profile-dropdown {
@@ -1441,6 +1454,116 @@ body {
 
 .dropdown-section-title svg {
   opacity: 0.7;
+}
+
+/* --- Profile Dropdown Theme Section (Mobile View) --- */
+.profile-theme-section {
+  display: none;
+}
+
+.theme-mode-segmented {
+  display: flex;
+  background: var(--search-helper-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.theme-mode-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.theme-mode-btn svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.theme-mode-btn:hover {
+  color: var(--text-primary);
+  background: var(--search-btn-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.theme-mode-btn.active {
+  background: var(--ui-accent);
+  color: #ffffff !important;
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-mode-btn.active svg {
+  opacity: 1;
+  stroke: #ffffff;
+}
+
+html.light-theme .theme-mode-segmented {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light-theme .theme-mode-btn.active {
+  background: var(--accent, #048b15);
+  color: #ffffff !important;
+}
+
+.profile-dropdown-theme-section {
+  padding: 4px 2px 0 2px;
+}
+
+.profile-dropdown-theme-section .dropdown-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+
+.profile-accent-wrapper {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.profile-custom-color-wrapper {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: none !important;
+  display: inline-flex !important;
+  align-items: center;
+}
+
+.profile-custom-color-wrapper .custom-color-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.profile-custom-color-wrapper .custom-color-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* --- Font Picker Menu inside Profile Dropdown --- */
@@ -1574,7 +1697,7 @@ body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--card-border);
-  padding: 14px 16px;
+  padding: 14px max(18px, env(safe-area-inset-right, 0px)) 14px max(18px, env(safe-area-inset-left, 0px));
   animation: fadeIn 0.4s var(--transition-ease);
   will-change: transform;
 }
@@ -1854,8 +1977,9 @@ body {
 .dashboard-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px 40px 24px;
+  padding: 0 max(24px, env(safe-area-inset-right, 0px)) max(48px, calc(32px + env(safe-area-inset-bottom, 0px))) max(24px, env(safe-area-inset-left, 0px));
   animation: fadeIn 0.4s var(--transition-ease);
+  box-sizing: border-box;
 }
 
 /* Dashboard Controls */
@@ -2544,7 +2668,7 @@ body {
 /* Mobile responsive fixes (Screens below 480px) */
 @media (max-width: 480px) {
   .navbar {
-    padding: 12px 16px;
+    padding: max(14px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) 12px max(18px, env(safe-area-inset-left, 0px));
   }
 
   .nav-logo-text {
@@ -2562,11 +2686,18 @@ body {
   }
 
   .dashboard-main {
-    padding: 0 16px 24px 16px;
+    padding: 0 max(18px, env(safe-area-inset-right, 0px)) max(64px, calc(40px + env(safe-area-inset-bottom, 0px))) max(18px, env(safe-area-inset-left, 0px));
   }
 
   .dashboard-controls {
-    padding: 12px calc(50vw - 50%) !important;
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)) !important;
+    margin: 4px 0 16px 0 !important;
+    border-radius: var(--border-radius);
+  }
+
+  .landing-card {
+    padding: 28px 20px 36px 20px;
+    border-radius: 16px;
   }
 
   .btn {
@@ -3594,7 +3725,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 
   .navbar {
-    padding: 12px 16px;
+    padding: max(14px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) 12px max(18px, env(safe-area-inset-left, 0px));
   }
 }
 
@@ -3856,7 +3987,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* --- Mobile Responsive Collapsible Navbar Layout --- */
 @media (max-width: 493px) {
   .navbar {
-    padding: 10px 12px;
+    padding: max(14px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) 12px max(18px, env(safe-area-inset-left, 0px));
   }
 
   .nav-container {
@@ -3881,7 +4012,31 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     gap: 8px !important;
   }
 
-  /* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
+  /* Mobile view rules for Theme Settings */
+@media (max-width: 768px) {
+  .profile-theme-section {
+    display: block;
+  }
+  .navbar .theme-menu-container,
+  .navbar .accent-menu-container,
+  .mobile-subbar .theme-menu-container,
+  .mobile-subbar .accent-menu-container {
+    display: none !important;
+  }
+}
+
+body.is-mobile-layout .profile-theme-section {
+  display: block;
+}
+
+body.is-mobile-layout .navbar .theme-menu-container,
+body.is-mobile-layout .navbar .accent-menu-container,
+body.is-mobile-layout .mobile-subbar .theme-menu-container,
+body.is-mobile-layout .mobile-subbar .accent-menu-container {
+  display: none !important;
+}
+
+/* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
   .navbar .nav-github-link,
   .navbar .version-selector,
   .navbar .theme-menu-container,
@@ -4012,10 +4167,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* --- About Page --- */
 .about-page-container {
   flex: 1;
-  padding: 40px 20px;
+  padding: max(28px, calc(16px + env(safe-area-inset-top, 0px))) max(20px, calc(16px + env(safe-area-inset-right, 0px))) max(40px, calc(24px + env(safe-area-inset-bottom, 0px))) max(20px, calc(16px + env(safe-area-inset-left, 0px)));
   max-width: 720px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .about-back-link {
@@ -5628,8 +5784,8 @@ textarea.form-input-single-line {
 /* On mobile, keep it slightly smaller and shifted */
 @media (max-width: 493px) {
   .btn-fab {
-    bottom: 28px;
-    right: 28px;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    right: max(24px, calc(16px + env(safe-area-inset-right, 0px)));
     width: 52px;
     height: 52px;
   }
@@ -6035,4 +6191,930 @@ html.light-theme .advanced-date-badge {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.08);
 }
+
+/* ==========================================================================
+   Safe Area Insets & Boundary Margins (Native App & Mobile Display)
+   ========================================================================== */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Landing Page (Login / Sign Up / Reset Password) comfortable boundaries */
+.landing-container {
+  padding-top: max(32px, calc(20px + var(--safe-top))) !important;
+  padding-bottom: max(36px, calc(24px + var(--safe-bottom))) !important;
+  padding-left: max(24px, calc(18px + var(--safe-left))) !important;
+  padding-right: max(24px, calc(18px + var(--safe-right))) !important;
+}
+
+/* Navbar top safe margin and side breathing room */
+.navbar {
+  padding-top: max(16px, calc(10px + var(--safe-top))) !important;
+  padding-left: max(20px, calc(16px + var(--safe-left))) !important;
+  padding-right: max(20px, calc(16px + var(--safe-right))) !important;
+}
+
+/* Dashboard main container: spacious boundaries, no tight card edges */
+.dashboard-main {
+  padding-top: 14px !important;
+  padding-left: max(20px, calc(16px + var(--safe-left))) !important;
+  padding-right: max(20px, calc(16px + var(--safe-right))) !important;
+  padding-bottom: max(84px, calc(60px + var(--safe-bottom))) !important;
+}
+
+/* Floating Action Button (Add Tracker) bottom safe boundary */
+.btn-fab {
+  bottom: max(30px, calc(20px + var(--safe-bottom))) !important;
+  right: max(24px, calc(18px + var(--safe-right))) !important;
+}
+
+/* Modals bottom safe boundary */
+.modal-footer {
+  padding-bottom: max(16px, calc(14px + var(--safe-bottom))) !important;
+}
+
+/* About Page boundary margins */
+.about-page-container {
+  padding-top: max(32px, calc(20px + var(--safe-top))) !important;
+  padding-bottom: max(40px, calc(24px + var(--safe-bottom))) !important;
+  padding-left: max(20px, calc(16px + var(--safe-left))) !important;
+  padding-right: max(20px, calc(16px + var(--safe-right))) !important;
+}
+
+/* Native App Specific Refinements */
+html.is-native-app .navbar,
+body.is-native-app .navbar {
+  padding-top: max(20px, calc(12px + var(--safe-top))) !important;
+}
+
+html.is-native-app .landing-container,
+body.is-native-app .landing-container {
+  padding-top: max(36px, calc(24px + var(--safe-top))) !important;
+}
+
+/* Remove Android APK download icon from dashboard in native APK build */
+html.is-native-app #btn-apk-download,
+body.is-native-app #btn-apk-download {
+  display: none !important;
+}
+
+/* ==========================================================================
+   APK-Only Native Mobile Header & Upper Space Redesign
+   ========================================================================== */
+
+/* 1. Hide web-only clutter in native APK */
+html.is-native-app .mobile-subbar,
+body.is-native-app .mobile-subbar {
+  display: none !important;
+}
+
+html.is-native-app .version-selector,
+html.is-native-app #btn-github,
+html.is-native-app #btn-download-apk,
+html.is-native-app #btn-refresh,
+html.is-native-app .beta-badge {
+  display: none !important;
+}
+
+/* 2. Compact Navbar in Native APK */
+html.is-native-app .navbar {
+  padding-top: max(16px, calc(8px + var(--safe-top))) !important;
+  padding-bottom: 8px !important;
+  padding-left: max(14px, calc(10px + var(--safe-left))) !important;
+  padding-right: max(14px, calc(10px + var(--safe-right))) !important;
+}
+
+html.is-native-app .nav-container {
+  gap: 8px !important;
+}
+
+html.is-native-app .logo-svg {
+  width: 26px !important;
+  height: 22px !important;
+}
+
+html.is-native-app .nav-logo-text {
+  font-size: 1.05rem !important;
+}
+
+html.is-native-app .nav-search-container {
+  margin: 0 4px !important;
+  flex: 1 1 auto !important;
+}
+
+html.is-native-app .nav-search-input {
+  height: 34px !important;
+  font-size: 0.82rem !important;
+  padding: 6px 30px 6px 12px !important;
+}
+
+html.is-native-app .nav-toolbar {
+  gap: 6px !important;
+}
+
+html.is-native-app #theme-toggle-btn,
+html.is-native-app #accent-toggle-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 6px !important;
+  display: inline-flex !important;
+}
+
+html.is-native-app .user-avatar {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+html.is-native-app .profile-name {
+  display: none !important;
+}
+
+/* Ensure hidden elements and 0-value stat buttons are strictly hidden */
+html.is-native-app .stats-btn.hidden,
+html.is-native-app #stats-banner.hidden,
+html.is-native-app .hidden {
+  display: none !important;
+}
+
+/* Smooth momentum scrolling & GPU compositing for fluid 60/120fps scrolling */
+html.is-native-app,
+body.is-native-app {
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+}
+
+html.is-native-app .navbar,
+html.is-native-app #stats-banner,
+html.is-native-app .dashboard-controls {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+/* 3. Compact Native Stats Filter Chips: all visible together, wrapping text cleanly */
+html.is-native-app #stats-banner {
+  padding: 6px 10px !important;
+  border-bottom: 1px solid var(--card-border) !important;
+}
+
+html.is-native-app .stats-container {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  justify-content: stretch !important;
+  overflow: visible !important;
+  padding: 2px 0 !important;
+}
+
+html.is-native-app .stats-container::-webkit-scrollbar {
+  display: none !important;
+}
+
+html.is-native-app .stats-divider {
+  display: none !important;
+}
+
+html.is-native-app .stats-btn {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  padding: 5px 6px !important;
+  border-radius: 12px !important;
+  min-height: 40px !important;
+  box-shadow: none !important;
+  white-space: normal !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+}
+
+html.is-native-app .stats-icon-wrapper {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  border-radius: 6px !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+html.is-native-app .stats-icon-wrapper svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+html.is-native-app .stats-info {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  min-width: 0 !important;
+  gap: 1px !important;
+}
+
+html.is-native-app .stats-num {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+html.is-native-app .stats-label {
+  display: block !important;
+  font-size: 0.65rem !important;
+  font-weight: 500 !important;
+  line-height: 1.15 !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  color: var(--text-muted);
+}
+
+/* 4. Compact Controls Row in Native APK */
+html.is-native-app .dashboard-controls {
+  padding: 4px 12px !important;
+  margin: 2px 0 8px 0 !important;
+  min-height: 36px !important;
+  border-radius: 10px !important;
+}
+
+html.is-native-app .sort-container {
+  gap: 4px !important;
+}
+
+html.is-native-app .sort-label {
+  font-size: 0.78rem !important;
+}
+
+html.is-native-app .sort-select {
+  padding: 4px 20px 4px 8px !important;
+  font-size: 0.78rem !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+}
+
+html.is-native-app .btn-toggle-edit {
+  width: 30px !important;
+  height: 30px !important;
+  padding: 6px !important;
+  border-radius: 6px !important;
+}
+
+/* 5. Compact Quick-Add Bar & Prominent Native FAB */
+html.is-native-app .cards-grid:has(.card-progress) .card-add,
+html.is-native-app .card-add.has-cards {
+  min-height: unset !important;
+  height: 42px !important;
+  padding: 0 16px !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  border-radius: 12px !important;
+  margin-bottom: 2px !important;
+  border-width: 1.5px !important;
+}
+
+html.is-native-app .cards-grid:has(.card-progress) .card-add .add-icon,
+html.is-native-app .card-add.has-cards .add-icon {
+  font-size: 1.1rem !important;
+  width: 22px !important;
+  height: 22px !important;
+  line-height: 22px !important;
+}
+
+html.is-native-app .cards-grid:has(.card-progress) .card-add .add-text,
+html.is-native-app .card-add.has-cards .add-text {
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+}
+
+html.is-native-app #btn-fab {
+  display: flex !important;
+  opacity: 1 !important;
+  transform: scale(1) !important;
+  pointer-events: auto !important;
+}
+
+/* ==========================================================================
+   VIEW MODE TOGGLE (Grid vs Circular Orbit)
+   ========================================================================== */
+.controls-left-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--stats-btn-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  user-select: none;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--font-family);
+}
+
+.view-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--stats-btn-highlight);
+}
+
+.view-toggle-btn.active {
+  background: var(--card-bg);
+  color: var(--ui-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--card-border);
+}
+
+.view-toggle-btn svg {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   CIRCULAR ORBIT VIEW
+   ========================================================================== */
+.orbit-view {
+  position: relative;
+  width: 100%;
+  height: min(78vh, 880px);
+  min-height: 580px;
+  margin: 4px 0 24px 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: radial-gradient(circle at center, rgba(74, 144, 217, 0.08) 0%, rgba(22, 27, 34, 0.4) 45%, var(--bg-body) 100%);
+  border: 1px solid var(--card-border);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.25);
+  touch-action: none;
+  user-select: none;
+}
+
+.orbit-viewport {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  outline: none;
+}
+
+.orbit-viewport:active {
+  cursor: grabbing;
+}
+
+.orbit-world {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* Decorative Orbit Guide Rings (Multi-Ring) */
+.orbit-guide-rings-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.orbit-ring-guide-group {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.orbit-guide-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1.5px dashed var(--orbit-guide-line, rgba(255, 255, 255, 0.22));
+  pointer-events: none;
+  box-shadow: 0 0 25px rgba(74, 144, 217, 0.04), inset 0 0 25px rgba(74, 144, 217, 0.04);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+/* Ring Urgency Labels at 12 o'clock */
+.orbit-ring-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: center center;
+  pointer-events: none !important;
+  user-select: none;
+  z-index: 6;
+  white-space: nowrap;
+}
+
+.orbit-ring-label span {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted, #8b949e);
+  background: var(--card-bg, #161b22);
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--orbit-guide-line, rgba(255, 255, 255, 0.22));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none !important;
+}
+
+html.light-theme .orbit-ring-label span {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Central Buttons Hub (3 Center-Aligned Lines: Line 1 = 2 buttons, Line 2 = 2 buttons, Line 3 = 1 button) */
+.orbit-center-hub {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 30;
+  pointer-events: auto;
+  user-select: none;
+  background: radial-gradient(ellipse at center, rgba(17, 24, 39, 0.88) 0%, rgba(17, 24, 39, 0.55) 65%, transparent 100%);
+  padding: 16px 28px;
+  border-radius: 36px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.orbit-hub-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.orbit-stat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  background-color: var(--stats-btn-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  user-select: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.orbit-stat-btn:hover {
+  background-color: var(--stats-btn-hover-bg);
+  border-color: var(--stats-btn-hover-border);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.orbit-stat-btn.active {
+  border-color: var(--ui-accent);
+  background: var(--card-bg);
+  box-shadow: 0 0 16px var(--ui-accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.orbit-stat-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.orbit-stat-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.orbit-stat-num {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+}
+
+.orbit-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+/* Orbit Cards Container & Nodes */
+.orbit-cards-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Orbit Circular Node (Fixed 64px) */
+.orbit-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: center center;
+  will-change: transform;
+  transition: filter 0.25s ease, opacity 0.3s ease;
+  user-select: none;
+}
+
+.orbit-node-circle {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--card-bg, #161b22);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 12px var(--node-status-glow, rgba(59, 130, 246, 0.25));
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
+}
+
+.orbit-node:hover .orbit-node-circle {
+  transform: scale(1.12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 18px var(--node-status-glow, rgba(59, 130, 246, 0.5));
+}
+
+.orbit-node-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+
+.orbit-node-percent {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #f0f6fc);
+  font-family: var(--font-family, inherit);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.orbit-node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.orbit-node-title {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #f0f6fc);
+  text-align: center;
+  max-width: 86px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  line-height: 1.2;
+}
+
+html.light-theme .orbit-node-title {
+  text-shadow: none;
+}
+
+.orbit-world.orbit-hide-titles .orbit-node-title {
+  display: none;
+}
+
+.orbit-node.orbit-node-focused {
+  z-index: 100 !important;
+}
+
+.orbit-node.orbit-node-focused .orbit-node-circle {
+  transform: scale(1.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 24px var(--node-status-glow, rgba(59, 130, 246, 0.7));
+}
+
+/* Floating Navigation HUD */
+.orbit-hud {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(22, 27, 34, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  border-radius: 30px;
+  padding: 5px 8px;
+  z-index: 80;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.orbit-hud-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.orbit-hud-btn:hover {
+  background: var(--stats-btn-highlight);
+  color: var(--ui-accent);
+  transform: scale(1.08);
+}
+
+.orbit-hud-btn.active {
+  color: var(--ui-accent);
+}
+
+.orbit-hud-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--card-border);
+  margin: 0 2px;
+}
+
+/* Orbit Card Detail Centered Modal */
+.orbit-card-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.18s var(--transition-ease);
+}
+
+.orbit-card-modal-overlay.hidden {
+  display: none !important;
+}
+
+.orbit-card-modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  cursor: pointer;
+}
+
+.orbit-card-modal-panel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  padding-top: 52px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg, #161b22);
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.12));
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3);
+  overflow: visible;
+  z-index: 2;
+  animation: orbitModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes orbitModalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.orbit-card-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(22, 27, 34, 0.7);
+  border: 1px solid var(--card-border);
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.2s ease;
+}
+
+.orbit-card-modal-close:hover {
+  background: var(--stats-btn-highlight);
+  color: var(--text-primary);
+  transform: scale(1.08);
+}
+
+html.light-theme .orbit-card-modal-close {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text-muted);
+}
+
+html.light-theme .orbit-card-modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+.orbit-card-modal-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  padding: 0 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Card overrides when embedded inside orbit modal */
+.orbit-card-modal-content .card-progress {
+  width: 100%;
+  min-height: unset;
+  border: 1px solid var(--card-progress-border);
+  border-radius: 14px;
+  padding: 20px;
+  cursor: default;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+.orbit-card-modal-content .card-progress:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--card-progress-border) !important;
+}
+
+/* Orbit Empty State */
+.orbit-empty-state {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: auto;
+  text-align: center;
+  margin-top: 130px;
+}
+
+.orbit-empty-content {
+  background: rgba(22, 27, 34, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 16px 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.orbit-empty-content p {
+  margin: 0 0 10px 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.orbit-btn-add-tracker {
+  background: var(--ui-accent);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.orbit-btn-add-tracker:hover {
+  background: var(--ui-accent-hover);
+  transform: translateY(-1px);
+}
+
+/* Orbit View Visibility Switches */
+body.view-orbit #stats-banner {
+  display: none !important;
+}
+
+body.view-orbit .controls-right-group .sort-container,
+body.view-orbit .controls-right-group .btn-toggle-edit {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .orbit-view {
+    height: calc(100dvh - 170px);
+    min-height: 480px;
+  }
+
+  .view-toggle-label {
+    display: none;
+  }
+
+  .view-toggle-btn {
+    padding: 6px 10px;
+  }
+
+  .orbit-stat-btn {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .orbit-stat-num {
+    font-size: 0.95rem;
+  }
+
+  .orbit-stat-label {
+    font-size: 0.65rem;
+  }
+
+  .orbit-hud {
+    bottom: 12px;
+    right: 12px;
+    padding: 4px 6px;
+  }
+}
+
 

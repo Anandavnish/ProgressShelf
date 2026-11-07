@@ -1,19 +1,26 @@
 import { isConfigured } from "./supabase-config.js?v=3.0";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference } from "./auth.js?v=3.0";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=3.0";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
-
-// Initialize Firebase FCM if configured (keeps FCM token system intact)
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.0";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=3.1";
+// Initialize Firebase FCM if configured (lazy, non-blocking on web, disabled on native)
 const firebaseConfig = window.firebaseConfig || {};
 
-let messaging = null;
-if (isConfigured) {
+let messagingInstance = null;
+let getTokenFn = null;
+
+async function getFirebaseMessaging() {
+  if (messagingInstance && getTokenFn) return { messaging: messagingInstance, getToken: getTokenFn };
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+  if (isNative || !isConfigured) return null;
   try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js");
+    const { getMessaging, getToken } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js");
     const firebaseApp = initializeApp(firebaseConfig);
-    messaging = getMessaging(firebaseApp);
+    messagingInstance = getMessaging(firebaseApp);
+    getTokenFn = getToken;
+    return { messaging: messagingInstance, getToken: getTokenFn };
   } catch (error) {
-    console.error("Firebase FCM initialization failed:", error);
+    console.warn("Firebase FCM initialization notice:", error);
+    return null;
   }
 }
 
@@ -88,7 +95,7 @@ function scrollFocusedInputIntoView() {
 }
 
 document.addEventListener('focusin', (e) => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || e.target.classList.contains('note-editor-contenteditable'))) {
     if (e.target.closest('.modal-body')) {
       activeFocusedModalInput = e.target;
       setTimeout(scrollFocusedInputIntoView, 300);
@@ -631,15 +638,17 @@ function handleBellRedClick(reason) {
     if (guestBannerBtn) guestBannerBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } else if (reason === 'perm') {
     showToast('Enable notifications in your browser to get alerts for this deadline.', 'info', 5000);
-    Notification.requestPermission().then(async (result) => {
-      if (result === 'granted' && currentUser && currentUser.uid) {
-        await handleFCMSession(currentUser.uid);
-      }
-      if (currentUser && currentUser.uid) {
-        cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
-        refreshAllBellStates(cachedBellHealth);
-      }
-    });
+    if (typeof Notification !== 'undefined') {
+      Notification.requestPermission().then(async (result) => {
+        if (result === 'granted' && currentUser && currentUser.uid) {
+          await handleFCMSession(currentUser.uid);
+        }
+        if (currentUser && currentUser.uid) {
+          cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
+          refreshAllBellStates(cachedBellHealth);
+        }
+      });
+    }
   } else if (reason === 'token') {
     showToast("Something's off with your notification setup — retrying…", 'info', 3000);
     if (currentUser && currentUser.uid) {
@@ -663,9 +672,11 @@ function handleBellRedClick(reason) {
  */
 async function silentFCMReregister(uid) {
   try {
-    if (!messaging) return false;
-    const registration = await navigator.serviceWorker.ready;
-    const token = await getToken(messaging, {
+    const fcm = await getFirebaseMessaging();
+    if (!fcm || !fcm.messaging) return false;
+    const registration = await navigator.serviceWorker?.ready;
+    if (!registration) return false;
+    const token = await fcm.getToken(fcm.messaging, {
       vapidKey: FCM_VAPID_KEY,
       serviceWorkerRegistration: registration
     });
@@ -700,27 +711,30 @@ function getProgressColor(percent) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+function getBarProgressPercent(bar) {
+  if (!bar) return null;
+  const barType = bar.type || "goal";
+  if (barType === "note") return null;
+  if (barType === "checklist") {
+    const items = bar.items || [];
+    if (items.length === 0) return null;
+    const doneCount = items.filter(item => item.done).length;
+    return Math.round((doneCount / items.length) * 100);
+  }
+  if (!bar.targetSmallest || Number(bar.targetSmallest) <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((Number(bar.currentSmallest || 0) / Number(bar.targetSmallest)) * 100)));
+}
+
 function applyCardProgressColor(card, bar) {
   if (!card) return;
   if (!bar) {
     card.style.setProperty("--bar-color", "var(--ui-accent, #4A90D9)");
     return;
   }
-  const barType = bar.type || "goal";
-  if (barType === "note") {
+  const percent = getBarProgressPercent(bar);
+  if (percent === null) {
     card.style.removeProperty("--bar-color");
     return;
-  }
-  let percent = 0;
-  if (barType === "goal") {
-    percent = bar.targetSmallest > 0
-      ? Math.max(0, Math.min(100, (bar.currentSmallest / bar.targetSmallest) * 100))
-      : 0;
-  } else if (barType === "checklist") {
-    const items = bar.items || [];
-    const doneCount = items.filter(item => item.done).length;
-    const totalCount = items.length;
-    percent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
   }
   const barColor = getProgressColor(percent);
   card.style.setProperty("--bar-color", barColor);
@@ -1050,6 +1064,53 @@ let isSearchActiveHistoryPushed = false;
 let deferredPrompt = null;
 let isPopStateExit = false;
 let lastInteractionCardId = null;
+const selectedBarIds = new Set();
+let editModeActive = false;
+let currentViewMode = localStorage.getItem("progress_shelf_view_mode") || "grid";
+let focusedOrbitBarId = null;
+const orbitElements = {
+  view: null,
+  viewport: null,
+  world: null,
+  cardsContainer: null,
+  guideRing: null,
+  guideRingsContainer: null,
+  centerHub: null,
+  cardModalOverlay: null,
+  cardModalBackdrop: null,
+  cardModalClose: null,
+  cardModalContent: null,
+  emptyState: null,
+  btnZoomIn: null,
+  btnZoomOut: null,
+  btnRecenter: null,
+  btnPlayPause: null,
+  iconPause: null,
+  iconPlay: null,
+  btnViewGrid: null,
+  btnViewOrbit: null
+};
+
+// Orbit View State (Camera & Motion)
+let orbitRotationAngle = 0;
+let orbitSpeed = 0.04; // Gentle ambient rotation (~0.04 deg/frame)
+let isOrbitPlaying = false;
+let isHoveringOrbitCard = false;
+let isDraggingOrbitCanvas = false;
+let canvasDragDistance = 0;
+let orbitAnimationId = null;
+let currentOrbitRadius = 320;
+let hasOrbitFitOnFirstRender = false;
+let cameraPanX = 0;
+let cameraPanY = 0;
+let cameraZoom = 1;
+let targetPanX = 0;
+let targetPanY = 0;
+let targetZoom = 1;
+let isCameraAnimating = false;
+let cameraAnimStartTime = 0;
+let cameraAnimDuration = 450;
+let startPanX = 0, startPanY = 0, startZoom = 1;
 // Cached result of the last async notification health check.
 // null = check hasn't run yet (bells default to yellow/neutral).
 let cachedBellHealth = null;
@@ -1548,15 +1609,31 @@ function updateOverallStats(bars) {
     if (!btn) return;
     if (count > 0) {
       btn.classList.remove("hidden");
-      if (div) div.classList.remove("hidden");
+      btn.style.display = "";
+      if (div) {
+        div.classList.remove("hidden");
+        div.style.display = "";
+      }
     } else {
       btn.classList.add("hidden");
-      if (div) div.classList.add("hidden");
+      btn.style.display = "none";
+      if (div) {
+        div.classList.add("hidden");
+        div.style.display = "none";
+      }
     }
   }
 
   // All Trackers is always visible if total > 0
-  if (btnAll) btnAll.classList.remove("hidden");
+  if (btnAll) {
+    if (total > 0) {
+      btnAll.classList.remove("hidden");
+      btnAll.style.display = "";
+    } else {
+      btnAll.classList.add("hidden");
+      btnAll.style.display = "none";
+    }
+  }
 
   toggleBtn(btnDeadlines, divDeadlines, deadlinesCount);
   toggleBtn(btnOverdue, divOverdue, overdueCount);
@@ -1582,6 +1659,36 @@ function updateOverallStats(bars) {
       }
     }
   });
+
+  // Update Orbit view center hub numbers & active state
+  const orbitStatTotal = document.getElementById("orbit-stat-total");
+  const orbitStatDeadlines = document.getElementById("orbit-stat-deadlines");
+  const orbitStatOverdue = document.getElementById("orbit-stat-overdue");
+  const orbitStatCompleted = document.getElementById("orbit-stat-completed");
+  const orbitStatFlexible = document.getElementById("orbit-stat-flexible");
+
+  if (orbitStatTotal) orbitStatTotal.textContent = total;
+  if (orbitStatDeadlines) orbitStatDeadlines.textContent = deadlinesCount;
+  if (orbitStatOverdue) orbitStatOverdue.textContent = overdueCount;
+  if (orbitStatCompleted) orbitStatCompleted.textContent = completedCount;
+  if (orbitStatFlexible) orbitStatFlexible.textContent = flexibleCount;
+
+  const orbitButtons = document.querySelectorAll(".orbit-stat-btn");
+  orbitButtons.forEach(btn => {
+    if (btn) {
+      if (btn.getAttribute("data-filter") === currentFilter) {
+        btn.classList.add("active");
+        btn.setAttribute("aria-pressed", "true");
+      } else {
+        btn.classList.remove("active");
+        btn.setAttribute("aria-pressed", "false");
+      }
+    }
+  });
+
+  if (typeof window.updateStickyOffsets === "function") {
+    window.updateStickyOffsets();
+  }
 }
 
 function filterBars(bars) {
@@ -2664,6 +2771,11 @@ function renderDashboard(bars) {
       addCard.addEventListener("click", () => openCreateModal());
       cardsGrid.insertBefore(addCard, cardsGrid.firstChild);
     }
+    if (bars && bars.length > 0) {
+      addCard.classList.add("has-cards");
+    } else {
+      addCard.classList.remove("has-cards");
+    }
 
     // Compile list of expected elements in order
     const expectedElements = [addCard];
@@ -2715,6 +2827,10 @@ function renderDashboard(bars) {
     syncRowHeights();
     syncFabVisibility();
     evaluateDemoBannerAndDropdownState();
+
+    if (typeof renderOrbitDashboard === "function" && currentViewMode === "orbit") {
+      renderOrbitDashboard(bars);
+    }
 
     // Scroll to and highlight card if 'id' parameter is set in the URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -3098,7 +3214,22 @@ window.addEventListener("wheel", (e) => {
 function syncFabVisibility() {
   const addCard = document.getElementById("btn-add-card");
   const fab = document.getElementById("btn-fab");
-  if (addCard && fab) {
+  if (!fab) return;
+
+  const isNative = document.documentElement.classList.contains('is-native-app') || (
+    typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()
+  );
+
+  if (isNative) {
+    if (currentBars && currentBars.length > 0) {
+      fab.classList.add("visible");
+    } else {
+      fab.classList.remove("visible");
+    }
+    return;
+  }
+
+  if (addCard) {
     const rect = addCard.getBoundingClientRect();
     const navbarHeight = document.querySelector(".navbar")?.offsetHeight || 57;
     // Show FAB when the bottom of "Add New Tracker" has scrolled above the navbar
@@ -4700,13 +4831,13 @@ formCreate.addEventListener("submit", async (e) => {
     closeModal(modalCreate);
     const targetUid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
     if ((notifyAt || alertAtDeadline) && targetUid) {
-      if (Notification.permission === "denied") {
+      if (typeof Notification !== 'undefined' && Notification.permission === "denied") {
         showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
       } else {
         handleFCMSession(targetUid);
       }
     }
-    await createBar(targetUid, {
+    const newBarId = await createBar(targetUid, {
       title,
       type,
       preset,
@@ -4726,6 +4857,9 @@ formCreate.addEventListener("submit", async (e) => {
       deadlineNotified: false,
       repeat
     });
+    if (newBarId) {
+      highlightAndScrollToCard(newBarId);
+    }
     showToast(`Successfully created tracker "${title}"!`, "success");
   } catch (error) {
     console.error("Error creating progress bar:", error);
@@ -4940,7 +5074,7 @@ formEdit.addEventListener("submit", async (e) => {
     const notifyChanged = notifyAt !== selectedBar.notifyAt || alertAtDeadline !== selectedBar.alertAtDeadline;
     const notifyEnabled = notifyAt || alertAtDeadline;
     if (notifyChanged && notifyEnabled && targetUid) {
-      if (Notification.permission === "denied") {
+      if (typeof Notification !== 'undefined' && Notification.permission === "denied") {
         showToast("Notifications blocked. Enable them in browser settings to receive alerts.", "warning");
       } else {
         handleFCMSession(targetUid);
@@ -5229,7 +5363,7 @@ if (btnBannerLogin) {
 
 // Stats filter button event listeners
 const setupStatsFilterListeners = () => {
-  const filterButtons = document.querySelectorAll(".stats-btn");
+  const filterButtons = document.querySelectorAll(".stats-btn, .orbit-stat-btn");
   filterButtons.forEach(btn => {
     btn.addEventListener("click", () => {
       const filter = btn.getAttribute("data-filter");
@@ -5254,6 +5388,9 @@ const setupStatsFilterListeners = () => {
         }
         currentFilter = filter;
         renderDashboard(currentBars);
+        if (currentViewMode === "orbit" && !focusedOrbitBarId) {
+          fitOrbitToScreen(true);
+        }
       }
     });
   });
@@ -5319,6 +5456,10 @@ function adjustSearchLayout() {
 
   if (!searchInput || !searchContainer || !navContainer || !logo || !toolbar || !subbarEl || !subbarContainer) return;
 
+  const isNative = document.documentElement.classList.contains('is-native-app') || (
+    typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()
+  );
+
   // Always keep search container in pill mode (always expanded)
   searchContainer.classList.add("search-pill-mode");
   searchContainer.classList.remove("expanded");
@@ -5337,6 +5478,22 @@ function adjustSearchLayout() {
       transferItems.push(child);
     }
   });
+
+  // In native APK: Always keep toolbar elements in navbar, keep subbar permanently hidden
+  if (isNative) {
+    transferItems.forEach(item => {
+      if (item.parentElement !== toolbar) {
+        if (profileBadge) {
+          toolbar.insertBefore(item, profileBadge);
+        } else {
+          toolbar.appendChild(item);
+        }
+      }
+    });
+    subbarEl.style.display = "none";
+    window.updateStickyOffsets?.();
+    return;
+  }
 
   const isCurrentlyInMobileDOM = transferItems.length > 0 && transferItems[0].parentElement === subbarContainer;
 
@@ -5689,30 +5846,31 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
-  // Sync Theme & Font Preferences from DB
-  if (user) {
-    const settings = await getUserSettings(user.uid);
-    if (settings) {
-      if (settings.accent_color) {
-        localStorage.setItem('app-accent-color', settings.accent_color);
-        if (typeof window.updateAccentFromSync === 'function') {
-          window.updateAccentFromSync(settings.accent_color);
+  // Sync Theme & Font Preferences from DB in background
+  if (user && user.uid) {
+    getUserSettings(user.uid).then((settings) => {
+      if (settings) {
+        if (settings.accent_color) {
+          localStorage.setItem('app-accent-color', settings.accent_color);
+          if (typeof window.updateAccentFromSync === 'function') {
+            window.updateAccentFromSync(settings.accent_color);
+          }
+        }
+
+        if (settings.custom_accents) {
+          try {
+            localStorage.setItem('app-custom-accents', JSON.stringify(settings.custom_accents));
+          } catch(e) {}
+        }
+
+        if (settings.font_family) {
+          localStorage.setItem('app-font-family', settings.font_family);
+          if (typeof window.applyFontFamily === 'function') {
+            window.applyFontFamily(settings.font_family);
+          }
         }
       }
-
-      if (settings.custom_accents) {
-        try {
-          localStorage.setItem('app-custom-accents', JSON.stringify(settings.custom_accents));
-        } catch(e) {}
-      }
-
-      if (settings.font_family) {
-        localStorage.setItem('app-font-family', settings.font_family);
-        if (typeof window.applyFontFamily === 'function') {
-          window.applyFontFamily(settings.font_family);
-        }
-      }
-    }
+    }).catch(err => console.warn("Background user settings fetch notice:", err));
 
     // Subscribe to realtime changes in user_settings for instant cross-device sync
     subscribeToUserSettings(user.uid, (newSettings) => {
@@ -5805,7 +5963,7 @@ initAuthProtection(async (user) => {
       checkFCMTokenExists(user.uid, localToken).then(async (exists) => {
         if (!exists) {
           console.log("Local FCM token is missing from the database. Re-registering...");
-          if (Notification.permission === "granted") {
+          if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
             await handleFCMSession(user.uid);
           }
         }
@@ -5814,7 +5972,7 @@ initAuthProtection(async (user) => {
         refreshAllBellStates(cachedBellHealth);
       }).catch(err => console.error("Error verifying FCM token on load:", err));
     } else {
-      if (Notification.permission === "granted") {
+      if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
         console.log("No FCM token found locally, but permission is granted. Registering fresh token...");
         handleFCMSession(user.uid);
       }
@@ -5825,7 +5983,7 @@ initAuthProtection(async (user) => {
 
     // Periodically re-sync FCM token and bell health every 3 minutes
     setInterval(async () => {
-      if (currentUser && currentUser.uid && !isGuestMode() && Notification.permission === 'granted') {
+      if (currentUser && currentUser.uid && !isGuestMode() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         await handleFCMSession(currentUser.uid);
       }
       if (currentUser && currentUser.uid) {
@@ -5844,7 +6002,7 @@ initAuthProtection(async (user) => {
     if (document.visibilityState === 'visible') {
       evaluateAutoResets(currentBars);
       if (currentUser && currentUser.uid && !isGuestMode()) {
-        if (Notification.permission === 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           await handleFCMSession(currentUser.uid);
         }
         cachedBellHealth = await getNotificationHealthStatus(currentUser.uid);
@@ -5917,6 +6075,7 @@ initAuthProtection(async (user) => {
   }
 
   setupDownloadApk();
+  setupNativeApp();
 
   // Subscribe to progress bars collection
   let firstLoad = true;
@@ -5927,7 +6086,7 @@ initAuthProtection(async (user) => {
       evaluateAutoResets(bars);
       
       // Dynamic Notification Permission Banner check (Rule 3)
-      if (user && user.uid && Notification.permission === "default") {
+      if (user && user.uid && typeof Notification !== 'undefined' && Notification.permission === "default") {
         const hasUpcomingNotifications = (bars || []).some(bar => hasActiveNotification(bar));
         if (hasUpcomingNotifications) {
           showNotificationBanner(user.uid);
@@ -5943,6 +6102,7 @@ initAuthProtection(async (user) => {
         if (navLogoSvg) {
           navLogoSvg.classList.remove("logo-loading");
         }
+        hideNativeSplashScreen();
       }
     },
     (error) => {
@@ -5951,6 +6111,7 @@ initAuthProtection(async (user) => {
         if (navLogoSvg) {
           navLogoSvg.classList.remove("logo-loading");
         }
+        hideNativeSplashScreen();
       }
       const errType = !navigator.onLine ? "network" : "server";
       showToast(errType === "network" ? "You are currently offline." : "Error connecting to database.", "error");
@@ -5960,6 +6121,99 @@ initAuthProtection(async (user) => {
     }
   );
 });
+
+function hideNativeSplashScreen() {
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+  if (isNative && window.Capacitor?.Plugins?.SplashScreen) {
+    window.Capacitor.Plugins.SplashScreen.hide().catch(() => {});
+  }
+}
+
+function setupNativeApp() {
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+  if (!isNative) return;
+
+  setupDeepLinkListener();
+
+  const { App, StatusBar } = window.Capacitor.Plugins || {};
+
+  // Setup Status Bar styling
+  if (StatusBar) {
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    const updateStatusBarStyle = () => {
+      const isDark = document.documentElement.classList.contains('dark-theme');
+      StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: isDark ? '#0D1117' : '#FFFFFF' }).catch(() => {});
+    };
+    updateStatusBarStyle();
+    const observer = new MutationObserver(updateStatusBarStyle);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // Handle Android Hardware Back Button
+  if (App) {
+    App.addListener('backButton', ({ canGoBack }) => {
+      // 1. Close open overlays/modals first
+      const activeModal = document.querySelector('.modal-overlay.active, .modal-backdrop:not(.hidden)');
+      if (activeModal) {
+        if (typeof closeModal === 'function') {
+          closeModal(activeModal);
+        } else {
+          activeModal.classList.remove('active');
+        }
+        return;
+      }
+
+      // Close open dropdowns/menus
+      const profileDropdown = document.getElementById('profile-dropdown');
+      if (profileDropdown && profileDropdown.classList.contains('active')) {
+        profileDropdown.classList.remove('active');
+        const menuBackdrop = document.getElementById('menu-backdrop');
+        if (menuBackdrop) menuBackdrop.classList.add('hidden');
+        return;
+      }
+      const fontDropdown = document.getElementById('font-picker-dropdown');
+      if (fontDropdown && !fontDropdown.classList.contains('hidden')) {
+        fontDropdown.classList.add('hidden');
+        return;
+      }
+
+      // 2. Go back in app navigation / filters next
+      const searchInput = document.getElementById('global-search');
+      if (searchInput && searchInput.value) {
+        searchInput.value = '';
+        const clearBtn = document.getElementById('btn-clear-search');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        if (typeof adjustSearchLayout === 'function') adjustSearchLayout();
+        if (typeof currentFilter !== 'undefined') currentFilter = 'all';
+        if (typeof renderDashboard === 'function' && typeof currentBars !== 'undefined') {
+          renderDashboard(currentBars);
+        }
+        return;
+      }
+
+      if (typeof currentFilter !== 'undefined' && currentFilter !== 'all') {
+        currentFilter = 'all';
+        const filterBtns = document.querySelectorAll('.stats-btn');
+        filterBtns.forEach(b => b.classList.remove('active'));
+        const allBtn = document.getElementById('btn-filter-total');
+        if (allBtn) allBtn.classList.add('active');
+        if (typeof renderDashboard === 'function' && typeof currentBars !== 'undefined') {
+          renderDashboard(currentBars);
+        }
+        return;
+      }
+
+      if (window.location.search || window.location.hash) {
+        window.history.back();
+        return;
+      }
+
+      // 3. Exit only from the home screen
+      App.exitApp();
+    });
+  }
+}
 
 /**
  * Renders distinct error state cards for network, server, or application issues.
@@ -6045,7 +6299,10 @@ function renderErrorState(type, details = "") {
   `;
 }
 
+let isCurrentlyOffline = false;
+
 window.addEventListener("offline", () => {
+  isCurrentlyOffline = true;
   showToast("You are currently offline.", "warning");
   const cardsGrid = document.getElementById("cards-grid");
   if (cardsGrid && cardsGrid.querySelectorAll(".card-progress").length === 0) {
@@ -6054,8 +6311,13 @@ window.addEventListener("offline", () => {
 });
 
 window.addEventListener("online", () => {
-  showToast("Network restored! Reconnecting...", "success");
-  window.location.reload();
+  if (isCurrentlyOffline) {
+    isCurrentlyOffline = false;
+    showToast("Network restored! Reconnecting...", "success");
+    if (typeof renderDashboard === "function" && typeof currentBars !== "undefined" && currentBars) {
+      renderDashboard(currentBars);
+    }
+  }
 });
 
 // Setup mutual exclusion for deadline inputs (Create and Edit modals)
@@ -6637,6 +6899,7 @@ function updateNotificationPreview(prefix) {
  */
 async function handleFCMSession(uid) {
   try {
+    if (typeof Notification === 'undefined') return;
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       const isGuest = isGuestMode();
@@ -6645,9 +6908,11 @@ async function handleFCMSession(uid) {
         return;
       }
 
-      if (typeof messaging !== "undefined" && messaging) {
-        const registration = await navigator.serviceWorker.ready;
-        const token = await getToken(messaging, { 
+      const fcm = await getFirebaseMessaging();
+      if (fcm && fcm.messaging && fcm.getToken) {
+        const registration = await navigator.serviceWorker?.ready;
+        if (!registration) return;
+        const token = await fcm.getToken(fcm.messaging, { 
           vapidKey: FCM_VAPID_KEY,
           serviceWorkerRegistration: registration
         });
@@ -6768,7 +7033,7 @@ function setupNotificationListeners(prefix = "") {
   notifyPercent?.addEventListener('change', onPercentType);
 
   const requestPermissionOnInteraction = () => {
-    if (Notification.permission === "denied") return;
+    if (typeof Notification === 'undefined' || Notification.permission === "denied") return;
     if (typeof currentUser !== 'undefined') {
       const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
       handleFCMSession(uid);
@@ -7510,10 +7775,6 @@ setupFormattingGuides();
 // ==========================================
 // APK & Edit Mode & Manual Ordering Controls
 // ==========================================
-const selectedBarIds = new Set();
-let editModeActive = false;
-
-
 
 // Toggles selection state of a card in Edit Mode
 function toggleCardSelection(card) {
@@ -7608,21 +7869,46 @@ function updateDeleteSelectedButton() {
   }
 }
 
-// Setup APK button toast triggers with shake animation
+// Setup APK button: Hidden in native APK build, direct download on web
 function setupAPKButton() {
   const btn = document.getElementById("btn-apk-download");
-  if (btn) {
-    btn.addEventListener("click", async () => {
-      btn.classList.add("shake-anim");
-      btn.addEventListener("animationend", () => {
-        btn.classList.remove("shake-anim");
-      }, { once: true });
-      const userAgreed = confirm("The Android APK is currently under development.\n\nWould you like to install the PWA Web App version right now instead?");
-      if (userAgreed) {
-        await window.triggerPWAInstall();
-      }
-    });
+  if (!btn) return;
+
+  const isNative = typeof window !== 'undefined' && (
+    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+    (window.location.protocol === 'https:' && window.location.hostname === 'localhost') ||
+    window.location.protocol === 'capacitor:' ||
+    document.documentElement.classList.contains('is-native-app')
+  );
+
+  // Remove the android icon for the apk build only
+  if (isNative) {
+    btn.style.display = "none";
+    return;
   }
+
+  btn.style.display = "inline-flex";
+  btn.setAttribute("title", "Download latest Android APK (ProgressShelf.apk)");
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    btn.classList.add("shake-anim");
+    btn.addEventListener("animationend", () => {
+      btn.classList.remove("shake-anim");
+    }, { once: true });
+
+    showToast("Downloading latest ProgressShelf.apk...", "success", 4000);
+
+    const downloadLink = document.createElement("a");
+    // Direct link to the repository APK
+    downloadLink.href = "https://github.com/Anandavnish/ProgressShelf/raw/main/ProgressShelf.apk";
+    downloadLink.download = "ProgressShelf.apk";
+    downloadLink.target = "_blank";
+    downloadLink.rel = "noopener noreferrer";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  });
 }
 
 // Setup Edit Mode and Batch Delete interactions
@@ -7662,12 +7948,6 @@ function setupEditModeControls() {
         await deleteMultipleBars(isGuestMode() ? null : (currentUser ? currentUser.uid : null), idsToDelete);
         if (toast) dismissToast(toast);
         showToast(`Deleted ${count} card${count === 1 ? '' : 's'} successfully.`, "success");
-        
-        // Remove deleted items locally if in guest mode
-        if (isGuestMode()) {
-          const bars = getLocalBars().filter(b => !idsToDelete.includes(b.id));
-          renderDashboard(bars);
-        }
         
         selectedBarIds.clear();
         exitEditMode();
@@ -7763,26 +8043,15 @@ function setupStaggeredHeaderScroll() {
   let H_controls = 45;
   let scrollTicking = false;
 
+  let subbarEl = document.querySelector(".mobile-subbar");
+  let statsEl = document.getElementById("stats-banner");
+  let controlsEl = document.querySelector(".dashboard-controls");
+  let navbarEl = document.querySelector(".navbar");
+
   function updateHeaderScroll() {
     const currentScrollY = window.scrollY;
     const deltaY = currentScrollY - lastScrollY;
     lastScrollY = currentScrollY;
-
-    const subbarEl = document.querySelector(".mobile-subbar");
-    const statsEl = document.getElementById("stats-banner");
-    const controlsEl = document.querySelector(".dashboard-controls");
-
-    // Measure dynamic heights with subpixel precision
-    const navbarEl = document.querySelector(".navbar");
-    H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
-    H_subbar = (subbarEl && window.getComputedStyle(subbarEl).display !== "none") ? subbarEl.getBoundingClientRect().height : 0;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
-    H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
-
-    // Push offsets to document so sticky tops align dynamically
-    document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
-    document.documentElement.style.setProperty("--subbar-height", `${H_subbar}px`);
-    document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
     // Clear translations at the top of the page and bring back mobile subbar
     if (currentScrollY <= 5) {
@@ -7869,14 +8138,14 @@ function setupStaggeredHeaderScroll() {
 
   // Handle window resizing and height re-evaluation
   function handleResize() {
-    const subbarEl = document.querySelector(".mobile-subbar");
-    const statsEl = document.getElementById("stats-banner");
-    const controlsEl = document.querySelector(".dashboard-controls");
-    const navbarEl = document.querySelector(".navbar");
+    subbarEl = document.querySelector(".mobile-subbar");
+    statsEl = document.getElementById("stats-banner");
+    controlsEl = document.querySelector(".dashboard-controls");
+    navbarEl = document.querySelector(".navbar");
     
     H_nav = navbarEl ? navbarEl.getBoundingClientRect().height : 57;
     H_subbar = (subbarEl && window.getComputedStyle(subbarEl).display !== "none") ? subbarEl.getBoundingClientRect().height : 0;
-    H_stats = (statsEl && !statsEl.classList.contains("hidden")) ? statsEl.getBoundingClientRect().height : 0;
+    H_stats = (statsEl && !statsEl.classList.contains("hidden") && window.getComputedStyle(statsEl).display !== "none") ? statsEl.getBoundingClientRect().height : 0;
     H_controls = controlsEl ? controlsEl.getBoundingClientRect().height : 45;
 
     document.documentElement.style.setProperty("--navbar-height", `${H_nav}px`);
@@ -7896,6 +8165,9 @@ function setupStaggeredHeaderScroll() {
       if (controlsEl) controlsEl.style.transform = `translateY(-${y_nav + y_subbar + y_stats + y_controls}px)`;
     }
   }
+
+  // Initial measurement
+  handleResize();
 
   // Expose handleResize globally so other layout updates can sync scroll offsets
   window.updateStickyOffsets = handleResize;
@@ -7981,9 +8253,11 @@ const setupRefreshListeners = () => {
 setupRefreshListeners();
 
 // ==========================================
-// Service Worker Registration & Updates
+// Service Worker Registration & Updates (Web only)
 // ==========================================
-if ('serviceWorker' in navigator) {
+const isNativePlatform = typeof window !== 'undefined' && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+
+if (!isNativePlatform && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
       .then((reg) => {
@@ -8026,8 +8300,11 @@ if ('serviceWorker' in navigator) {
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadControllerOnLoad) return; // Skip reload if this is the initial service worker activation after unregistering
+    if (sessionStorage.getItem('sw_refreshed_recently')) return;
     if (!refreshing) {
       refreshing = true;
+      sessionStorage.setItem('sw_refreshed_recently', 'true');
+      setTimeout(() => sessionStorage.removeItem('sw_refreshed_recently'), 20000);
 
       let countdown = 8;
       const toast = showToast(`A new version is available! Auto-refreshing in ${countdown}s...`, "info", 0);
@@ -8492,12 +8769,12 @@ const setupTerracePage = () => {
 setupTerracePage();
 
 // Setup PWA WebAPK download logic
-const checkIsPWA = () => {
+function checkIsPWA() {
   return window.matchMedia('(display-mode: standalone)').matches || 
          window.matchMedia('(display-mode: minimal-ui)').matches || 
          window.matchMedia('(display-mode: fullscreen)').matches || 
          window.navigator.standalone === true;
-};
+}
 
 window.triggerPWAInstall = async function() {
   // Check device types
@@ -9220,6 +9497,836 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeAllMenus();
+    if (typeof closeOrbitCardModal === "function" && focusedOrbitBarId) {
+      closeOrbitCardModal();
+    }
   }
 });
+
+/* ==========================================================================
+   CIRCULAR ORBIT VIEW MODULE
+   ========================================================================== */
+
+function initOrbitViewElements() {
+  orbitElements.view = document.getElementById("orbit-view");
+  orbitElements.viewport = document.getElementById("orbit-viewport");
+  orbitElements.world = document.getElementById("orbit-world");
+  orbitElements.cardsContainer = document.getElementById("orbit-cards-container");
+  orbitElements.guideRing = document.getElementById("orbit-guide-ring");
+  orbitElements.guideRingsContainer = document.getElementById("orbit-guide-rings-container");
+  orbitElements.centerHub = document.getElementById("orbit-center-hub");
+  orbitElements.cardModalOverlay = document.getElementById("orbit-card-modal");
+  orbitElements.cardModalBackdrop = document.getElementById("orbit-card-modal-backdrop");
+  orbitElements.cardModalClose = document.getElementById("btn-orbit-card-close");
+  orbitElements.cardModalContent = document.getElementById("orbit-card-modal-content");
+  orbitElements.emptyState = document.getElementById("orbit-empty-state");
+  orbitElements.btnZoomIn = document.getElementById("btn-orbit-zoom-in");
+  orbitElements.btnZoomOut = document.getElementById("btn-orbit-zoom-out");
+  orbitElements.btnRecenter = document.getElementById("btn-orbit-recenter");
+  orbitElements.btnPlayPause = document.getElementById("btn-orbit-play-pause");
+  orbitElements.iconPause = document.getElementById("orbit-icon-pause");
+  orbitElements.iconPlay = document.getElementById("orbit-icon-play");
+  orbitElements.btnViewGrid = document.getElementById("btn-view-grid");
+  orbitElements.btnViewOrbit = document.getElementById("btn-view-orbit");
+}
+
+function applyCameraTransform() {
+  if (!orbitElements.world) return;
+  orbitElements.world.style.transform = `translate(${cameraPanX}px, ${cameraPanY}px) scale(${cameraZoom})`;
+
+  // Keep center hub comfortably readable even when zoomed out
+  if (orbitElements.centerHub) {
+    const hubCounterScale = cameraZoom < 0.85 ? Math.min(1.4, 0.88 / Math.sqrt(cameraZoom)) : 1;
+    orbitElements.centerHub.style.transform = `translate(-50%, -50%) scale(${hubCounterScale})`;
+  }
+
+  // Counter-scale ring labels by 1/zoom so they stay readable when canvas is fitted (capped at 1.3)
+  const labelCounterScale = cameraZoom < 0.95 ? Math.min(1.3, 1 / cameraZoom) : 1;
+  orbitElements.world.style.setProperty("--ring-label-scale", labelCounterScale.toFixed(3));
+
+  // Toggle hiding node titles if zoom is below 0.45 threshold
+  if (cameraZoom < 0.45) {
+    orbitElements.world.classList.add("orbit-hide-titles");
+  } else {
+    orbitElements.world.classList.remove("orbit-hide-titles");
+  }
+}
+
+function easeOutCubicCamera(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function animateCameraStep(timestamp) {
+  if (!isCameraAnimating) return;
+  const elapsed = timestamp - cameraAnimStartTime;
+  const progress = Math.min(1, elapsed / cameraAnimDuration);
+  const ease = easeOutCubicCamera(progress);
+
+  cameraPanX = startPanX + (targetPanX - startPanX) * ease;
+  cameraPanY = startPanY + (targetPanY - startPanY) * ease;
+  cameraZoom = startZoom + (targetZoom - startZoom) * ease;
+  applyCameraTransform();
+
+  if (progress < 1) {
+    requestAnimationFrame(animateCameraStep);
+  } else {
+    isCameraAnimating = false;
+  }
+}
+
+function smoothCameraTo(pX, pY, zoom, duration = 450) {
+  startPanX = cameraPanX;
+  startPanY = cameraPanY;
+  startZoom = cameraZoom;
+  targetPanX = pX;
+  targetPanY = pY;
+  targetZoom = zoom;
+  cameraAnimStartTime = performance.now();
+  cameraAnimDuration = duration;
+  isCameraAnimating = true;
+  requestAnimationFrame(animateCameraStep);
+}
+
+function fitOrbitToScreen(smooth = true) {
+  if (focusedOrbitBarId) return;
+  if (!orbitElements.viewport || !orbitElements.viewport.clientWidth) return;
+  const vpWidth = orbitElements.viewport.clientWidth;
+  const vpHeight = orbitElements.viewport.clientHeight;
+
+  // Scale based on the outermost active orbit radius with 100px node footprint
+  const requiredDiameter = (currentOrbitRadius * 2) + 120;
+  const scaleX = (vpWidth - 80) / requiredDiameter;
+  const scaleY = (vpHeight - 80) / requiredDiameter;
+  const fitScale = Math.min(scaleX, scaleY);
+  // Clamped so circular nodes stay comfortably readable
+  const idealScale = Math.min(1.0, Math.max(0.2, fitScale));
+
+  if (smooth) {
+    smoothCameraTo(0, 0, idealScale, 500);
+  } else {
+    cameraPanX = 0;
+    cameraPanY = 0;
+    cameraZoom = idealScale;
+    applyCameraTransform();
+  }
+}
+
+/**
+ * Calculates urgency-based orbit tiers:
+ * 1: Overdue
+ * 2: Due <= 7 days
+ * 3: Later deadlines
+ * 4: Flexible goals (no deadline)
+ * 5: Completed
+ * Within each ring, sorted by deadline and placed clockwise from 12 o'clock.
+ * Radius = max(minR, n * 100 / (2π)), splitting rings exceeding ~24 nodes into sub-rings.
+ */
+function getBarUrgencyTier(bar) {
+  const completed = isTrackerCompleted(bar);
+  if (completed) return 5;
+  const deadlineMs = getDeadlineMs(bar);
+  if (deadlineMs) {
+    const now = Date.now();
+    if (deadlineMs <= now) return 1;
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (deadlineMs - now <= sevenDaysMs) return 2;
+    return 3;
+  }
+  return 4;
+}
+
+function getOrbitTierMeta(tier) {
+  const meta = {
+    1: { name: "Overdue", label: "Overdue" },
+    2: { name: "Due ≤ 7 Days", label: "Due Soon" },
+    3: { name: "Later Deadlines", label: "Upcoming" },
+    4: { name: "Flexible Goals", label: "Flexible" },
+    5: { name: "Completed", label: "Completed" }
+  };
+  return meta[tier] || { name: "Tier", label: "Tier" };
+}
+
+function calculateOrbitRings(filteredBars) {
+  if (!filteredBars || filteredBars.length === 0) return [];
+
+  const tierMap = new Map();
+  filteredBars.forEach(bar => {
+    const tier = getBarUrgencyTier(bar);
+    if (!tierMap.has(tier)) tierMap.set(tier, []);
+    tierMap.get(tier).push(bar);
+  });
+
+  const tierOrder = [1, 2, 3, 4, 5];
+  const ringGroups = [];
+
+  tierOrder.forEach(tier => {
+    const barsInTier = tierMap.get(tier);
+    if (!barsInTier || barsInTier.length === 0) return;
+
+    // Sort within ring by deadline ascending (soonest/most urgent first) or createdAt
+    if (tier === 1 || tier === 2 || tier === 3) {
+      barsInTier.sort((a, b) => (getDeadlineMs(a) || 0) - (getDeadlineMs(b) || 0));
+    } else {
+      barsInTier.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() || 0 : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() || 0 : 0;
+        return timeB - timeA;
+      });
+    }
+
+    // If ring exceeds ~24 nodes, split into sub-rings
+    const MAX_PER_RING = 24;
+    const tierMeta = getOrbitTierMeta(tier);
+    if (barsInTier.length > MAX_PER_RING) {
+      const subCount = Math.ceil(barsInTier.length / MAX_PER_RING);
+      const chunkSize = Math.ceil(barsInTier.length / subCount);
+      for (let s = 0; s < subCount; s++) {
+        const subBars = barsInTier.slice(s * chunkSize, (s + 1) * chunkSize);
+        if (subBars.length > 0) {
+          ringGroups.push({
+            tier,
+            tierName: `${tierMeta.name} (${s + 1}/${subCount})`,
+            ringLabel: `${tierMeta.label} (${s + 1}/${subCount})`,
+            bars: subBars
+          });
+        }
+      }
+    } else {
+      ringGroups.push({
+        tier,
+        tierName: tierMeta.name,
+        ringLabel: tierMeta.label,
+        bars: barsInTier
+      });
+    }
+  });
+
+  // Radius calculation: Radius = max(minR, (n + 1) * 100 / (2π))
+  const BASE_MIN_RADIUS = 260;
+  let prevRadius = 0;
+
+  return ringGroups.map((group, index) => {
+    const n = group.bars.length;
+    const totalSlots = n + 1;
+    const ringOffset = (index % 2 !== 0 && n > 0) ? (180 / totalSlots) : 0;
+    const emptySlotAngle = -90 + ringOffset;
+
+    const calculatedR = Math.round(((n + 1) * 100) / (2 * Math.PI));
+    const minR = index === 0 ? BASE_MIN_RADIUS : (prevRadius + 110);
+    const radius = Math.max(minR, calculatedR);
+    prevRadius = radius;
+
+    return {
+      ringIndex: index,
+      tier: group.tier,
+      tierName: group.tierName,
+      ringLabel: group.ringLabel,
+      radius,
+      ringOffset,
+      emptySlotAngle,
+      bars: group.bars,
+      speedMultiplier: 1.0 - (index * 0.12)
+    };
+  });
+}
+
+function openOrbitCardModal(barId) {
+  if (!orbitElements.cardModalOverlay || !orbitElements.cardModalContent) initOrbitViewElements();
+  const bar = (currentBars || []).find(b => b.id === barId);
+  if (!bar) return;
+
+  focusedOrbitBarId = barId;
+
+  // Highlight selected node with .orbit-node-focused
+  if (orbitElements.cardsContainer) {
+    const prev = orbitElements.cardsContainer.querySelector(".orbit-node-focused");
+    if (prev) prev.classList.remove("orbit-node-focused");
+    const node = orbitElements.cardsContainer.querySelector(`[data-bar-id="${barId}"]`);
+    if (node) node.classList.add("orbit-node-focused");
+  }
+
+  // Render card using existing createCardElement(bar)
+  if (orbitElements.cardModalContent) {
+    orbitElements.cardModalContent.innerHTML = "";
+    const cardEl = createCardElement(bar);
+    orbitElements.cardModalContent.appendChild(cardEl);
+  }
+
+  if (orbitElements.cardModalOverlay) {
+    orbitElements.cardModalOverlay.classList.remove("hidden");
+    orbitElements.cardModalOverlay.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeOrbitCardModal() {
+  focusedOrbitBarId = null;
+  if (orbitElements.cardsContainer) {
+    const focused = orbitElements.cardsContainer.querySelector(".orbit-node-focused");
+    if (focused) focused.classList.remove("orbit-node-focused");
+  }
+  if (orbitElements.cardModalOverlay) {
+    orbitElements.cardModalOverlay.classList.add("hidden");
+    orbitElements.cardModalOverlay.setAttribute("aria-hidden", "true");
+    if (orbitElements.cardModalContent) {
+      orbitElements.cardModalContent.innerHTML = "";
+    }
+  }
+}
+
+function updateAllOrbitNodePositions() {
+  if (!orbitElements.cardsContainer) return;
+  const nodes = orbitElements.cardsContainer.children;
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const radius = parseFloat(node.dataset.orbitRadius || currentOrbitRadius);
+    const baseAngle = parseFloat(node.dataset.baseAngle || "0");
+    const speedMult = parseFloat(node.dataset.speedMultiplier || "1");
+    const currentAngle = (baseAngle + orbitRotationAngle * speedMult) % 360;
+    const rad = currentAngle * Math.PI / 180;
+    const x = Math.round(radius * Math.cos(rad));
+    const y = Math.round(radius * Math.sin(rad));
+    node.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+  }
+}
+
+function orbitAnimationLoop() {
+  if (currentViewMode === "orbit") {
+    if (isOrbitPlaying && !isHoveringOrbitCard && !isDraggingOrbitCanvas && !focusedOrbitBarId && !isCameraAnimating) {
+      orbitRotationAngle = (orbitRotationAngle + orbitSpeed) % 360;
+      updateAllOrbitNodePositions();
+    }
+  }
+  orbitAnimationId = requestAnimationFrame(orbitAnimationLoop);
+}
+
+/**
+ * Determines urgency/status for orbit circular nodes:
+ * overdue = red, soon (<= 7 days) = amber, normal (> 7 days) = blue, flexible = purple, completed = green
+ */
+function getOrbitBarStatus(bar) {
+  const completed = isTrackerCompleted(bar);
+  if (completed) {
+    return { status: 'completed', color: '#22C55E', colorClass: 'val-green', glow: 'rgba(34, 197, 94, 0.4)' };
+  }
+  const deadlineMs = getDeadlineMs(bar);
+  if (deadlineMs) {
+    const now = Date.now();
+    if (deadlineMs <= now) {
+      return { status: 'overdue', color: '#EF4444', colorClass: 'val-red', glow: 'rgba(239, 68, 68, 0.4)' };
+    }
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (deadlineMs - now <= sevenDaysMs) {
+      return { status: 'soon', color: '#F59E0B', colorClass: 'val-orange', glow: 'rgba(245, 158, 11, 0.4)' };
+    }
+    return { status: 'normal', color: '#3B82F6', colorClass: 'val-blue', glow: 'rgba(59, 130, 246, 0.4)' };
+  }
+  return { status: 'flexible', color: '#A855F7', colorClass: 'val-purple', glow: 'rgba(168, 85, 247, 0.4)' };
+}
+
+function renderOrbitNode(node, bar) {
+  const percent = getBarProgressPercent(bar);
+  const status = getOrbitBarStatus(bar);
+  const escapedTitle = escapeHtml(bar.title || "Untitled");
+
+  node.style.setProperty("--node-status-glow", status.glow);
+  node.dataset.status = status.status;
+
+  if (percent === null) {
+    const isNote = (bar.type || "goal") === "note";
+    const noteIconHtml = isNote ? `
+        <span class="orbit-node-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${status.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+        </span>` : '';
+
+    // Type note displays document icon; goals with no target show a neutral empty track circle
+    node.innerHTML = `
+      <div class="orbit-node-circle ${status.colorClass}" title="${escapedTitle}">
+        <svg class="orbit-node-svg" width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="27" fill="none" stroke="var(--orbit-node-track, var(--card-border, rgba(255, 255, 255, 0.12)))" stroke-width="4.5" />
+        </svg>
+        ${noteIconHtml}
+      </div>
+      <div class="orbit-node-title" title="${escapedTitle}">${escapedTitle}</div>
+    `;
+  } else {
+    const circ = 2 * Math.PI * 27; // ~169.65
+    const dashOffset = (circ * (1 - percent / 100)).toFixed(2);
+    node.innerHTML = `
+      <div class="orbit-node-circle ${status.colorClass}" title="${escapedTitle} (${percent}%)">
+        <svg class="orbit-node-svg" width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="27" fill="none" stroke="var(--orbit-node-track, var(--card-border, rgba(255, 255, 255, 0.12)))" stroke-width="4.5" />
+          <circle cx="32" cy="32" r="27" fill="none" stroke="${status.color}" stroke-width="4.5" stroke-linecap="round"
+            stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${dashOffset}"
+            transform="rotate(-90 32 32)" />
+        </svg>
+        <span class="orbit-node-percent">${percent}%</span>
+      </div>
+      <div class="orbit-node-title" title="${escapedTitle}">${escapedTitle}</div>
+    `;
+  }
+}
+
+function renderOrbitDashboard(bars) {
+  if (!orbitElements.cardsContainer) initOrbitViewElements();
+  if (!orbitElements.cardsContainer) return;
+
+  const sortedBars = sortBars(bars || currentBars || []);
+  let filtered = filterBars([...sortedBars]);
+
+  // Sort by search relevance score descending when search is active
+  const searchTokens = getCurrentSearchTokens();
+  if (searchTokens.length > 0) {
+    const scored = filtered.map((bar, index) => ({ bar, index, score: getBarSearchScore(bar, searchTokens) }));
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      return a.index - b.index;
+    });
+    filtered = scored.map(item => item.bar);
+  }
+
+  const rings = calculateOrbitRings(filtered);
+  currentOrbitRadius = rings.length > 0 ? rings[rings.length - 1].radius : 260;
+
+  // Render concentric decorative guide rings with labels at empty-slot angle
+  if (orbitElements.guideRingsContainer) {
+    orbitElements.guideRingsContainer.innerHTML = rings.map(ring => {
+      const rad = ring.emptySlotAngle * (Math.PI / 180);
+      const labelX = Math.round(ring.radius * Math.cos(rad));
+      const labelY = Math.round(ring.radius * Math.sin(rad));
+      return `
+      <div class="orbit-ring-guide-group">
+        <div class="orbit-guide-ring" style="width: ${ring.radius * 2}px; height: ${ring.radius * 2}px;"></div>
+        <div class="orbit-ring-label" style="transform: translate3d(${labelX}px, ${labelY}px, 0) translate(-50%, -50%) scale(var(--ring-label-scale, 1));">
+          <span>${escapeHtml(ring.ringLabel)}</span>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } else if (orbitElements.guideRing) {
+    orbitElements.guideRing.style.width = (currentOrbitRadius * 2) + "px";
+    orbitElements.guideRing.style.height = (currentOrbitRadius * 2) + "px";
+  }
+
+  if (filtered.length === 0) {
+    orbitElements.cardsContainer.innerHTML = "";
+    if (orbitElements.emptyState) orbitElements.emptyState.classList.remove("hidden");
+    return;
+  } else {
+    if (orbitElements.emptyState) orbitElements.emptyState.classList.add("hidden");
+  }
+
+  // Map existing nodes for efficient DOM reconciliation
+  const existingNodesMap = new Map();
+  Array.from(orbitElements.cardsContainer.children).forEach(node => {
+    if (node.dataset.barId) {
+      existingNodesMap.set(node.dataset.barId, node);
+    }
+  });
+
+  orbitElements.cardsContainer.innerHTML = "";
+
+  // Place each urgency ring's nodes clockwise, reserving slot 0 for the ring label
+  rings.forEach((ring) => {
+    const totalSlots = ring.bars.length + 1;
+    const angularStep = 360 / totalSlots;
+    ring.bars.forEach((bar, j) => {
+      const baseAngle = -90 + ring.ringOffset + (j + 1) * angularStep;
+
+      let node = existingNodesMap.get(bar.id);
+
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "orbit-node";
+        node.dataset.barId = bar.id;
+
+        let nodePointerDownX = 0;
+        let nodePointerDownY = 0;
+
+        node.addEventListener("pointerdown", (e) => {
+          nodePointerDownX = e.clientX;
+          nodePointerDownY = e.clientY;
+        });
+
+        node.addEventListener("mouseenter", () => {
+          isHoveringOrbitCard = true;
+        });
+        node.addEventListener("mouseleave", () => {
+          isHoveringOrbitCard = false;
+        });
+
+        node.addEventListener("click", (e) => {
+          if (currentViewMode !== "orbit") return;
+          const nodeMoveDist = Math.hypot(e.clientX - nodePointerDownX, e.clientY - nodePointerDownY);
+          if (nodeMoveDist > 5 || canvasDragDistance > 5) {
+            return; // Drag/pan: ignore click
+          }
+          e.stopPropagation();
+          e.preventDefault();
+          openOrbitCardModal(bar.id);
+        });
+      }
+
+      renderOrbitNode(node, bar);
+
+      node.dataset.orbitRadius = ring.radius;
+      node.dataset.baseAngle = baseAngle;
+      node.dataset.speedMultiplier = ring.speedMultiplier;
+      node.dataset.ringIndex = ring.ringIndex;
+
+      if (focusedOrbitBarId === bar.id) {
+        node.classList.add("orbit-node-focused");
+      } else {
+        node.classList.remove("orbit-node-focused");
+      }
+
+      orbitElements.cardsContainer.appendChild(node);
+    });
+  });
+
+  updateAllOrbitNodePositions();
+
+  // Refresh open modal card if active, or close only if deleted from full currentBars
+  if (focusedOrbitBarId) {
+    const activeBar = (currentBars || bars || []).find(b => b.id === focusedOrbitBarId);
+    if (!activeBar) {
+      closeOrbitCardModal();
+    } else {
+      const modalActiveCard = orbitElements.cardModalContent?.querySelector(".card-progress");
+      if (modalActiveCard) {
+        try {
+          updateCardElement(modalActiveCard, activeBar);
+        } catch (err) {
+          console.warn("Failed to update card element in orbit modal:", err);
+        }
+      }
+    }
+  }
+
+  // Auto-fit on first orbit render only (instant fit, skipped if modal open)
+  if (!hasOrbitFitOnFirstRender && !focusedOrbitBarId) {
+    hasOrbitFitOnFirstRender = true;
+    fitOrbitToScreen(false);
+  }
+}
+
+function setViewMode(mode) {
+  currentViewMode = mode;
+  localStorage.setItem("progress_shelf_view_mode", mode);
+
+  if (!orbitElements.view) initOrbitViewElements();
+
+  const grid = document.getElementById("cards-grid");
+  const stats = document.getElementById("stats-banner");
+
+  if (mode === "orbit") {
+    document.body.classList.add("view-orbit");
+    if (grid) grid.classList.add("hidden");
+    if (orbitElements.view) orbitElements.view.classList.remove("hidden");
+    if (stats) stats.classList.add("hidden");
+
+    if (orbitElements.btnViewGrid) {
+      orbitElements.btnViewGrid.classList.remove("active");
+      orbitElements.btnViewGrid.setAttribute("aria-pressed", "false");
+    }
+    if (orbitElements.btnViewOrbit) {
+      orbitElements.btnViewOrbit.classList.add("active");
+      orbitElements.btnViewOrbit.setAttribute("aria-pressed", "true");
+    }
+
+    renderOrbitDashboard(currentBars);
+    if (!focusedOrbitBarId) {
+      fitOrbitToScreen(false);
+    }
+
+    if (!orbitAnimationId) {
+      orbitAnimationId = requestAnimationFrame(orbitAnimationLoop);
+    }
+  } else {
+    document.body.classList.remove("view-orbit");
+    if (typeof closeOrbitCardModal === "function") closeOrbitCardModal();
+    if (orbitElements.view) orbitElements.view.classList.add("hidden");
+    if (grid) grid.classList.remove("hidden");
+    if (stats && currentBars && currentBars.length > 0) stats.classList.remove("hidden");
+
+    if (orbitElements.btnViewOrbit) {
+      orbitElements.btnViewOrbit.classList.remove("active");
+      orbitElements.btnViewOrbit.setAttribute("aria-pressed", "false");
+    }
+    if (orbitElements.btnViewGrid) {
+      orbitElements.btnViewGrid.classList.add("active");
+      orbitElements.btnViewGrid.setAttribute("aria-pressed", "true");
+    }
+
+    if (typeof syncRowHeights === "function") syncRowHeights();
+  }
+}
+
+function setupOrbitGesturesAndControls() {
+  initOrbitViewElements();
+  if (!orbitElements.viewport) return;
+
+  const vp = orbitElements.viewport;
+
+  // 1. Mouse wheel zoom centered on mouse pointer (ignored when modal is open)
+  vp.addEventListener("wheel", (e) => {
+    if (focusedOrbitBarId || e.target.closest(".orbit-card-modal-overlay")) {
+      return;
+    }
+    e.preventDefault();
+    if (isCameraAnimating) isCameraAnimating = false;
+
+    const rect = vp.getBoundingClientRect();
+    const mouseX = e.clientX - (rect.left + rect.width / 2);
+    const mouseY = e.clientY - (rect.top + rect.height / 2);
+
+    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+    const newZoom = Math.min(2.5, Math.max(0.2, cameraZoom * zoomFactor));
+    const scaleRatio = newZoom / cameraZoom;
+
+    cameraPanX = mouseX - (mouseX - cameraPanX) * scaleRatio;
+    cameraPanY = mouseY - (mouseY - cameraPanY) * scaleRatio;
+    cameraZoom = newZoom;
+    applyCameraTransform();
+  }, { passive: false });
+
+  // 2. Click & drag to pan the canvas (ignored when modal is open)
+  let isPointerDown = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startCameraPanX = 0;
+  let startCameraPanY = 0;
+  let hasPointerCaptured = false;
+
+  vp.addEventListener("pointerdown", (e) => {
+    if (focusedOrbitBarId || e.target.closest("button, input, select, textarea, .orbit-hud, .orbit-stat-btn, .orbit-card-modal-overlay")) {
+      return;
+    }
+
+    isPointerDown = true;
+    hasPointerCaptured = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    canvasDragDistance = 0;
+    startCameraPanX = cameraPanX;
+    startCameraPanY = cameraPanY;
+  });
+
+  vp.addEventListener("pointermove", (e) => {
+    if (!isPointerDown) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    canvasDragDistance = Math.hypot(dx, dy);
+
+    if (canvasDragDistance > 5) {
+      if (!hasPointerCaptured) {
+        hasPointerCaptured = true;
+        isDraggingOrbitCanvas = true;
+        try {
+          vp.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+      cameraPanX = startCameraPanX + dx;
+      cameraPanY = startCameraPanY + dy;
+      applyCameraTransform();
+    }
+  });
+
+  const onPointerUp = (e) => {
+    if (isPointerDown) {
+      isPointerDown = false;
+      isDraggingOrbitCanvas = false;
+      if (hasPointerCaptured) {
+        hasPointerCaptured = false;
+        try {
+          vp.releasePointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+      setTimeout(() => {
+        canvasDragDistance = 0;
+      }, 60);
+    }
+  };
+
+  vp.addEventListener("pointerup", onPointerUp);
+  vp.addEventListener("pointercancel", onPointerUp);
+
+  // 3. Touch Pinch to Zoom & Pan (ignored when modal is open)
+  let initialTouchDist = 0;
+  let initialTouchZoom = 1;
+
+  vp.addEventListener("touchstart", (e) => {
+    if (focusedOrbitBarId || e.target.closest(".orbit-card-modal-overlay")) {
+      return;
+    }
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      initialTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      initialTouchZoom = cameraZoom;
+    }
+  }, { passive: true });
+
+  vp.addEventListener("touchmove", (e) => {
+    if (focusedOrbitBarId || e.target.closest(".orbit-card-modal-overlay")) {
+      return;
+    }
+    if (e.touches.length === 2 && initialTouchDist > 0) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = currentDist / initialTouchDist;
+      const newZoom = Math.min(2.5, Math.max(0.2, initialTouchZoom * ratio));
+      cameraZoom = newZoom;
+      applyCameraTransform();
+    }
+  }, { passive: true });
+
+  vp.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+      initialTouchDist = 0;
+    }
+  }, { passive: true });
+
+  // Center hub hover to pause ambient motion
+  if (orbitElements.centerHub) {
+    orbitElements.centerHub.addEventListener("mouseenter", () => {
+      isHoveringOrbitCard = true;
+    });
+    orbitElements.centerHub.addEventListener("mouseleave", () => {
+      isHoveringOrbitCard = false;
+    });
+  }
+
+  // 4. Floating HUD Button Handlers
+  if (orbitElements.btnZoomIn) {
+    orbitElements.btnZoomIn.addEventListener("click", () => {
+      smoothCameraTo(cameraPanX, cameraPanY, Math.min(2.5, cameraZoom * 1.25), 250);
+    });
+  }
+
+  if (orbitElements.btnZoomOut) {
+    orbitElements.btnZoomOut.addEventListener("click", () => {
+      smoothCameraTo(cameraPanX, cameraPanY, Math.max(0.2, cameraZoom * 0.8), 250);
+    });
+  }
+
+  if (orbitElements.btnRecenter) {
+    orbitElements.btnRecenter.addEventListener("click", () => {
+      closeOrbitCardModal();
+      fitOrbitToScreen(true);
+    });
+  }
+
+  if (orbitElements.btnPlayPause) {
+    if (isOrbitPlaying) {
+      orbitElements.btnPlayPause.classList.add("active");
+      if (orbitElements.iconPause) orbitElements.iconPause.classList.remove("hidden");
+      if (orbitElements.iconPlay) orbitElements.iconPlay.classList.add("hidden");
+    } else {
+      orbitElements.btnPlayPause.classList.remove("active");
+      if (orbitElements.iconPause) orbitElements.iconPause.classList.add("hidden");
+      if (orbitElements.iconPlay) orbitElements.iconPlay.classList.remove("hidden");
+    }
+
+    orbitElements.btnPlayPause.addEventListener("click", () => {
+      isOrbitPlaying = !isOrbitPlaying;
+      if (isOrbitPlaying) {
+        orbitElements.btnPlayPause.classList.add("active");
+        if (orbitElements.iconPause) orbitElements.iconPause.classList.remove("hidden");
+        if (orbitElements.iconPlay) orbitElements.iconPlay.classList.add("hidden");
+      } else {
+        orbitElements.btnPlayPause.classList.remove("active");
+        if (orbitElements.iconPause) orbitElements.iconPause.classList.add("hidden");
+        if (orbitElements.iconPlay) orbitElements.iconPlay.classList.remove("hidden");
+      }
+    });
+  }
+
+  // Orbit Card Modal Listeners (Close button, backdrop click, and change events)
+  if (orbitElements.cardModalClose) {
+    orbitElements.cardModalClose.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeOrbitCardModal();
+    });
+  }
+
+  if (orbitElements.cardModalBackdrop) {
+    orbitElements.cardModalBackdrop.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeOrbitCardModal();
+    });
+  }
+
+  if (orbitElements.cardModalOverlay) {
+    orbitElements.cardModalOverlay.addEventListener("wheel", (e) => {
+      e.stopPropagation();
+    }, { passive: true });
+
+    orbitElements.cardModalOverlay.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+    });
+
+    orbitElements.cardModalOverlay.addEventListener("click", (e) => {
+      if (e.target === orbitElements.cardModalOverlay || e.target === orbitElements.cardModalBackdrop) {
+        e.stopPropagation();
+        closeOrbitCardModal();
+      }
+    });
+  }
+
+  if (orbitElements.cardModalContent) {
+    orbitElements.cardModalContent.addEventListener("change", () => {
+      if (focusedOrbitBarId && currentBars) {
+        renderOrbitDashboard(currentBars);
+      }
+    });
+  }
+
+  const btnAddOrbit = document.getElementById("btn-orbit-add-tracker");
+  if (btnAddOrbit) {
+    btnAddOrbit.addEventListener("click", () => {
+      openCreateModal();
+    });
+  }
+
+  // 5. View Mode Switcher Handlers
+  if (orbitElements.btnViewGrid) {
+    orbitElements.btnViewGrid.addEventListener("click", () => {
+      setViewMode("grid");
+    });
+  }
+
+  if (orbitElements.btnViewOrbit) {
+    orbitElements.btnViewOrbit.addEventListener("click", () => {
+      setViewMode("orbit");
+    });
+  }
+
+  // Window resize: re-fit if in orbit view (debounced ~150ms, skipped if modal open)
+  let resizeOrbitDebounceTimer = null;
+  window.addEventListener("resize", () => {
+    if (currentViewMode === "orbit" && !focusedOrbitBarId) {
+      clearTimeout(resizeOrbitDebounceTimer);
+      resizeOrbitDebounceTimer = setTimeout(() => {
+        if (currentViewMode === "orbit" && !focusedOrbitBarId) {
+          fitOrbitToScreen(true);
+        }
+      }, 150);
+    }
+  });
+
+  // If initial mode is orbit, apply it
+  if (currentViewMode === "orbit") {
+    setViewMode("orbit");
+  }
+}
+
+// Initialize orbit gestures and controls
+setupOrbitGesturesAndControls();
+
 
