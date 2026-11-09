@@ -17,3 +17,5 @@ android/.cxx/
 *.apk
 !ProgressShelf.apk
 *.aab
+supabase/.temp/
+*.apk
