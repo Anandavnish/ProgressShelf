@@ -10449,12 +10449,41 @@ async function handleCreateBarFromAi(cardData) {
   return newBarId;
 }
 
+async function handleEditBarFromAi(barId, updates) {
+  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
+  if (!targetUid) {
+    throw new Error("Please sign in to edit trackers.");
+  }
+  await editBar(targetUid, barId, updates);
+  if (typeof highlightAndScrollToCard === 'function') {
+    highlightAndScrollToCard(barId);
+  }
+}
+
+async function handleDeleteBarFromAi(barId) {
+  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
+  if (!targetUid) {
+    throw new Error("Please sign in to delete trackers.");
+  }
+  await deleteBar(targetUid, barId);
+}
+
+function getLiveBars() {
+  if (typeof currentBars !== 'undefined' && Array.isArray(currentBars)) {
+    return currentBars;
+  }
+  return getLocalBars() || [];
+}
+
 setupAssistantModule({
   closeAllMenus,
   openModal,
   showToast,
   escapeHtml,
-  handleCreateBarFromAi
+  handleCreateBarFromAi,
+  handleEditBarFromAi,
+  handleDeleteBarFromAi,
+  getLiveBars
 });
 
 

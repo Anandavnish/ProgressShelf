@@ -1,8 +1,7 @@
 /**
  * ProgressShelf AI Assistant UI Module
- * Handles the assistant drawer panel, Connect Gemini flow, AI Settings modal,
- * and Phase 3 features (Shared Confirmation Sheet, Create from text/paste/photo,
- * Break down a goal, and Extract tasks from notes).
+ * Handles the conversational assistant drawer panel, Connect Gemini flow, AI Settings modal,
+ * full card awareness, and interactive Shared Confirmation Sheets for create, update, breakdown, and delete.
  */
 
 import { isGuestMode, exitGuestMode } from "./auth.js?v=3.2";
@@ -17,6 +16,7 @@ let currentAiStatus = null;
 let isGenerating = false;
 let attachedImage = null; // { name: string, mimeType: string, data: string, dataUrl: string } | null
 let threadHtml = ''; // Preserves conversation history while panel is open
+let conversationHistory = []; // [{ role: 'user' | 'model', text: string }]
 
 let deps = {
   closeAllMenus: () => {},
@@ -24,6 +24,9 @@ let deps = {
   showToast: () => {},
   escapeHtml: (s) => safeEscapeHtml(s),
   handleCreateBarFromAi: async () => {},
+  handleEditBarFromAi: async () => {},
+  handleDeleteBarFromAi: async () => {},
+  getLiveBars: () => [],
 };
 
 function safeEscapeHtml(str) {
@@ -64,6 +67,58 @@ function showToast(msg, type) {
   }
 }
 
+/**
+ * Lightweight safe markdown-to-HTML parser for conversational replies.
+ */
+function renderMarkdownText(text) {
+  if (!text) return '';
+  const escaped = escapeHtml(text);
+
+  // Bold: **text** or __text__
+  let formatted = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+  // Italic: *text* or _text_
+  formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
+
+  // Inline code: `code`
+  formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Line breaks & paragraphs / lists
+  const lines = formatted.split('\n');
+  let result = '';
+  let inList = false;
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!inList) {
+        result += '<ul>';
+        inList = true;
+      }
+      result += `<li>${trimmed.substring(2)}</li>`;
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      if (!inList) {
+        result += '<ol>';
+        inList = true;
+      }
+      result += `<li>${trimmed.replace(/^\d+\.\s/, '')}</li>`;
+    } else {
+      if (inList) {
+        result += '</ul>';
+        inList = false;
+      }
+      if (trimmed.length > 0) {
+        result += `<p>${trimmed}</p>`;
+      }
+    }
+  }
+
+  if (inList) result += '</ul>';
+  return result;
+}
+
 export function formatAiErrorMessage(err) {
   if (!navigator.onLine) {
     return 'You appear to be offline. Check your network connection.';
@@ -98,8 +153,9 @@ export function renderSkeletonAssistant() {
  */
 function updateAssistantControlsState() {
   const isConnected = !!(currentAiStatus && currentAiStatus.connected && !isGuestMode());
+  const chipPlan = document.getElementById('chip-plan-day');
+  const chipClean = document.getElementById('chip-cleanup-overdue');
   const chipBreakdown = document.getElementById('chip-breakdown-goal');
-  const chipCreate = document.getElementById('chip-create-tracker');
   const btnAttach = document.getElementById('btn-assistant-attach');
   const btnSend = document.getElementById('btn-assistant-send');
   const textarea = document.getElementById('assistant-input');
@@ -107,8 +163,9 @@ function updateAssistantControlsState() {
   const hasInput = textarea && textarea.value.trim().length > 0;
   const hasAttachment = attachedImage !== null;
 
+  if (chipPlan) chipPlan.disabled = !isConnected || isGenerating;
+  if (chipClean) chipClean.disabled = !isConnected || isGenerating;
   if (chipBreakdown) chipBreakdown.disabled = !isConnected || isGenerating;
-  if (chipCreate) chipCreate.disabled = !isConnected || isGenerating;
   if (btnAttach) btnAttach.disabled = !isConnected || isGenerating;
   if (btnSend) {
     btnSend.disabled = !isConnected || isGenerating || (!hasInput && !hasAttachment);
@@ -116,6 +173,7 @@ function updateAssistantControlsState() {
 }
 
 export async function renderAssistantState(status) {
+  currentAiStatus = status;
   const container = document.getElementById('assistant-content');
   if (!container) return;
 
@@ -131,7 +189,7 @@ export async function renderAssistantState(status) {
           </svg>
         </div>
         <h3 class="assistant-state-title">Sign in to use AI</h3>
-        <p class="assistant-state-desc">Connect your Google or email account to activate Gemini, get daily planning insights, and automate tracker updates.</p>
+        <p class="assistant-state-desc">Connect your Google or email account to activate Gemini, chat about your goals, plan your day, and automate tracker updates.</p>
         <button id="btn-assistant-login-cta" class="btn btn-primary assistant-cta-btn" type="button">Sign in</button>
       </div>
     `;
@@ -172,8 +230,8 @@ export async function renderAssistantState(status) {
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
           </div>
-          <h4 class="assistant-today-title">Today's Briefing</h4>
-          <p class="assistant-today-sub">Your morning overview, urgent items, and daily recommendations will appear here.</p>
+          <h4 class="assistant-today-title">Your Personal Progress Companion</h4>
+          <p class="assistant-today-sub">I can see your cards, help you plan your day, break down complex goals, or chat about your habits.</p>
         </div>
 
         <div id="assistant-thread" class="assistant-thread">${threadHtml}</div>
@@ -187,7 +245,6 @@ export async function renderAssistantState(status) {
       });
     }
 
-    // Reattach listeners to any existing confirm cards in history
     attachThreadCardListeners();
     return;
   }
@@ -375,7 +432,7 @@ export function toggleAssistantPanel() {
 }
 
 /* ==========================================================================
-   PHASE 3: SHARED CONFIRM SHEET & ACTION HANDLERS
+   CONVERSATIONAL CHAT, CARD CONTEXT & SUGGESTIONS
    ========================================================================== */
 
 function scrollThreadToBottom() {
@@ -386,8 +443,62 @@ function scrollThreadToBottom() {
 }
 
 /**
- * Handles user prompt execution via Gemini, showing thinking indicator,
- * and rendering the Shared Confirmation Sheet.
+ * Renders card suggestion pills above the input box.
+ */
+function renderCardSuggestions(filterText = '') {
+  const wrap = document.getElementById('assistant-card-suggestions');
+  if (!wrap) return;
+
+  const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  if (!liveBars.length) {
+    wrap.classList.add('hidden');
+    return;
+  }
+
+  const query = (filterText || '').toLowerCase().trim();
+  const matched = liveBars.filter(b => {
+    if (!query) return true;
+    return (b.title || '').toLowerCase().includes(query);
+  });
+
+  if (!matched.length) {
+    wrap.classList.add('hidden');
+    return;
+  }
+
+  wrap.innerHTML = `
+    <span class="assistant-suggestion-label">Cards:</span>
+    ${matched.map(b => `
+      <button type="button" class="assistant-suggestion-pill" data-card-id="${escapeHtml(b.id)}" data-card-title="${escapeHtml(b.title || 'Untitled')}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+        <span>${escapeHtml(b.title || 'Untitled')}</span>
+      </button>
+    `).join('')}
+  `;
+
+  wrap.classList.remove('hidden');
+
+  wrap.querySelectorAll('.assistant-suggestion-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const title = pill.dataset.cardTitle;
+      const textarea = document.getElementById('assistant-input');
+      if (textarea) {
+        textarea.value = `Break down: ${title}`;
+        textarea.focus();
+        updateAssistantControlsState();
+      }
+      wrap.classList.add('hidden');
+    });
+  });
+}
+
+function hideCardSuggestions() {
+  const wrap = document.getElementById('assistant-card-suggestions');
+  if (wrap) wrap.classList.add('hidden');
+}
+
+/**
+ * Executes a conversational turn with Gemini with full cards context.
  */
 async function handleAssistantPrompt(userText, options = {}) {
   if (!currentAiStatus || !currentAiStatus.connected) {
@@ -402,9 +513,10 @@ async function handleAssistantPrompt(userText, options = {}) {
   if (!text && !img) return;
 
   isGenerating = true;
+  hideCardSuggestions();
   updateAssistantControlsState();
 
-  // Hide placeholder if visible
+  // Hide today placeholder if visible
   const placeholder = document.getElementById('assistant-today-placeholder');
   if (placeholder) placeholder.classList.add('hidden');
 
@@ -448,45 +560,66 @@ async function handleAssistantPrompt(userText, options = {}) {
   thread.insertAdjacentHTML('beforeend', thinkingHtml);
   scrollThreadToBottom();
 
-  // Determine Task & Payload
-  let task = options.task || 'create_tracker';
-  let payload = {};
+  // 3. Prepare Cards Context for Gemini
+  const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  const cardsSummary = liveBars.map(b => ({
+    id: b.id,
+    title: b.title,
+    type: b.type || 'goal',
+    current: b.currentSmallest || 0,
+    target: b.targetSmallest || 100,
+    unit: b.levels?.[0]?.name || '%',
+    completed: Boolean(b.completed),
+    deadline: b.deadlineAt ? new Date(b.deadlineAt).toISOString() : null,
+    isOverdue: Boolean(b.deadlineAt && b.deadlineAt < Date.now() && !b.completed),
+    items: Array.isArray(b.items) ? b.items.map(it => ({ id: it.id, text: it.text, done: Boolean(it.done) })) : [],
+    text: b.text || ''
+  }));
 
-  if (task === 'break_down_goal') {
-    payload = {
-      goal: text.replace(/^break\s*down[:\s]*/i, '').trim() || text,
-      currentDate: new Date().toISOString(),
+  const payload = {
+    message: text,
+    history: conversationHistory.slice(-8), // Keep last 8 turns
+    cards: cardsSummary,
+    currentDate: new Date().toISOString(),
+  };
+
+  if (img && img.data && img.mimeType) {
+    payload.image = {
+      data: img.data,
+      mimeType: img.mimeType,
     };
-  } else if (task === 'extract_notes') {
-    payload = {
-      noteText: text,
-      currentDate: new Date().toISOString(),
-    };
-  } else {
-    // Default: create_tracker
-    payload = {
-      input: text,
-      currentDate: new Date().toISOString(),
-    };
-    if (img && img.data && img.mimeType) {
-      payload.image = {
-        data: img.data,
-        mimeType: img.mimeType,
-      };
-    }
   }
 
   try {
-    const result = await aiGenerate(task, payload);
+    const result = await aiGenerate('chat', payload);
 
     // Remove thinking indicator
     const thinkingEl = document.getElementById(thinkingId);
     if (thinkingEl) thinkingEl.remove();
 
-    // Render Shared Confirmation Sheet
-    renderConfirmSheet(result, task);
+    // 4. Append Conversational Message from AI
+    const replyMsg = result.message || 'I have analyzed your request.';
+    conversationHistory.push({ role: 'user', text });
+    conversationHistory.push({ role: 'model', text: replyMsg });
+
+    const replyId = 'reply-' + Date.now();
+    const replyHtml = `
+      <div id="${replyId}" class="assistant-msg assistant-msg-bot">
+        <div class="assistant-msg-text">
+          ${renderMarkdownText(replyMsg)}
+        </div>
+      </div>
+    `;
+    thread.insertAdjacentHTML('beforeend', replyHtml);
+
+    // 5. If AI proposes an action (create, update, delete, breakdown), render Confirmation Sheet!
+    if (result.hasAction && result.action) {
+      renderActionConfirmSheet(result.action, replyId);
+    }
+
+    threadHtml = thread.innerHTML;
   } catch (err) {
-    console.error('[Assistant] Prompt generation error:', err);
+    console.error('[Assistant] Prompt error:', err);
     const thinkingEl = document.getElementById(thinkingId);
     if (thinkingEl) thinkingEl.remove();
 
@@ -497,9 +630,9 @@ async function handleAssistantPrompt(userText, options = {}) {
       </div>
     `;
     thread.insertAdjacentHTML('beforeend', errHtml);
+    threadHtml = thread.innerHTML;
   } finally {
     isGenerating = false;
-    // Clear attachment state
     clearAttachment();
     updateAssistantControlsState();
     scrollThreadToBottom();
@@ -507,69 +640,79 @@ async function handleAssistantPrompt(userText, options = {}) {
 }
 
 /**
- * Renders the Shared Confirmation Sheet card inside the assistant thread.
+ * Renders the Confirmation Sheet card directly below an assistant reply.
  */
-function renderConfirmSheet(result, task) {
-  const thread = document.getElementById('assistant-thread');
-  if (!thread) return;
+function renderActionConfirmSheet(action, parentMsgId) {
+  const parentMsg = document.getElementById(parentMsgId);
+  if (!parentMsg) return;
 
   const cardId = 'confirm-' + Date.now();
-  const rawType = (result.type || 'goal').toLowerCase();
-  const cardType = rawType === 'checklist' ? 'checklist' : (rawType === 'note' ? 'note' : 'goal');
+  const actType = (action.type || 'create').toLowerCase();
+  const isDelete = actType === 'delete';
+  const isUpdate = actType === 'update';
+
+  const rawCardType = (action.cardType || 'goal').toLowerCase();
+  const cardType = rawCardType === 'checklist' ? 'checklist' : (rawCardType === 'note' ? 'note' : 'goal');
   const typeLabel = cardType === 'checklist' ? 'Checklist' : (cardType === 'note' ? 'Markdown Note' : 'Goal Tracker');
-  const title = result.title || 'New Tracker';
-  const explanation = result.explanation || result.summary || '';
+  const title = action.title || (isDelete ? 'Delete Tracker' : 'New Tracker');
+  const explanation = action.explanation || '';
 
-  // Type specific markup
+  let statusBadgeText = 'Ready to create';
+  if (isDelete) statusBadgeText = 'Confirm deletion';
+  if (isUpdate) statusBadgeText = 'Ready to update';
+
+  // Fields markup
   let typeFieldsHtml = '';
-  if (cardType === 'goal') {
-    const targetVal = typeof result.target === 'number' ? result.target : 100;
-    const unitVal = result.unit || '%';
-    typeFieldsHtml = `
-      <div class="confirm-row-2col">
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Target</label>
-          <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="1" step="any">
+  if (!isDelete) {
+    if (cardType === 'goal') {
+      const targetVal = typeof action.target === 'number' ? action.target : 100;
+      const unitVal = action.unit || '%';
+      typeFieldsHtml = `
+        <div class="confirm-row-2col">
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Target</label>
+            <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="1" step="any">
+          </div>
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Unit</label>
+            <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}">
+          </div>
         </div>
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Unit</label>
-          <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}">
+      `;
+    } else if (cardType === 'checklist') {
+      const items = Array.isArray(action.items) && action.items.length ? action.items : [{ text: 'Step 1' }];
+      const itemsHtml = items.map((it, idx) => `
+        <div class="confirm-item-row" data-idx="${idx}">
+          <input type="checkbox" class="confirm-item-checkbox" checked title="Include in tracker">
+          <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
         </div>
-      </div>
-    `;
-  } else if (cardType === 'checklist') {
-    const items = Array.isArray(result.items) && result.items.length ? result.items : [{ text: 'Step 1' }];
-    const itemsHtml = items.map((it, idx) => `
-      <div class="confirm-item-row" data-idx="${idx}">
-        <input type="checkbox" class="confirm-item-checkbox" checked title="Include in tracker">
-        <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
-      </div>
-    `).join('');
+      `).join('');
 
-    typeFieldsHtml = `
-      <div class="confirm-field-group">
-        <label class="confirm-field-label">Action Items (${items.length})</label>
-        <div class="confirm-items-list">
-          ${itemsHtml}
+      typeFieldsHtml = `
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Checklist Items (${items.length})</label>
+          <div class="confirm-items-list">
+            ${itemsHtml}
+          </div>
         </div>
-      </div>
-    `;
-  } else if (cardType === 'note') {
-    const noteText = result.noteText || result.text || '';
-    typeFieldsHtml = `
-      <div class="confirm-field-group">
-        <label class="confirm-field-label">Note Content</label>
-        <textarea class="confirm-input confirm-note-textarea" rows="4">${escapeHtml(noteText)}</textarea>
-      </div>
-    `;
+      `;
+    } else if (cardType === 'note') {
+      const noteText = action.noteText || '';
+      typeFieldsHtml = `
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Note Content</label>
+          <textarea class="confirm-input confirm-note-textarea" rows="4">${escapeHtml(noteText)}</textarea>
+        </div>
+      `;
+    }
   }
 
-  // Meta badges (Deadline & Recurring)
+  // Meta Badges
   let metaBadgesHtml = '';
-  if (result.deadline) {
-    let displayDeadline = result.deadline;
+  if (action.deadline) {
+    let displayDeadline = action.deadline;
     try {
-      displayDeadline = new Date(result.deadline).toLocaleDateString(undefined, {
+      displayDeadline = new Date(action.deadline).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
@@ -584,86 +727,106 @@ function renderConfirmSheet(result, task) {
     `;
   }
 
-  if (result.isRecurring) {
+  if (action.isRecurring) {
     metaBadgesHtml += `
       <div class="confirm-meta-chip">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        <span>Repeats daily at ${escapeHtml(result.resetTime || '08:00')}</span>
+        <span>Repeats daily at ${escapeHtml(action.resetTime || '08:00')}</span>
       </div>
     `;
   }
 
-  const confirmHtml = `
-    <div id="${cardId}" class="assistant-msg assistant-msg-bot">
-      <div class="assistant-confirm-card" data-type="${cardType}">
-        <div class="confirm-card-header">
-          <div class="confirm-type-badge ${cardType}">
-            <span>${typeLabel}</span>
-          </div>
-          <span class="confirm-status-text">Preview — Ready to create</span>
+  const primaryBtnClass = isDelete ? 'btn-danger' : 'btn-primary';
+  const primaryBtnText = isDelete ? 'Delete Tracker' : (isUpdate ? 'Apply Update' : 'Create Tracker');
+
+  const confirmCardHtml = `
+    <div id="${cardId}" class="assistant-confirm-card" data-action-type="${actType}" data-card-id="${escapeHtml(action.cardId || '')}" data-card-type="${cardType}">
+      <div class="confirm-card-header">
+        <div class="confirm-type-badge ${cardType}">
+          <span>${typeLabel}</span>
         </div>
+        <span class="confirm-status-text">${statusBadgeText}</span>
+      </div>
 
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Tracker Title</label>
-          <input type="text" class="confirm-input confirm-title-input" value="${escapeHtml(title)}">
-        </div>
+      <div class="confirm-field-group">
+        <label class="confirm-field-label">Title</label>
+        <input type="text" class="confirm-input confirm-title-input" value="${escapeHtml(title)}" ${isDelete ? 'readonly' : ''}>
+      </div>
 
-        ${typeFieldsHtml}
+      ${typeFieldsHtml}
 
-        ${metaBadgesHtml ? `<div class="confirm-meta-row">${metaBadgesHtml}</div>` : ''}
+      ${metaBadgesHtml ? `<div class="confirm-meta-row">${metaBadgesHtml}</div>` : ''}
 
-        ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
+      ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
 
-        <div class="confirm-actions">
-          <button type="button" class="btn btn-primary btn-confirm-create">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>Create Tracker</span>
-          </button>
-          <button type="button" class="btn btn-secondary btn-confirm-cancel">Discard</button>
-        </div>
+      <div class="confirm-actions">
+        <button type="button" class="btn ${primaryBtnClass} btn-confirm-primary">
+          <span>${primaryBtnText}</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-confirm-cancel">Discard</button>
       </div>
     </div>
   `;
 
-  thread.insertAdjacentHTML('beforeend', confirmHtml);
-  threadHtml = thread.innerHTML;
-  attachSingleCardListeners(document.getElementById(cardId), result);
-  scrollThreadToBottom();
+  parentMsg.insertAdjacentHTML('beforeend', confirmCardHtml);
+  attachActionCardListeners(document.getElementById(cardId), action);
 }
 
 function attachThreadCardListeners() {
   const cards = document.querySelectorAll('.assistant-confirm-card');
   cards.forEach(card => {
-    // If not already resolved
-    if (card.querySelector('.btn-confirm-create')) {
-      attachSingleCardListeners(card.closest('.assistant-msg'), {});
+    if (card.querySelector('.btn-confirm-primary')) {
+      attachActionCardListeners(card, {});
     }
   });
 }
 
-function attachSingleCardListeners(msgEl, rawData) {
-  if (!msgEl) return;
-  const card = msgEl.querySelector('.assistant-confirm-card');
+function attachActionCardListeners(card, rawAction) {
   if (!card) return;
 
-  const btnCreate = card.querySelector('.btn-confirm-create');
+  const btnPrimary = card.querySelector('.btn-confirm-primary');
   const btnCancel = card.querySelector('.btn-confirm-cancel');
   const actionsWrap = card.querySelector('.confirm-actions');
+  const actType = card.dataset.actionType || 'create';
+  const cardId = card.dataset.cardId || rawAction.cardId;
 
   if (btnCancel && actionsWrap) {
     btnCancel.addEventListener('click', () => {
-      actionsWrap.innerHTML = `<div class="confirm-discarded-state">Tracker proposal discarded.</div>`;
+      actionsWrap.innerHTML = `<div class="confirm-discarded-state">Action proposal discarded.</div>`;
       const thread = document.getElementById('assistant-thread');
       if (thread) threadHtml = thread.innerHTML;
     });
   }
 
-  if (btnCreate && actionsWrap) {
-    btnCreate.addEventListener('click', async () => {
-      btnCreate.disabled = true;
-      btnCreate.textContent = 'Creating...';
+  if (btnPrimary && actionsWrap) {
+    btnPrimary.addEventListener('click', async () => {
+      btnPrimary.disabled = true;
+      btnPrimary.textContent = 'Processing...';
 
-      const type = card.dataset.type || 'goal';
+      // 1. DELETE ACTION
+      if (actType === 'delete') {
+        if (!cardId) {
+          showToast('No card ID specified to delete', 'error');
+          btnPrimary.disabled = false;
+          return;
+        }
+        try {
+          if (typeof deps.handleDeleteBarFromAi === 'function') {
+            await deps.handleDeleteBarFromAi(cardId);
+          }
+          actionsWrap.innerHTML = `<div class="confirm-success-state"><span>Tracker deleted ✓</span></div>`;
+          const thread = document.getElementById('assistant-thread');
+          if (thread) threadHtml = thread.innerHTML;
+        } catch (err) {
+          showToast(err.message || 'Failed to delete tracker', 'error');
+          btnPrimary.disabled = false;
+          btnPrimary.textContent = 'Delete Tracker';
+        }
+        return;
+      }
+
+      // 2. CREATE or UPDATE ACTION
+      const type = card.dataset.cardType || 'goal';
       const titleInput = card.querySelector('.confirm-title-input');
       const finalTitle = titleInput ? titleInput.value.trim() : 'New Tracker';
 
@@ -699,22 +862,22 @@ function attachSingleCardListeners(msgEl, rawData) {
         levels = [{ name: 'notes', multiplier: 1, target: 1 }];
       }
 
-      // Deadline handling
+      // Deadline
       let deadlineAt = null;
-      if (rawData.deadline) {
+      if (rawAction.deadline) {
         try {
-          const parsed = new Date(rawData.deadline).getTime();
+          const parsed = new Date(rawAction.deadline).getTime();
           if (!isNaN(parsed) && parsed > Date.now()) {
             deadlineAt = parsed;
           }
         } catch (_) {}
       }
 
-      // Repeat / Habit handling
+      // Repeat
       let repeat = null;
-      if (rawData.isRecurring) {
+      if (rawAction.isRecurring) {
         repeat = {
-          resetTime: rawData.resetTime || '08:00',
+          resetTime: rawAction.resetTime || '08:00',
           resetCount: null,
           checklistResetEnabled: type === 'checklist',
           deadlineResetEnabled: false,
@@ -722,6 +885,41 @@ function attachSingleCardListeners(msgEl, rawData) {
         };
       }
 
+      if (actType === 'update' && cardId) {
+        // UPDATE EXISTING CARD
+        try {
+          const updates = {
+            title: finalTitle,
+            ...(items ? { items, targetSmallest } : {}),
+            ...(text !== null ? { text } : {}),
+            ...(type === 'goal' ? { targetSmallest, levels } : {}),
+            ...(deadlineAt ? { deadlineAt, alertAtDeadline: true } : {}),
+            ...(repeat ? { repeat } : {})
+          };
+          if (typeof deps.handleEditBarFromAi === 'function') {
+            await deps.handleEditBarFromAi(cardId, updates);
+          }
+          actionsWrap.innerHTML = `
+            <div class="confirm-success-state">
+              <span>Tracker updated ✓</span>
+              <button type="button" class="btn btn-secondary confirm-view-btn">View card</button>
+            </div>
+          `;
+          const viewBtn = actionsWrap.querySelector('.confirm-view-btn');
+          if (viewBtn) {
+            viewBtn.addEventListener('click', () => closeAssistantPanel());
+          }
+          const thread = document.getElementById('assistant-thread');
+          if (thread) threadHtml = thread.innerHTML;
+        } catch (err) {
+          showToast(err.message || 'Failed to update tracker', 'error');
+          btnPrimary.disabled = false;
+          btnPrimary.textContent = 'Apply Update';
+        }
+        return;
+      }
+
+      // CREATE NEW CARD
       const cardPayload = {
         title: finalTitle,
         type: type,
@@ -747,32 +945,27 @@ function attachSingleCardListeners(msgEl, rawData) {
         let newBarId = null;
         if (typeof deps.handleCreateBarFromAi === 'function') {
           newBarId = await deps.handleCreateBarFromAi(cardPayload);
-        } else {
-          throw new Error('createBar handler not available');
         }
 
         actionsWrap.innerHTML = `
           <div class="confirm-success-state">
-            <span>Tracker created!</span>
-            <button type="button" class="btn btn-secondary confirm-view-btn" data-bar-id="${escapeHtml(newBarId || '')}">View card</button>
+            <span>Tracker created ✓</span>
+            <button type="button" class="btn btn-secondary confirm-view-btn">View card</button>
           </div>
         `;
 
         const viewBtn = actionsWrap.querySelector('.confirm-view-btn');
         if (viewBtn) {
-          viewBtn.addEventListener('click', () => {
-            closeAssistantPanel();
-          });
+          viewBtn.addEventListener('click', () => closeAssistantPanel());
         }
 
         showToast(`Successfully created "${finalTitle}"!`, 'success');
         const thread = document.getElementById('assistant-thread');
         if (thread) threadHtml = thread.innerHTML;
       } catch (err) {
-        console.error('[Assistant] Failed to create tracker:', err);
         showToast(err.message || 'Failed to create tracker', 'error');
-        btnCreate.disabled = false;
-        btnCreate.textContent = 'Create Tracker';
+        btnPrimary.disabled = false;
+        btnPrimary.textContent = 'Create Tracker';
       }
     });
   }
@@ -1098,8 +1291,9 @@ export function setupAssistantModule(injectedDeps = {}) {
   const fileInput = document.getElementById('assistant-file-input');
   const btnRemoveAttach = document.getElementById('btn-assistant-remove-attachment');
 
+  const chipPlan = document.getElementById('chip-plan-day');
+  const chipClean = document.getElementById('chip-cleanup-overdue');
   const chipBreakdown = document.getElementById('chip-breakdown-goal');
-  const chipCreate = document.getElementById('chip-create-tracker');
 
   if (btnAssistant) {
     btnAssistant.addEventListener('click', toggleAssistantPanel);
@@ -1120,6 +1314,7 @@ export function setupAssistantModule(injectedDeps = {}) {
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
       updateAssistantControlsState();
+      renderCardSuggestions(textarea.value);
     });
 
     textarea.addEventListener('keydown', (e) => {
@@ -1142,6 +1337,7 @@ export function setupAssistantModule(injectedDeps = {}) {
     handleAssistantPrompt(val);
     textarea.value = '';
     textarea.style.height = 'auto';
+    hideCardSuggestions();
     updateAssistantControlsState();
   }
 
@@ -1162,42 +1358,40 @@ export function setupAssistantModule(injectedDeps = {}) {
     btnRemoveAttach.addEventListener('click', clearAttachment);
   }
 
-  // Guided Chip: Break down a goal
+  // Chip 1: Plan my day
+  if (chipPlan) {
+    chipPlan.addEventListener('click', () => {
+      handleAssistantPrompt('Plan my day based on my current cards and priorities.');
+    });
+  }
+
+  // Chip 2: Clean up overdue
+  if (chipClean) {
+    chipClean.addEventListener('click', () => {
+      handleAssistantPrompt('Review my overdue and lagging trackers and suggest how to clean them up or reschedule them.');
+    });
+  }
+
+  // Chip 3: Break down a goal
   if (chipBreakdown) {
     chipBreakdown.addEventListener('click', () => {
       if (!textarea) return;
       const val = textarea.value.trim();
       if (val) {
-        handleAssistantPrompt(val, { task: 'break_down_goal' });
+        handleAssistantPrompt(`Break down: ${val}`);
         textarea.value = '';
         textarea.style.height = 'auto';
+        hideCardSuggestions();
         updateAssistantControlsState();
       } else {
-        textarea.value = 'Break down: ';
+        renderCardSuggestions('');
+        textarea.placeholder = 'Type a goal or pick a card from above...';
         textarea.focus();
-        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-        updateAssistantControlsState();
       }
     });
   }
 
-  // Guided Chip: Add from photo or paste
-  if (chipCreate) {
-    chipCreate.addEventListener('click', () => {
-      if (!textarea) return;
-      const val = textarea.value.trim();
-      if (val || attachedImage) {
-        handleAssistantPrompt(val, { task: 'create_tracker' });
-        textarea.value = '';
-        textarea.style.height = 'auto';
-        updateAssistantControlsState();
-      } else {
-        if (fileInput) fileInput.click();
-      }
-    });
-  }
-
-  // Expose assistant controls on window for testing
+  // Expose assistant controls on window for global access/testing
   window.openAssistantPanel = openAssistantPanel;
   window.closeAssistantPanel = closeAssistantPanel;
   window.toggleAssistantPanel = toggleAssistantPanel;
@@ -1209,4 +1403,5 @@ export function setupAssistantModule(injectedDeps = {}) {
   window.renderAiSettingsError = renderAiSettingsError;
   window.formatAiErrorMessage = formatAiErrorMessage;
   window.handleAssistantPrompt = handleAssistantPrompt;
+  window.renderCardSuggestions = renderCardSuggestions;
 }

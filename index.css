@@ -7887,6 +7887,60 @@ html.light-theme .nav-assistant-btn.active {
   color: var(--error);
 }
 
+/* Card Suggestions Bar */
+.assistant-card-suggestions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--input-bg);
+  animation: assistantFadeIn 0.2s ease-out;
+}
+
+.assistant-card-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.assistant-card-suggestions.hidden {
+  display: none !important;
+}
+
+.assistant-suggestion-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.assistant-suggestion-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+}
+
+.assistant-suggestion-pill:hover {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+  transform: translateY(-1px);
+}
+
 /* Chat Thread */
 .assistant-thread {
   display: flex;
@@ -7898,7 +7952,7 @@ html.light-theme .nav-assistant-btn.active {
 .assistant-msg {
   display: flex;
   flex-direction: column;
-  max-width: 90%;
+  max-width: 92%;
   animation: assistantFadeIn 0.2s ease-out;
 }
 
@@ -7929,6 +7983,52 @@ html.light-theme .nav-assistant-btn.active {
 .assistant-msg-bot {
   align-self: flex-start;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistant-msg-text {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 12px 14px;
+  border-radius: 2px 14px 14px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.assistant-msg-text p {
+  margin: 0 0 8px;
+}
+
+.assistant-msg-text p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-msg-text ul,
+.assistant-msg-text ol {
+  margin: 6px 0 8px 18px;
+  padding: 0;
+}
+
+.assistant-msg-text li {
+  margin-bottom: 4px;
+}
+
+.assistant-msg-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.assistant-msg-text code {
+  background: var(--input-bg);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  border: 1px solid var(--card-border);
 }
 
 /* Thinking Indicator */
