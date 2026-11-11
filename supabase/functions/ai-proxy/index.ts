@@ -345,7 +345,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Missing "task" parameter' }, 400);
     }
 
-    const SUPPORTED_TASKS = ['ping', 'create_tracker', 'break_down_goal', 'extract_notes'];
+    const SUPPORTED_TASKS = ['ping', 'create_tracker', 'break_down_goal', 'extract_notes', 'chat'];
     if (!SUPPORTED_TASKS.includes(task)) {
       return jsonResponse(
         { error: `Task "${task}" is not supported. Supported tasks: ${SUPPORTED_TASKS.join(', ')}` },
@@ -564,12 +564,133 @@ Provide an appropriate title for the task checklist in "title", the checklist it
         },
         required: ['title', 'type', 'items', 'summary'],
       };
+    } else if (task === 'chat') {
+      const userMessage = String(payload?.message || payload?.text || payload?.input || '').trim();
+      if (!userMessage && !payload?.image?.data) {
+        return jsonResponse({ error: 'Message text or image is required.' }, 400);
+      }
+
+      const cardsContext = Array.isArray(payload?.cards) ? payload.cards : [];
+      const historyContext = Array.isArray(payload?.history) ? payload.history : [];
+
+      const promptText = `You are an intelligent, friendly, and proactive personal AI companion for ProgressShelf, a personal progress and habit tracking app.
+The user is having a conversation with you.
+Current reference date and time: ${currentDateStr}.
+
+The user's current cards and trackers:
+${JSON.stringify(cardsContext, null, 2)}
+
+Recent conversation history:
+${historyContext.map((h: { role?: string; text?: string }) => `${h.role || 'user'}: ${h.text || ''}`).join('\n')}
+
+User message:
+"""
+${userMessage}
+"""
+
+Guidelines:
+1. Always converse naturally, warmly, and helpfully with the user in "message" using Markdown formatting (bolding, lists, bullet points).
+2. You have FULL ACCESS to inspect, discuss, recommend, create, update, or delete the user's cards.
+3. If the user asks about their trackers, habits, stats, or general questions:
+   - Provide a direct, thorough answer in "message", referencing their actual cards by title.
+   - Set "hasAction": false, "action": null.
+4. If the user wants to take action:
+   - "create": Creating a brand new tracker (goal, checklist, or note). Set action with title, cardType, target/items/noteText, deadline (if any), repeat (if habit).
+   - "breakdown": Breaking down a goal or existing card into 4-7 actionable checklist steps.
+   - "update": Updating/editing an existing card (changing title, editing items, updating note, rescheduling deadline). Provide the cardId of the target card.
+   - "delete": Deleting an existing card. Specify cardId and title.
+   - "plan_day": When user asks to plan their day, organize today's priorities based on active cards and deadlines, explain in "message", and suggest a checklist plan in action.
+   - "clean_overdue": When user asks to clean up overdue tasks, identify overdue trackers, explain what to do in "message", and suggest actions in action.
+5. If the user asks to break down or edit a card but did NOT specify which one and it's ambiguous:
+   - Ask them politely in "message" which of their cards they want to focus on (mentioning their card titles), and set "hasAction": false, "action": null.
+6. Provide a concise rationale in action.explanation if an action is suggested.`;
+
+      parts = [{ text: promptText }];
+      if (payload?.image?.data && payload?.image?.mimeType) {
+        parts.push({
+          inlineData: {
+            mimeType: String(payload.image.mimeType),
+            data: String(payload.image.data),
+          },
+        });
+      }
+
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          message: { type: 'STRING' },
+          hasAction: { type: 'BOOLEAN' },
+          action: {
+            type: 'OBJECT',
+            properties: {
+              type: { type: 'STRING' },
+              cardId: { type: 'STRING' },
+              title: { type: 'STRING' },
+              cardType: { type: 'STRING' },
+              unit: { type: 'STRING' },
+              target: { type: 'NUMBER' },
+              items: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    text: { type: 'STRING' },
+                    done: { type: 'BOOLEAN' },
+                  },
+                  required: ['text'],
+                },
+              },
+              noteText: { type: 'STRING' },
+              deadline: { type: 'STRING' },
+              isRecurring: { type: 'BOOLEAN' },
+              resetTime: { type: 'STRING' },
+              explanation: { type: 'STRING' },
+            },
+          },
+        },
+        required: ['message', 'hasAction'],
+      };
+    }
+
+    // Dynamic model resolution: query models list to use the exact working model
+    let activeModel = GEMINI_MODEL;
+    try {
+      const modelsRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+        headers: { 'x-goog-api-key': apiKey },
+      });
+      if (modelsRes.ok) {
+        const mJson = await modelsRes.json();
+        const available: string[] = (mJson.models || [])
+          .filter((m: { supportedGenerationMethods?: string[] }) =>
+            m.supportedGenerationMethods?.includes('generateContent')
+          )
+          .map((m: { name: string }) => m.name.replace(/^models\//, ''));
+
+        console.log('[ai-proxy] Available models for user key:', available);
+        const preferred = [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-2.0-flash-exp',
+          'gemini-1.5-flash-latest',
+          'gemini-1.5-flash',
+          'gemini-1.5-pro',
+        ];
+        const match = preferred.find((p) => available.includes(p)) ||
+          available.find((m) => m.includes('flash')) ||
+          available[0];
+
+        if (match) {
+          activeModel = match;
+        }
+      }
+    } catch (e) {
+      console.warn('[ai-proxy] Error querying available models:', e);
     }
 
     // Execute structured JSON Gemini call
     // Note: x-goog-api-key header is used; key is never in URL.
     // Guard: Never log card text, payload, or decrypted keys.
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
 
     let geminiRes: Response;
     try {
