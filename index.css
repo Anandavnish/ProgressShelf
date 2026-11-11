@@ -7792,4 +7792,361 @@ html.light-theme .nav-assistant-btn.active {
   display: none !important;
 }
 
+/* ==========================================================================
+   AI ASSISTANT PHASE 3: THREAD, CONFIRM SHEET & INPUT STYLES
+   ========================================================================== */
+
+/* Active Chips & Actions when AI is connected */
+.assistant-chip:not(:disabled) {
+  cursor: pointer;
+  opacity: 1;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border-color: var(--card-border);
+  transition: all var(--transition-speed) ease;
+}
+
+.assistant-chip:not(:disabled):hover {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.assistant-chip:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.assistant-action-btn:not(:disabled) {
+  cursor: pointer;
+  opacity: 1;
+  color: var(--text-primary);
+  transition: all var(--transition-speed) ease;
+}
+
+.assistant-action-btn:not(:disabled):hover {
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.assistant-send-btn:not(:disabled) {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: #fff;
+  opacity: 1;
+}
+
+.assistant-send-btn:not(:disabled):hover {
+  background: var(--ui-accent);
+  box-shadow: 0 0 8px var(--ui-accent-glow);
+  color: #fff;
+}
+
+/* Attachment Pill */
+.assistant-attachment-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 16px 4px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.assistant-attachment-preview.hidden {
+  display: none !important;
+}
+
+.assistant-attachment-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.assistant-attachment-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-attachment-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.assistant-attachment-remove:hover {
+  color: var(--error);
+}
+
+/* Chat Thread */
+.assistant-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.assistant-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 90%;
+  animation: assistantFadeIn 0.2s ease-out;
+}
+
+@keyframes assistantFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.assistant-msg-user {
+  align-self: flex-end;
+  background: var(--ui-accent);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 14px 14px 2px 14px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.assistant-msg-user-img {
+  max-width: 180px;
+  max-height: 140px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  object-fit: cover;
+}
+
+.assistant-msg-bot {
+  align-self: flex-start;
+  width: 100%;
+}
+
+/* Thinking Indicator */
+.assistant-thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.assistant-thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.assistant-thinking-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  animation: assistantPulse 1.2s infinite ease-in-out;
+}
+
+.assistant-thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.assistant-thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes assistantPulse {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Shared Confirm Sheet Card */
+.assistant-confirm-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  transition: border-color var(--transition-speed) ease;
+}
+
+.assistant-confirm-card:hover {
+  border-color: var(--ui-accent);
+}
+
+.confirm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirm-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--ui-accent);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.confirm-status-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.confirm-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.confirm-field-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.confirm-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-speed) ease;
+}
+
+.confirm-input:focus {
+  border-color: var(--ui-accent);
+}
+
+.confirm-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Checklist items preview */
+.confirm-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.confirm-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--input-bg);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+}
+
+.confirm-item-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.confirm-item-text {
+  flex: 1 1 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.confirm-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confirm-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--card-border);
+}
+
+.confirm-explanation {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+  font-style: italic;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.confirm-actions .btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.confirm-success-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(39, 174, 96, 0.1);
+  border: 1px solid rgba(39, 174, 96, 0.25);
+  color: var(--success);
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.confirm-discarded-state {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 

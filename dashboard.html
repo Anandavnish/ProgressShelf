@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=6.42">
+  <link rel="stylesheet" href="index.css?v=6.43">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -1556,20 +1556,28 @@
 
     <div class="assistant-footer">
       <div class="assistant-chips-scroll">
-        <button class="assistant-chip" disabled type="button">Plan my day</button>
-        <button class="assistant-chip" disabled type="button">Clean up overdue</button>
-        <button class="assistant-chip" disabled type="button">Break down a goal</button>
-        <button class="assistant-chip" disabled type="button">Add from photo or paste</button>
+        <button id="chip-plan-day" class="assistant-chip" disabled type="button">Plan my day</button>
+        <button id="chip-cleanup-overdue" class="assistant-chip" disabled type="button">Clean up overdue</button>
+        <button id="chip-breakdown-goal" class="assistant-chip" disabled type="button">Break down a goal</button>
+        <button id="chip-create-tracker" class="assistant-chip" disabled type="button">Add from photo or paste</button>
+      </div>
+      <div id="assistant-attachment-preview" class="assistant-attachment-preview hidden">
+        <img id="assistant-attachment-thumb" class="assistant-attachment-thumb" src="" alt="Attachment thumbnail">
+        <span id="assistant-attachment-name" class="assistant-attachment-name"></span>
+        <button id="btn-assistant-remove-attachment" class="assistant-attachment-remove" title="Remove attachment" type="button" aria-label="Remove attachment">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div class="assistant-input-box">
+        <input type="file" id="assistant-file-input" accept="image/*" class="hidden" style="display:none;">
         <textarea id="assistant-input" class="assistant-input" rows="1" placeholder="Ask Assistant..."></textarea>
         <div class="assistant-input-actions">
-          <button id="btn-assistant-attach" class="assistant-action-btn" title="Attach file (coming soon)" aria-label="Attach file" disabled type="button">
+          <button id="btn-assistant-attach" class="assistant-action-btn" title="Attach image" aria-label="Attach file" disabled type="button">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
             </svg>
           </button>
-          <button id="btn-assistant-send" class="assistant-action-btn assistant-send-btn" title="Send (coming soon)" aria-label="Send message" disabled type="button">
+          <button id="btn-assistant-send" class="assistant-action-btn assistant-send-btn" title="Send message" aria-label="Send message" disabled type="button">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -1596,6 +1604,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=11.9"></script>
+  <script type="module" src="app.js?v=11.10"></script>
 </body>
 </html>

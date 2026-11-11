@@ -62,7 +62,7 @@ document.addEventListener('change', (e) => {
 
 // Ensure single-line textareas behave exactly like text inputs (no linebreaks)
 document.addEventListener('keydown', (e) => {
-  if (e.target && e.target.classList.contains('form-input-single-line')) {
+  if (e.target && e.target.classList && e.target.classList.contains('form-input-single-line')) {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (!e.target.classList.contains('add-item-input')) {
@@ -10437,11 +10437,24 @@ setupOrbitGesturesAndControls();
    AI ASSISTANT MODULE INITIALIZATION
    ========================================================================== */
 
+async function handleCreateBarFromAi(cardData) {
+  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
+  if (!targetUid) {
+    throw new Error("Please sign in to create trackers.");
+  }
+  const newBarId = await createBar(targetUid, cardData);
+  if (newBarId && typeof highlightAndScrollToCard === 'function') {
+    highlightAndScrollToCard(newBarId);
+  }
+  return newBarId;
+}
+
 setupAssistantModule({
   closeAllMenus,
   openModal,
   showToast,
-  escapeHtml
+  escapeHtml,
+  handleCreateBarFromAi
 });
 
 

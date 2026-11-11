@@ -1,10 +1,12 @@
 /**
  * ProgressShelf AI Assistant UI Module
- * Handles the assistant drawer panel, Connect Gemini flow, and AI Settings modal.
+ * Handles the assistant drawer panel, Connect Gemini flow, AI Settings modal,
+ * and Phase 3 features (Shared Confirmation Sheet, Create from text/paste/photo,
+ * Break down a goal, and Extract tasks from notes).
  */
 
 import { isGuestMode, exitGuestMode } from "./auth.js?v=3.2";
-import { aiStatus, aiSaveKey, aiRemoveKey } from "./ai.js?v=3.2";
+import { aiStatus, aiSaveKey, aiRemoveKey, aiGenerate } from "./ai.js?v=3.2";
 
 export let isAssistantPanelOpen = false;
 export function isAssistantOpen() {
@@ -12,11 +14,16 @@ export function isAssistantOpen() {
 }
 
 let currentAiStatus = null;
+let isGenerating = false;
+let attachedImage = null; // { name: string, mimeType: string, data: string, dataUrl: string } | null
+let threadHtml = ''; // Preserves conversation history while panel is open
+
 let deps = {
   closeAllMenus: () => {},
   openModal: () => {},
   showToast: () => {},
   escapeHtml: (s) => safeEscapeHtml(s),
+  handleCreateBarFromAi: async () => {},
 };
 
 function safeEscapeHtml(str) {
@@ -85,12 +92,36 @@ export function renderSkeletonAssistant() {
   `;
 }
 
+/**
+ * Updates the state of the chips, attach button, and send button
+ * based on whether AI is connected, guest mode, and active input.
+ */
+function updateAssistantControlsState() {
+  const isConnected = !!(currentAiStatus && currentAiStatus.connected && !isGuestMode());
+  const chipBreakdown = document.getElementById('chip-breakdown-goal');
+  const chipCreate = document.getElementById('chip-create-tracker');
+  const btnAttach = document.getElementById('btn-assistant-attach');
+  const btnSend = document.getElementById('btn-assistant-send');
+  const textarea = document.getElementById('assistant-input');
+
+  const hasInput = textarea && textarea.value.trim().length > 0;
+  const hasAttachment = attachedImage !== null;
+
+  if (chipBreakdown) chipBreakdown.disabled = !isConnected || isGenerating;
+  if (chipCreate) chipCreate.disabled = !isConnected || isGenerating;
+  if (btnAttach) btnAttach.disabled = !isConnected || isGenerating;
+  if (btnSend) {
+    btnSend.disabled = !isConnected || isGenerating || (!hasInput && !hasAttachment);
+  }
+}
+
 export async function renderAssistantState(status) {
   const container = document.getElementById('assistant-content');
   if (!container) return;
 
   // 1. Guest or Not Signed In
   if (isGuestMode()) {
+    updateAssistantControlsState();
     container.innerHTML = `
       <div class="assistant-state-panel assistant-guest-state">
         <div class="assistant-state-icon-box">
@@ -115,6 +146,7 @@ export async function renderAssistantState(status) {
 
   // 2. Connected State
   if (status && status.connected) {
+    updateAssistantControlsState();
     container.innerHTML = `
       <div class="assistant-state-panel assistant-connected-view">
         <div class="assistant-connected-header">
@@ -131,7 +163,7 @@ export async function renderAssistantState(status) {
           </button>
         </div>
 
-        <div class="assistant-today-placeholder">
+        <div id="assistant-today-placeholder" class="assistant-today-placeholder ${threadHtml ? 'hidden' : ''}">
           <div class="assistant-today-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -143,6 +175,8 @@ export async function renderAssistantState(status) {
           <h4 class="assistant-today-title">Today's Briefing</h4>
           <p class="assistant-today-sub">Your morning overview, urgent items, and daily recommendations will appear here.</p>
         </div>
+
+        <div id="assistant-thread" class="assistant-thread">${threadHtml}</div>
       </div>
     `;
 
@@ -152,10 +186,14 @@ export async function renderAssistantState(status) {
         openAiSettingsModal();
       });
     }
+
+    // Reattach listeners to any existing confirm cards in history
+    attachThreadCardListeners();
     return;
   }
 
   // 3. Disconnected State - Connect Gemini Card
+  updateAssistantControlsState();
   container.innerHTML = `
     <div class="assistant-state-panel assistant-connect-card">
       <div class="assistant-connect-header">
@@ -335,6 +373,457 @@ export function toggleAssistantPanel() {
     openAssistantPanel();
   }
 }
+
+/* ==========================================================================
+   PHASE 3: SHARED CONFIRM SHEET & ACTION HANDLERS
+   ========================================================================== */
+
+function scrollThreadToBottom() {
+  const content = document.getElementById('assistant-content');
+  if (content) {
+    content.scrollTop = content.scrollHeight;
+  }
+}
+
+/**
+ * Handles user prompt execution via Gemini, showing thinking indicator,
+ * and rendering the Shared Confirmation Sheet.
+ */
+async function handleAssistantPrompt(userText, options = {}) {
+  if (!currentAiStatus || !currentAiStatus.connected) {
+    showToast('Please connect your Gemini API key in AI settings first.', 'warning');
+    return;
+  }
+  if (isGenerating) return;
+
+  const text = (userText || '').trim();
+  const img = options.image || attachedImage;
+
+  if (!text && !img) return;
+
+  isGenerating = true;
+  updateAssistantControlsState();
+
+  // Hide placeholder if visible
+  const placeholder = document.getElementById('assistant-today-placeholder');
+  if (placeholder) placeholder.classList.add('hidden');
+
+  let thread = document.getElementById('assistant-thread');
+  if (!thread) {
+    await renderAssistantState(currentAiStatus);
+    thread = document.getElementById('assistant-thread');
+  }
+
+  // 1. Append User Message Bubble
+  const userMsgId = 'msg-' + Date.now();
+  let userContentHtml = '';
+  if (img && img.dataUrl) {
+    userContentHtml += `<img src="${escapeHtml(img.dataUrl)}" class="assistant-msg-user-img" alt="Attached image">`;
+  }
+  if (text) {
+    userContentHtml += `<div>${escapeHtml(text)}</div>`;
+  }
+
+  const userMsgHtml = `
+    <div id="${userMsgId}" class="assistant-msg assistant-msg-user">
+      ${userContentHtml}
+    </div>
+  `;
+  thread.insertAdjacentHTML('beforeend', userMsgHtml);
+
+  // 2. Append Thinking Indicator
+  const thinkingId = 'thinking-' + Date.now();
+  const thinkingHtml = `
+    <div id="${thinkingId}" class="assistant-msg assistant-msg-bot">
+      <div class="assistant-thinking-indicator">
+        <span>Thinking with Gemini</span>
+        <div class="assistant-thinking-dots">
+          <span class="assistant-thinking-dot"></span>
+          <span class="assistant-thinking-dot"></span>
+          <span class="assistant-thinking-dot"></span>
+        </div>
+      </div>
+    </div>
+  `;
+  thread.insertAdjacentHTML('beforeend', thinkingHtml);
+  scrollThreadToBottom();
+
+  // Determine Task & Payload
+  let task = options.task || 'create_tracker';
+  let payload = {};
+
+  if (task === 'break_down_goal') {
+    payload = {
+      goal: text.replace(/^break\s*down[:\s]*/i, '').trim() || text,
+      currentDate: new Date().toISOString(),
+    };
+  } else if (task === 'extract_notes') {
+    payload = {
+      noteText: text,
+      currentDate: new Date().toISOString(),
+    };
+  } else {
+    // Default: create_tracker
+    payload = {
+      input: text,
+      currentDate: new Date().toISOString(),
+    };
+    if (img && img.data && img.mimeType) {
+      payload.image = {
+        data: img.data,
+        mimeType: img.mimeType,
+      };
+    }
+  }
+
+  try {
+    const result = await aiGenerate(task, payload);
+
+    // Remove thinking indicator
+    const thinkingEl = document.getElementById(thinkingId);
+    if (thinkingEl) thinkingEl.remove();
+
+    // Render Shared Confirmation Sheet
+    renderConfirmSheet(result, task);
+  } catch (err) {
+    console.error('[Assistant] Prompt generation error:', err);
+    const thinkingEl = document.getElementById(thinkingId);
+    if (thinkingEl) thinkingEl.remove();
+
+    const errMsg = formatAiErrorMessage(err);
+    const errHtml = `
+      <div class="assistant-msg assistant-msg-bot">
+        <div class="assistant-connect-error" role="alert">${escapeHtml(errMsg)}</div>
+      </div>
+    `;
+    thread.insertAdjacentHTML('beforeend', errHtml);
+  } finally {
+    isGenerating = false;
+    // Clear attachment state
+    clearAttachment();
+    updateAssistantControlsState();
+    scrollThreadToBottom();
+  }
+}
+
+/**
+ * Renders the Shared Confirmation Sheet card inside the assistant thread.
+ */
+function renderConfirmSheet(result, task) {
+  const thread = document.getElementById('assistant-thread');
+  if (!thread) return;
+
+  const cardId = 'confirm-' + Date.now();
+  const rawType = (result.type || 'goal').toLowerCase();
+  const cardType = rawType === 'checklist' ? 'checklist' : (rawType === 'note' ? 'note' : 'goal');
+  const typeLabel = cardType === 'checklist' ? 'Checklist' : (cardType === 'note' ? 'Markdown Note' : 'Goal Tracker');
+  const title = result.title || 'New Tracker';
+  const explanation = result.explanation || result.summary || '';
+
+  // Type specific markup
+  let typeFieldsHtml = '';
+  if (cardType === 'goal') {
+    const targetVal = typeof result.target === 'number' ? result.target : 100;
+    const unitVal = result.unit || '%';
+    typeFieldsHtml = `
+      <div class="confirm-row-2col">
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Target</label>
+          <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="1" step="any">
+        </div>
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Unit</label>
+          <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}">
+        </div>
+      </div>
+    `;
+  } else if (cardType === 'checklist') {
+    const items = Array.isArray(result.items) && result.items.length ? result.items : [{ text: 'Step 1' }];
+    const itemsHtml = items.map((it, idx) => `
+      <div class="confirm-item-row" data-idx="${idx}">
+        <input type="checkbox" class="confirm-item-checkbox" checked title="Include in tracker">
+        <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
+      </div>
+    `).join('');
+
+    typeFieldsHtml = `
+      <div class="confirm-field-group">
+        <label class="confirm-field-label">Action Items (${items.length})</label>
+        <div class="confirm-items-list">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
+  } else if (cardType === 'note') {
+    const noteText = result.noteText || result.text || '';
+    typeFieldsHtml = `
+      <div class="confirm-field-group">
+        <label class="confirm-field-label">Note Content</label>
+        <textarea class="confirm-input confirm-note-textarea" rows="4">${escapeHtml(noteText)}</textarea>
+      </div>
+    `;
+  }
+
+  // Meta badges (Deadline & Recurring)
+  let metaBadgesHtml = '';
+  if (result.deadline) {
+    let displayDeadline = result.deadline;
+    try {
+      displayDeadline = new Date(result.deadline).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (_) {}
+    metaBadgesHtml += `
+      <div class="confirm-meta-chip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Deadline: ${escapeHtml(displayDeadline)}</span>
+      </div>
+    `;
+  }
+
+  if (result.isRecurring) {
+    metaBadgesHtml += `
+      <div class="confirm-meta-chip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span>Repeats daily at ${escapeHtml(result.resetTime || '08:00')}</span>
+      </div>
+    `;
+  }
+
+  const confirmHtml = `
+    <div id="${cardId}" class="assistant-msg assistant-msg-bot">
+      <div class="assistant-confirm-card" data-type="${cardType}">
+        <div class="confirm-card-header">
+          <div class="confirm-type-badge ${cardType}">
+            <span>${typeLabel}</span>
+          </div>
+          <span class="confirm-status-text">Preview — Ready to create</span>
+        </div>
+
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Tracker Title</label>
+          <input type="text" class="confirm-input confirm-title-input" value="${escapeHtml(title)}">
+        </div>
+
+        ${typeFieldsHtml}
+
+        ${metaBadgesHtml ? `<div class="confirm-meta-row">${metaBadgesHtml}</div>` : ''}
+
+        ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
+
+        <div class="confirm-actions">
+          <button type="button" class="btn btn-primary btn-confirm-create">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Create Tracker</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-confirm-cancel">Discard</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  thread.insertAdjacentHTML('beforeend', confirmHtml);
+  threadHtml = thread.innerHTML;
+  attachSingleCardListeners(document.getElementById(cardId), result);
+  scrollThreadToBottom();
+}
+
+function attachThreadCardListeners() {
+  const cards = document.querySelectorAll('.assistant-confirm-card');
+  cards.forEach(card => {
+    // If not already resolved
+    if (card.querySelector('.btn-confirm-create')) {
+      attachSingleCardListeners(card.closest('.assistant-msg'), {});
+    }
+  });
+}
+
+function attachSingleCardListeners(msgEl, rawData) {
+  if (!msgEl) return;
+  const card = msgEl.querySelector('.assistant-confirm-card');
+  if (!card) return;
+
+  const btnCreate = card.querySelector('.btn-confirm-create');
+  const btnCancel = card.querySelector('.btn-confirm-cancel');
+  const actionsWrap = card.querySelector('.confirm-actions');
+
+  if (btnCancel && actionsWrap) {
+    btnCancel.addEventListener('click', () => {
+      actionsWrap.innerHTML = `<div class="confirm-discarded-state">Tracker proposal discarded.</div>`;
+      const thread = document.getElementById('assistant-thread');
+      if (thread) threadHtml = thread.innerHTML;
+    });
+  }
+
+  if (btnCreate && actionsWrap) {
+    btnCreate.addEventListener('click', async () => {
+      btnCreate.disabled = true;
+      btnCreate.textContent = 'Creating...';
+
+      const type = card.dataset.type || 'goal';
+      const titleInput = card.querySelector('.confirm-title-input');
+      const finalTitle = titleInput ? titleInput.value.trim() : 'New Tracker';
+
+      let targetSmallest = 100;
+      let levels = [{ name: '%', multiplier: 1, target: 100 }];
+      let items = null;
+      let text = null;
+
+      if (type === 'goal') {
+        const targetInput = card.querySelector('.confirm-target-input');
+        const unitInput = card.querySelector('.confirm-unit-input');
+        const tVal = targetInput ? parseFloat(targetInput.value) || 100 : 100;
+        const uVal = unitInput ? unitInput.value.trim() || '%' : '%';
+        targetSmallest = tVal;
+        levels = [{ name: uVal, multiplier: 1, target: tVal }];
+      } else if (type === 'checklist') {
+        const itemRows = Array.from(card.querySelectorAll('.confirm-item-row'));
+        const checkedItems = itemRows
+          .filter(row => row.querySelector('.confirm-item-checkbox')?.checked)
+          .map((row, idx) => ({
+            id: String(idx + 1),
+            text: row.querySelector('.confirm-item-text')?.value.trim() || `Item ${idx + 1}`,
+            done: false
+          }));
+
+        items = checkedItems.length ? checkedItems : [{ id: '1', text: 'Step 1', done: false }];
+        targetSmallest = items.length;
+        levels = [{ name: 'items', multiplier: 1, target: items.length }];
+      } else if (type === 'note') {
+        const noteArea = card.querySelector('.confirm-note-textarea');
+        text = noteArea ? noteArea.value : '';
+        targetSmallest = 1;
+        levels = [{ name: 'notes', multiplier: 1, target: 1 }];
+      }
+
+      // Deadline handling
+      let deadlineAt = null;
+      if (rawData.deadline) {
+        try {
+          const parsed = new Date(rawData.deadline).getTime();
+          if (!isNaN(parsed) && parsed > Date.now()) {
+            deadlineAt = parsed;
+          }
+        } catch (_) {}
+      }
+
+      // Repeat / Habit handling
+      let repeat = null;
+      if (rawData.isRecurring) {
+        repeat = {
+          resetTime: rawData.resetTime || '08:00',
+          resetCount: null,
+          checklistResetEnabled: type === 'checklist',
+          deadlineResetEnabled: false,
+          lastResetAt: Date.now()
+        };
+      }
+
+      const cardPayload = {
+        title: finalTitle,
+        type: type,
+        preset: 'custom',
+        levels: levels,
+        targetSmallest: targetSmallest,
+        currentSmallest: 0,
+        items: items,
+        text: text,
+        completed: false,
+        createdAt: Date.now(),
+        deadlineAt: deadlineAt,
+        deadlineSetAt: deadlineAt ? Date.now() : null,
+        notifyAt: null,
+        notified: false,
+        notifyPercent: null,
+        alertAtDeadline: !!deadlineAt,
+        deadlineNotified: false,
+        repeat: repeat
+      };
+
+      try {
+        let newBarId = null;
+        if (typeof deps.handleCreateBarFromAi === 'function') {
+          newBarId = await deps.handleCreateBarFromAi(cardPayload);
+        } else {
+          throw new Error('createBar handler not available');
+        }
+
+        actionsWrap.innerHTML = `
+          <div class="confirm-success-state">
+            <span>Tracker created!</span>
+            <button type="button" class="btn btn-secondary confirm-view-btn" data-bar-id="${escapeHtml(newBarId || '')}">View card</button>
+          </div>
+        `;
+
+        const viewBtn = actionsWrap.querySelector('.confirm-view-btn');
+        if (viewBtn) {
+          viewBtn.addEventListener('click', () => {
+            closeAssistantPanel();
+          });
+        }
+
+        showToast(`Successfully created "${finalTitle}"!`, 'success');
+        const thread = document.getElementById('assistant-thread');
+        if (thread) threadHtml = thread.innerHTML;
+      } catch (err) {
+        console.error('[Assistant] Failed to create tracker:', err);
+        showToast(err.message || 'Failed to create tracker', 'error');
+        btnCreate.disabled = false;
+        btnCreate.textContent = 'Create Tracker';
+      }
+    });
+  }
+}
+
+function clearAttachment() {
+  attachedImage = null;
+  const preview = document.getElementById('assistant-attachment-preview');
+  const fileInput = document.getElementById('assistant-file-input');
+  if (preview) preview.classList.add('hidden');
+  if (fileInput) fileInput.value = '';
+}
+
+function setAttachment(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('Please select a valid image file (PNG, JPG, WebP).', 'warning');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Image size exceeds 5MB limit.', 'warning');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const base64Data = dataUrl.split(',')[1];
+    attachedImage = {
+      name: file.name,
+      mimeType: file.type,
+      data: base64Data,
+      dataUrl: dataUrl
+    };
+
+    const preview = document.getElementById('assistant-attachment-preview');
+    const thumb = document.getElementById('assistant-attachment-thumb');
+    const nameSpan = document.getElementById('assistant-attachment-name');
+
+    if (thumb) thumb.src = dataUrl;
+    if (nameSpan) nameSpan.textContent = file.name;
+    if (preview) preview.classList.remove('hidden');
+
+    updateAssistantControlsState();
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ==========================================================================
+   AI SETTINGS MODAL & INITIALIZATION
+   ========================================================================== */
 
 export function renderAiSettingsError(err) {
   const body = document.getElementById('ai-settings-modal-body');
@@ -604,6 +1093,13 @@ export function setupAssistantModule(injectedDeps = {}) {
   const backdrop = document.getElementById('assistant-backdrop');
   const btnProfileAi = document.getElementById('btn-profile-ai-settings');
   const textarea = document.getElementById('assistant-input');
+  const btnSend = document.getElementById('btn-assistant-send');
+  const btnAttach = document.getElementById('btn-assistant-attach');
+  const fileInput = document.getElementById('assistant-file-input');
+  const btnRemoveAttach = document.getElementById('btn-assistant-remove-attachment');
+
+  const chipBreakdown = document.getElementById('chip-breakdown-goal');
+  const chipCreate = document.getElementById('chip-create-tracker');
 
   if (btnAssistant) {
     btnAssistant.addEventListener('click', toggleAssistantPanel);
@@ -617,14 +1113,91 @@ export function setupAssistantModule(injectedDeps = {}) {
   if (btnProfileAi) {
     btnProfileAi.addEventListener('click', openAiSettingsModal);
   }
+
+  // Auto-growing textarea & send button state
   if (textarea) {
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+      updateAssistantControlsState();
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitCurrentPrompt();
+      }
     });
   }
 
-  // Expose assistant controls on window for global access/testing
+  if (btnSend) {
+    btnSend.addEventListener('click', submitCurrentPrompt);
+  }
+
+  function submitCurrentPrompt() {
+    if (!textarea) return;
+    const val = textarea.value.trim();
+    if (!val && !attachedImage) return;
+
+    handleAssistantPrompt(val);
+    textarea.value = '';
+    textarea.style.height = 'auto';
+    updateAssistantControlsState();
+  }
+
+  // File attach listeners
+  if (btnAttach && fileInput) {
+    btnAttach.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        setAttachment(fileInput.files[0]);
+      }
+    });
+  }
+
+  if (btnRemoveAttach) {
+    btnRemoveAttach.addEventListener('click', clearAttachment);
+  }
+
+  // Guided Chip: Break down a goal
+  if (chipBreakdown) {
+    chipBreakdown.addEventListener('click', () => {
+      if (!textarea) return;
+      const val = textarea.value.trim();
+      if (val) {
+        handleAssistantPrompt(val, { task: 'break_down_goal' });
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        updateAssistantControlsState();
+      } else {
+        textarea.value = 'Break down: ';
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        updateAssistantControlsState();
+      }
+    });
+  }
+
+  // Guided Chip: Add from photo or paste
+  if (chipCreate) {
+    chipCreate.addEventListener('click', () => {
+      if (!textarea) return;
+      const val = textarea.value.trim();
+      if (val || attachedImage) {
+        handleAssistantPrompt(val, { task: 'create_tracker' });
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        updateAssistantControlsState();
+      } else {
+        if (fileInput) fileInput.click();
+      }
+    });
+  }
+
+  // Expose assistant controls on window for testing
   window.openAssistantPanel = openAssistantPanel;
   window.closeAssistantPanel = closeAssistantPanel;
   window.toggleAssistantPanel = toggleAssistantPanel;
@@ -635,4 +1208,5 @@ export function setupAssistantModule(injectedDeps = {}) {
   window.renderAiSettingsModalBody = renderAiSettingsModalBody;
   window.renderAiSettingsError = renderAiSettingsError;
   window.formatAiErrorMessage = formatAiErrorMessage;
+  window.handleAssistantPrompt = handleAssistantPrompt;
 }
