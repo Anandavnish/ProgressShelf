@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ---------------------------------------------------------------------------
 const RATE_LIMIT_GENERATE_PER_HOUR = 30;
 const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB max request payload
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-flash';
 
 // Allowed CORS origins: strictly localhost:8000 and the production URL
 const ALLOWED_ORIGINS = new Set([
@@ -259,23 +259,16 @@ Deno.serve(async (req: Request) => {
 
     const trimmedKey = rawKey.trim();
 
-    // Validate key with one minimal Gemini call (1 token ping)
+    // Validate key with Google Gemini API models endpoint (0 token cost, canonical key validation)
     // Note: API key is sent strictly via x-goog-api-key header, never in the URL.
-    const validationUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+    const validationUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
     let validationRes: Response;
     try {
       validationRes = await fetch(validationUrl, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'x-goog-api-key': trimmedKey,
         },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'ping' }] }],
-          generationConfig: {
-            maxOutputTokens: 1,
-          },
-        }),
       });
     } catch {
       console.error('[ai-proxy] Network failure connecting to Gemini validation endpoint');
@@ -283,9 +276,15 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!validationRes.ok) {
-      // Security guard: never log the raw key or response contents
       console.warn(`[ai-proxy] Key validation failed with status ${validationRes.status}`);
-      return jsonResponse({ error: 'Invalid Gemini API key or unauthorized model access' }, 400);
+      let errMsg = 'Invalid Gemini API key. Please check your key in Google AI Studio.';
+      try {
+        const errJson = await validationRes.json();
+        if (errJson?.error?.message) {
+          errMsg = errJson.error.message;
+        }
+      } catch (_) {}
+      return jsonResponse({ error: errMsg }, 400);
     }
 
     // Encrypt with AES-256-GCM (random 12-byte IV generated per save)
