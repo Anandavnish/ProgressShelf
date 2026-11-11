@@ -345,9 +345,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Missing "task" parameter' }, 400);
     }
 
-    // Only task "ping" is implemented for Phase 1
-    if (task !== 'ping') {
-      return jsonResponse({ error: `Task "${task}" is not supported. Only "ping" is implemented.` }, 400);
+    const SUPPORTED_TASKS = ['ping', 'create_tracker', 'break_down_goal', 'extract_notes'];
+    if (!SUPPORTED_TASKS.includes(task)) {
+      return jsonResponse(
+        { error: `Task "${task}" is not supported. Supported tasks: ${SUPPORTED_TASKS.join(', ')}` },
+        400
+      );
     }
 
     // Per-user rate limiting (30 generate calls/hour)
@@ -391,6 +394,178 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Failed to decrypt API key. Please re-save your key.' }, 500);
     }
 
+    // Build task-specific prompts and structured JSON schema
+    let parts: Array<Record<string, unknown>> = [];
+    let responseSchema: Record<string, unknown> = {};
+
+    const currentDateStr =
+      typeof payload?.currentDate === 'string' && payload.currentDate
+        ? payload.currentDate
+        : new Date().toISOString();
+
+    if (task === 'ping') {
+      parts = [{ text: 'Respond with a valid JSON object matching the requested schema for task ping.' }];
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          status: { type: 'STRING' },
+          task: { type: 'STRING' },
+          timestamp: { type: 'STRING' },
+          message: { type: 'STRING' },
+        },
+        required: ['status', 'task', 'timestamp'],
+      };
+    } else if (task === 'create_tracker') {
+      const userInput = String(payload?.input || payload?.text || payload?.prompt || '').trim();
+      const hasImage = Boolean(payload?.image?.data && payload?.image?.mimeType);
+
+      if (!userInput && !hasImage) {
+        return jsonResponse({ error: 'Please provide text or an image to create a tracker.' }, 400);
+      }
+
+      const promptText = `You are an intelligent task planner for ProgressShelf, a personal productivity and progress tracking app.
+The user wants to create a new tracker card from text, pasted content, or an attached image.
+Current reference date and time: ${currentDateStr}.
+
+User Input:
+"""
+${userInput || '(Image provided without text description)'}
+"""
+
+Analyze the user's input and determine the best tracker format:
+1. "goal": For measurable numeric progress towards a target number (e.g. pages, chapters, percent, hours, cups, lessons, workouts).
+   - "target": Target number (default 100 if percent or unspecified).
+   - "unit": Short unit name (e.g. "%", "pages", "chapters", "hours", "lessons").
+2. "checklist": For discrete steps, subtasks, habits, packing lists, or routines.
+   - "items": Array of actionable items with text field.
+3. "note": For informational memos, references, or reflections without discrete checkboxes.
+   - "noteText": Formatted note text.
+
+Deadline handling:
+- If the user mentions a target completion date or relative time (e.g. "by Friday", "by tomorrow at 5pm", "in 2 weeks", "by end of next month"), calculate and output the exact deadline as an ISO 8601 string (e.g. "2026-11-15T17:00:00.000Z") in "deadline".
+- If no deadline is specified, set "deadline" to "".
+
+Recurring / Habit handling:
+- If the user describes a recurring daily habit or checklist (e.g. "daily workout", "every morning at 8am", "repeat every day"), set "isRecurring": true, "resetTime": "08:00". Otherwise set "isRecurring": false, "resetTime": "".
+
+Provide a concise title, type ("goal", "checklist", or "note"), relevant fields, and a 1-sentence friendly explanation.`;
+
+      parts = [{ text: promptText }];
+      if (hasImage) {
+        parts.push({
+          inlineData: {
+            mimeType: String(payload.image.mimeType),
+            data: String(payload.image.data),
+          },
+        });
+      }
+
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          type: { type: 'STRING' },
+          unit: { type: 'STRING' },
+          target: { type: 'NUMBER' },
+          items: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                text: { type: 'STRING' },
+              },
+              required: ['text'],
+            },
+          },
+          noteText: { type: 'STRING' },
+          deadline: { type: 'STRING' },
+          isRecurring: { type: 'BOOLEAN' },
+          resetTime: { type: 'STRING' },
+          explanation: { type: 'STRING' },
+        },
+        required: ['title', 'type', 'explanation'],
+      };
+    } else if (task === 'break_down_goal') {
+      const goalText = String(payload?.goal || payload?.text || payload?.input || '').trim();
+      if (!goalText) {
+        return jsonResponse({ error: 'A goal description is required to break down.' }, 400);
+      }
+
+      const promptText = `You are an expert productivity coach for ProgressShelf.
+Break down the following goal into 4 to 7 clear, sequential, highly actionable checklist milestones.
+Each milestone step must be concise, concrete, and begin with an action verb.
+Current reference date: ${currentDateStr}.
+
+Goal to break down:
+"""
+${goalText}
+"""
+
+Suggest a realistic completion timeframe in days in "suggestedDeadlineDays" (e.g. 7, 14, 21, 30).
+Provide an inspiring, actionable 1-sentence summary in "explanation".`;
+
+      parts = [{ text: promptText }];
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          type: { type: 'STRING' },
+          items: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                text: { type: 'STRING' },
+              },
+              required: ['text'],
+            },
+          },
+          suggestedDeadlineDays: { type: 'INTEGER' },
+          explanation: { type: 'STRING' },
+        },
+        required: ['title', 'type', 'items', 'explanation'],
+      };
+    } else if (task === 'extract_notes') {
+      const noteContent = String(payload?.noteText || payload?.text || payload?.notes || payload?.input || '').trim();
+      if (!noteContent) {
+        return jsonResponse({ error: 'Note text is required to extract action items.' }, 400);
+      }
+
+      const promptText = `You are an executive assistant for ProgressShelf.
+Extract all concrete todo items and action steps from the provided notes into a clean checklist.
+Filter out general narrative, conversational filler, and non-actionable remarks.
+Each checklist item must start with an action verb and describe a clear, verifiable outcome.
+Current reference date: ${currentDateStr}.
+
+Notes to extract tasks from:
+"""
+${noteContent}
+"""
+
+Provide an appropriate title for the task checklist in "title", the checklist items in "items", and a 1-sentence summary in "summary".`;
+
+      parts = [{ text: promptText }];
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          type: { type: 'STRING' },
+          items: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                text: { type: 'STRING' },
+              },
+              required: ['text'],
+            },
+          },
+          summary: { type: 'STRING' },
+        },
+        required: ['title', 'type', 'items', 'summary'],
+      };
+    }
+
     // Execute structured JSON Gemini call
     // Note: x-goog-api-key header is used; key is never in URL.
     // Guard: Never log card text, payload, or decrypted keys.
@@ -405,27 +580,10 @@ Deno.serve(async (req: Request) => {
           'x-goog-api-key': apiKey,
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: 'Respond with a valid JSON object matching the requested schema for task ping.',
-                },
-              ],
-            },
-          ],
+          contents: [{ parts }],
           generationConfig: {
             responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                status: { type: 'STRING' },
-                task: { type: 'STRING' },
-                timestamp: { type: 'STRING' },
-                message: { type: 'STRING' },
-              },
-              required: ['status', 'task', 'timestamp'],
-            },
+            responseSchema,
           },
         }),
       });
@@ -436,7 +594,14 @@ Deno.serve(async (req: Request) => {
 
     if (!geminiRes.ok) {
       console.error(`[ai-proxy] Gemini generation call failed with status ${geminiRes.status}`);
-      return jsonResponse({ error: 'Gemini generation request failed', status: geminiRes.status }, geminiRes.status);
+      let errMsg = 'Gemini generation request failed';
+      try {
+        const errJson = await geminiRes.json();
+        if (errJson?.error?.message) {
+          errMsg = errJson.error.message;
+        }
+      } catch (_) {}
+      return jsonResponse({ error: errMsg, status: geminiRes.status }, geminiRes.status);
     }
 
     let geminiJson: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
