@@ -1,6 +1,6 @@
 // db.js
-import { supabase, isConfigured } from "./supabase-config.js?v=3.0";
-import { isGuestMode } from "./auth.js?v=3.0";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.2";
+import { isGuestMode } from "./auth.js?v=3.2";
 
 const writeQueues = new Map(); // barId -> latest pending write promise
 
@@ -1062,20 +1062,56 @@ export async function updateUserSettings(uid, settings) {
   }
 }
 
-export function subscribeToUserSettings(uid, onUpdate) {
-  if (!isConfigured || isGuestMode()) return () => {};
+let activeSettingsChannel = null;
+let activeSettingsUid = null;
+let activeSettingsListener = null;
 
-  const channel = supabase
+export function subscribeToUserSettings(uid, onUpdate) {
+  if (!isConfigured || isGuestMode() || !uid) return () => {};
+
+  activeSettingsListener = onUpdate;
+
+  if (activeSettingsChannel && activeSettingsUid === uid) {
+    return () => {
+      if (activeSettingsChannel) {
+        supabase.removeChannel(activeSettingsChannel);
+        activeSettingsChannel = null;
+        activeSettingsUid = null;
+        activeSettingsListener = null;
+      }
+    };
+  }
+
+  if (activeSettingsChannel) {
+    supabase.removeChannel(activeSettingsChannel);
+    activeSettingsChannel = null;
+    activeSettingsUid = null;
+  }
+
+  const existing = supabase.getChannels?.().find(ch => ch.topic === `realtime:user-settings-${uid}` || ch.topic === `user-settings-${uid}`);
+  if (existing) {
+    supabase.removeChannel(existing);
+  }
+
+  activeSettingsUid = uid;
+  activeSettingsChannel = supabase
     .channel(`user-settings-${uid}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${uid}` },
       (payload) => {
-        onUpdate(payload.new);
+        if (activeSettingsListener) {
+          activeSettingsListener(payload.new);
+        }
       }
     )
     .subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    if (activeSettingsChannel) {
+      supabase.removeChannel(activeSettingsChannel);
+      activeSettingsChannel = null;
+      activeSettingsUid = null;
+      activeSettingsListener = null;
+    }
   };
 }

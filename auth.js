@@ -1,6 +1,6 @@
 // auth.js
-import { supabase, isConfigured } from "./supabase-config.js?v=3.0";
-import { updateUserSettings } from "./db.js?v=3.1";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.2";
+import { updateUserSettings } from "./db.js?v=3.2";
 
 const isDashboard = window.location.pathname.includes("dashboard") || (typeof document !== 'undefined' && !!document.getElementById("cards-grid"));
 
@@ -285,11 +285,13 @@ export function initAuthProtection(onUserActive) {
   const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
   let initialDispatched = false;
+  let activeUid = null;
 
   // Cache-first fast startup: on dashboard, immediately dispatch cached user or guest
   // with zero network calls blocking first paint
   if (isDashboard && (cachedUser || isGuest) && !isPasswordSetupPending) {
     initialDispatched = true;
+    activeUid = isGuest ? 'guest' : cachedUser?.uid;
     if (onUserActive) {
       onUserActive(isGuest ? { uid: null, displayName: "Guest" } : cachedUser);
     }
@@ -321,13 +323,15 @@ export function initAuthProtection(onUserActive) {
       }
       if (!isDashboard && !isPasswordSetupPending) {
         window.location.href = "dashboard.html";
-      } else if (onUserActive && (!initialDispatched || user.uid !== cachedUser?.uid)) {
+      } else if (onUserActive && (!initialDispatched || user.uid !== activeUid)) {
+        activeUid = user.uid;
         onUserActive(user);
       }
     } else if (isGuest) {
       if (!isDashboard) {
         window.location.href = "dashboard.html";
       } else if (onUserActive && !initialDispatched) {
+        activeUid = 'guest';
         onUserActive({ uid: null, displayName: "Guest" });
       }
     } else {
@@ -349,6 +353,7 @@ export function initAuthProtection(onUserActive) {
       const isPasswordSetupPending = sessionStorage.getItem('password_setup_pending') === 'true';
 
       if (event === 'SIGNED_OUT') {
+        activeUid = null;
         localStorage.removeItem("ps_cached_user");
         if (isDashboard && !isGuest) {
           window.location.href = "index.html";
@@ -361,7 +366,8 @@ export function initAuthProtection(onUserActive) {
         }
         if (!isDashboard && !isPasswordSetupPending) {
           window.location.href = "dashboard.html";
-        } else if (onUserActive && user) {
+        } else if (onUserActive && user && user.uid !== activeUid) {
+          activeUid = user.uid;
           onUserActive(user);
         }
       }
