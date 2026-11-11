@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v204';
+const CACHE_NAME = 'progressshelf-cache-v205';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
   'app.js',
   'auth.js',
   'ai.js',
+  'assistant.js',
   'db.js',
   'login.js',
   'reset-password.js',
