@@ -7302,6 +7302,37 @@ html.light-theme .nav-assistant-btn.active {
   margin: 0;
 }
 
+.assistant-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.assistant-header-btn {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  transition: color var(--transition-speed) ease, background var(--transition-speed) ease;
+}
+
+.assistant-header-btn:hover {
+  color: var(--text-primary);
+  background: var(--input-bg);
+}
+
+.assistant-header-btn.active {
+  color: var(--ui-accent);
+  background: var(--input-bg);
+}
+
 .assistant-close-btn {
   background: transparent;
   border: none;
@@ -7311,7 +7342,8 @@ html.light-theme .nav-assistant-btn.active {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   transition: color var(--transition-speed) ease, background var(--transition-speed) ease;
 }
@@ -7319,6 +7351,216 @@ html.light-theme .nav-assistant-btn.active {
 .assistant-close-btn:hover {
   color: var(--text-primary);
   background: var(--input-bg);
+}
+
+/* History Sub-pane / Drawer inside Assistant */
+.assistant-history-pane {
+  position: absolute;
+  top: 57px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--card-bg);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  animation: assistantFadeIn 0.18s ease-out;
+}
+
+.assistant-history-pane.hidden {
+  display: none !important;
+}
+
+.assistant-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--input-bg);
+  flex-shrink: 0;
+}
+
+.assistant-history-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.assistant-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.assistant-history-new-btn {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.assistant-history-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-speed) ease, background var(--transition-speed) ease;
+}
+
+.assistant-history-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--card-bg);
+}
+
+.assistant-history-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+  gap: 8px;
+}
+
+.assistant-history-item:hover {
+  border-color: var(--ui-accent);
+  transform: translateY(-1px);
+}
+
+.assistant-history-item.active {
+  border-color: var(--ui-accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.assistant-history-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.assistant-history-item-title {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-history-item-time {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+}
+
+.assistant-history-item-del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.assistant-history-item-del:hover {
+  color: var(--error);
+  background: var(--input-error-bg);
+}
+
+.assistant-history-notice-box {
+  padding: 36px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.assistant-history-notice-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.assistant-history-notice-desc {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0;
+  max-width: 280px;
+}
+
+/* AI Settings Section for History */
+.ai-settings-history-section {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-settings-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ai-settings-history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ai-settings-history-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-settings-history-sub {
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.ai-settings-clear-wrap {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 10px;
+  border-top: 1px dashed var(--card-border);
 }
 
 /* Scrolling Thread / Body Area */

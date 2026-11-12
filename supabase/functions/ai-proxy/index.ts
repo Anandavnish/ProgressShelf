@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ---------------------------------------------------------------------------
 const RATE_LIMIT_GENERATE_PER_HOUR = 30;
 const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB max request payload
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-1.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash';
 
 // Allowed CORS origins: strictly localhost:8000 and the production URL
 const ALLOWED_ORIGINS = new Set([
@@ -653,7 +653,18 @@ Guidelines:
     }
 
     // Dynamic model resolution: query models list to use the exact working model
-    let activeModel = GEMINI_MODEL;
+    let candidateModels: string[] = [];
+    const preferredOrder = [
+      'gemini-3.8-flash',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-001',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-pro',
+    ];
+
     try {
       const modelsRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
         headers: { 'x-goog-api-key': apiKey },
@@ -667,69 +678,72 @@ Guidelines:
           .map((m: { name: string }) => m.name.replace(/^models\//, ''));
 
         console.log('[ai-proxy] Available models for user key:', available);
-        const preferred = [
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-2.0-flash-exp',
-          'gemini-1.5-flash-latest',
-          'gemini-1.5-flash',
-          'gemini-1.5-pro',
+        candidateModels = [
+          ...preferredOrder.filter((p) => available.includes(p)),
+          ...available.filter((a) => !preferredOrder.includes(a) && a.includes('flash')),
+          ...available.filter((a) => !preferredOrder.includes(a) && !a.includes('flash')),
         ];
-        const match = preferred.find((p) => available.includes(p)) ||
-          available.find((m) => m.includes('flash')) ||
-          available[0];
-
-        if (match) {
-          activeModel = match;
-        }
       }
     } catch (e) {
       console.warn('[ai-proxy] Error querying available models:', e);
     }
 
-    // Execute structured JSON Gemini call
+    if (!candidateModels.length) {
+      candidateModels = preferredOrder;
+    }
+
+    // Execute structured JSON Gemini call with automatic model fallback
     // Note: x-goog-api-key header is used; key is never in URL.
     // Guard: Never log card text, payload, or decrypted keys.
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
+    let geminiJson: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } | null = null;
+    let lastError = 'Gemini generation request failed';
+    let lastStatus = 502;
 
-    let geminiRes: Response;
-    try {
-      geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema,
-          },
-        }),
-      });
-    } catch {
-      console.error('[ai-proxy] Network failure connecting to Gemini generate endpoint');
-      return jsonResponse({ error: 'Failed to reach Gemini API' }, 502);
-    }
-
-    if (!geminiRes.ok) {
-      console.error(`[ai-proxy] Gemini generation call failed with status ${geminiRes.status}`);
-      let errMsg = 'Gemini generation request failed';
+    for (const modelToTry of candidateModels) {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
       try {
-        const errJson = await geminiRes.json();
-        if (errJson?.error?.message) {
-          errMsg = errJson.error.message;
+        const geminiRes = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+        });
+
+        if (geminiRes.ok) {
+          geminiJson = await geminiRes.json();
+          break; // Succeeded!
         }
-      } catch (_) {}
-      return jsonResponse({ error: errMsg, status: geminiRes.status }, geminiRes.status);
+
+        lastStatus = geminiRes.status;
+        try {
+          const errJson = await geminiRes.json();
+          if (errJson?.error?.message) {
+            lastError = errJson.error.message;
+          }
+        } catch (_) {}
+
+        console.warn(`[ai-proxy] Model ${modelToTry} call failed (${lastStatus}): ${lastError}. Trying fallback model...`);
+
+        // If credentials are completely invalid or rate limit hit, do not loop
+        if (lastStatus === 401 || (lastError && lastError.toLowerCase().includes('api key not valid'))) {
+          break;
+        }
+      } catch (networkErr) {
+        console.warn(`[ai-proxy] Network failure trying model ${modelToTry}:`, networkErr);
+      }
     }
 
-    let geminiJson: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    try {
-      geminiJson = await geminiRes.json();
-    } catch {
-      return jsonResponse({ error: 'Invalid response from Gemini API' }, 502);
+    if (!geminiJson) {
+      console.error(`[ai-proxy] All candidate models failed. Last status: ${lastStatus}, error: ${lastError}`);
+      return jsonResponse({ error: lastError, status: lastStatus }, lastStatus);
     }
 
     const candidateText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;

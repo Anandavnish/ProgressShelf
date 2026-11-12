@@ -17,6 +17,55 @@ let isGenerating = false;
 let attachedImage = null; // { name: string, mimeType: string, data: string, dataUrl: string } | null
 let threadHtml = ''; // Preserves conversation history while panel is open
 let conversationHistory = []; // [{ role: 'user' | 'model', text: string }]
+let activeSessionId = null;
+
+const STORAGE_KEY_HISTORY_ENABLED = 'ps_ai_save_history';
+const STORAGE_KEY_CHAT_SESSIONS = 'ps_ai_chat_sessions';
+
+export function isAiHistoryEnabled() {
+  return localStorage.getItem(STORAGE_KEY_HISTORY_ENABLED) === 'true';
+}
+
+export function setAiHistoryEnabled(enabled) {
+  localStorage.setItem(STORAGE_KEY_HISTORY_ENABLED, enabled ? 'true' : 'false');
+}
+
+export function getChatSessions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CHAT_SESSIONS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function saveChatSessions(sessions) {
+  try {
+    localStorage.setItem(STORAGE_KEY_CHAT_SESSIONS, JSON.stringify(sessions));
+  } catch (e) {
+    console.warn('[Assistant] Failed to save chat sessions:', e);
+  }
+}
+
+export function clearAllChatSessions() {
+  localStorage.removeItem(STORAGE_KEY_CHAT_SESSIONS);
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - Number(ts);
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 let deps = {
   closeAllMenus: () => {},
@@ -414,6 +463,8 @@ export function closeAssistantPanel() {
   if (!isAssistantPanelOpen) return;
   isAssistantPanelOpen = false;
 
+  closeHistoryPane();
+
   const backdrop = document.getElementById('assistant-backdrop');
   const panel = document.getElementById('assistant-panel');
   const btn = document.getElementById('btn-assistant');
@@ -429,6 +480,183 @@ export function toggleAssistantPanel() {
   } else {
     openAssistantPanel();
   }
+}
+
+/* ==========================================================================
+   CONVERSATION SESSIONS & HISTORY PANE
+   ========================================================================== */
+
+export function startNewConversation(options = { toast: true }) {
+  activeSessionId = null;
+  conversationHistory = [];
+  threadHtml = '';
+
+  const thread = document.getElementById('assistant-thread');
+  if (thread) {
+    thread.innerHTML = '';
+  }
+
+  const placeholder = document.getElementById('assistant-today-placeholder');
+  if (placeholder) {
+    placeholder.classList.remove('hidden');
+  }
+
+  const textarea = document.getElementById('assistant-input');
+  if (textarea) {
+    textarea.value = '';
+    textarea.style.height = 'auto';
+  }
+
+  clearAttachment();
+  hideCardSuggestions();
+  closeHistoryPane();
+  updateAssistantControlsState();
+
+  if (options && options.toast) {
+    showToast('Started new conversation', 'info');
+  }
+}
+
+export function openHistoryPane() {
+  const pane = document.getElementById('assistant-history-pane');
+  const btn = document.getElementById('btn-assistant-history');
+  if (!pane) return;
+  pane.classList.remove('hidden');
+  if (btn) btn.classList.add('active');
+  renderHistoryPaneList();
+}
+
+export function closeHistoryPane() {
+  const pane = document.getElementById('assistant-history-pane');
+  const btn = document.getElementById('btn-assistant-history');
+  if (pane) pane.classList.add('hidden');
+  if (btn) btn.classList.remove('active');
+}
+
+export function toggleHistoryPane() {
+  const pane = document.getElementById('assistant-history-pane');
+  if (pane && !pane.classList.contains('hidden')) {
+    closeHistoryPane();
+  } else {
+    openHistoryPane();
+  }
+}
+
+export function renderHistoryPaneList() {
+  const listContainer = document.getElementById('assistant-history-list');
+  if (!listContainer) return;
+
+  if (!isAiHistoryEnabled()) {
+    listContainer.innerHTML = `
+      <div class="assistant-history-notice-box">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 14 14"></polyline>
+        </svg>
+        <h4 class="assistant-history-notice-title">Chat history is turned off</h4>
+        <p class="assistant-history-notice-desc">Enable chat history in AI Settings to keep a local record of your past conversations on this device.</p>
+        <button type="button" id="btn-history-enable-settings" class="btn btn-primary btn-sm" style="margin-top: 6px;">Open AI Settings</button>
+      </div>
+    `;
+
+    const openSettingsBtn = document.getElementById('btn-history-enable-settings');
+    if (openSettingsBtn) {
+      openSettingsBtn.addEventListener('click', () => {
+        closeHistoryPane();
+        openAiSettingsModal();
+      });
+    }
+    return;
+  }
+
+  const sessions = getChatSessions();
+  if (!sessions.length) {
+    listContainer.innerHTML = `
+      <div class="assistant-history-notice-box">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <h4 class="assistant-history-notice-title">No past conversations</h4>
+        <p class="assistant-history-notice-desc">Conversations you have with Assistant will appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  listContainer.innerHTML = sessions.map(s => `
+    <div class="assistant-history-item ${s.id === activeSessionId ? 'active' : ''}" data-session-id="${escapeHtml(s.id)}">
+      <div class="assistant-history-item-body">
+        <span class="assistant-history-item-title">${escapeHtml(s.title || 'Conversation')}</span>
+        <span class="assistant-history-item-time">${formatRelativeTime(s.updatedAt || s.createdAt)}</span>
+      </div>
+      <button type="button" class="assistant-history-item-del" data-session-id="${escapeHtml(s.id)}" title="Delete chat" aria-label="Delete chat">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+
+  // Wire click to load session
+  listContainer.querySelectorAll('.assistant-history-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.assistant-history-item-del')) return;
+      const sid = item.dataset.sessionId;
+      const targetSession = sessions.find(s => s.id === sid);
+      if (targetSession) {
+        loadChatSession(targetSession);
+      }
+    });
+  });
+
+  // Wire click to delete session
+  listContainer.querySelectorAll('.assistant-history-item-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sid = btn.dataset.sessionId;
+      deleteChatSession(sid);
+    });
+  });
+}
+
+export function loadChatSession(session) {
+  if (!session) return;
+  activeSessionId = session.id;
+  conversationHistory = Array.isArray(session.history) ? [...session.history] : [];
+  threadHtml = session.threadHtml || '';
+
+  const thread = document.getElementById('assistant-thread');
+  if (thread) {
+    thread.innerHTML = threadHtml;
+    attachThreadCardListeners();
+  }
+
+  const placeholder = document.getElementById('assistant-today-placeholder');
+  if (placeholder) {
+    if (threadHtml) {
+      placeholder.classList.add('hidden');
+    } else {
+      placeholder.classList.remove('hidden');
+    }
+  }
+
+  closeHistoryPane();
+  scrollThreadToBottom();
+  updateAssistantControlsState();
+}
+
+export function deleteChatSession(sessionId) {
+  const sessions = getChatSessions().filter(s => s.id !== sessionId);
+  saveChatSessions(sessions);
+  if (activeSessionId === sessionId) {
+    startNewConversation({ toast: false });
+  }
+  renderHistoryPaneList();
+  showToast('Conversation removed from history', 'info');
 }
 
 /* ==========================================================================
@@ -543,6 +771,22 @@ async function handleAssistantPrompt(userText, options = {}) {
   `;
   thread.insertAdjacentHTML('beforeend', userMsgHtml);
 
+  // Initialize and persist session if history is enabled
+  if (isAiHistoryEnabled() && !activeSessionId) {
+    activeSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const titleText = text ? (text.length > 36 ? text.slice(0, 33) + '...' : text) : 'Image prompt';
+    const sessions = getChatSessions();
+    sessions.unshift({
+      id: activeSessionId,
+      title: titleText,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      history: [{ role: 'user', text }],
+      threadHtml: thread.innerHTML
+    });
+    saveChatSessions(sessions);
+  }
+
   // 2. Append Thinking Indicator
   const thinkingId = 'thinking-' + Date.now();
   const thinkingHtml = `
@@ -618,6 +862,7 @@ async function handleAssistantPrompt(userText, options = {}) {
     }
 
     threadHtml = thread.innerHTML;
+    syncActiveSessionThread();
   } catch (err) {
     console.error('[Assistant] Prompt error:', err);
     const thinkingEl = document.getElementById(thinkingId);
@@ -631,11 +876,25 @@ async function handleAssistantPrompt(userText, options = {}) {
     `;
     thread.insertAdjacentHTML('beforeend', errHtml);
     threadHtml = thread.innerHTML;
+    syncActiveSessionThread();
   } finally {
     isGenerating = false;
     clearAttachment();
     updateAssistantControlsState();
     scrollThreadToBottom();
+  }
+}
+
+function syncActiveSessionThread() {
+  if (isAiHistoryEnabled() && activeSessionId) {
+    const sessions = getChatSessions();
+    const idx = sessions.findIndex(s => s.id === activeSessionId);
+    if (idx !== -1) {
+      sessions[idx].updatedAt = Date.now();
+      sessions[idx].history = [...conversationHistory];
+      sessions[idx].threadHtml = threadHtml;
+      saveChatSessions(sessions);
+    }
   }
 }
 
@@ -795,6 +1054,7 @@ function attachActionCardListeners(card, rawAction) {
       actionsWrap.innerHTML = `<div class="confirm-discarded-state">Action proposal discarded.</div>`;
       const thread = document.getElementById('assistant-thread');
       if (thread) threadHtml = thread.innerHTML;
+      syncActiveSessionThread();
     });
   }
 
@@ -817,6 +1077,7 @@ function attachActionCardListeners(card, rawAction) {
           actionsWrap.innerHTML = `<div class="confirm-success-state"><span>Tracker deleted ✓</span></div>`;
           const thread = document.getElementById('assistant-thread');
           if (thread) threadHtml = thread.innerHTML;
+          syncActiveSessionThread();
         } catch (err) {
           showToast(err.message || 'Failed to delete tracker', 'error');
           btnPrimary.disabled = false;
@@ -911,6 +1172,7 @@ function attachActionCardListeners(card, rawAction) {
           }
           const thread = document.getElementById('assistant-thread');
           if (thread) threadHtml = thread.innerHTML;
+          syncActiveSessionThread();
         } catch (err) {
           showToast(err.message || 'Failed to update tracker', 'error');
           btnPrimary.disabled = false;
@@ -962,6 +1224,7 @@ function attachActionCardListeners(card, rawAction) {
         showToast(`Successfully created "${finalTitle}"!`, 'success');
         const thread = document.getElementById('assistant-thread');
         if (thread) threadHtml = thread.innerHTML;
+        syncActiveSessionThread();
       } catch (err) {
         showToast(err.message || 'Failed to create tracker', 'error');
         btnPrimary.disabled = false;
@@ -1085,6 +1348,51 @@ export async function openAiSettingsModal() {
   }
 }
 
+function getAiHistorySectionHtml() {
+  const sessions = getChatSessions();
+  return `
+    <div class="ai-settings-history-section">
+      <div class="ai-settings-history-row">
+        <div class="ai-settings-history-info">
+          <span class="ai-settings-history-title">Save chat history</span>
+          <span class="ai-settings-history-sub">Keep past conversations locally on this device. Off by default.</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="ai-toggle-history" ${isAiHistoryEnabled() ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="ai-settings-clear-wrap" class="ai-settings-clear-wrap ${sessions.length > 0 ? '' : 'hidden'}">
+        <button type="button" id="btn-ai-clear-history" class="btn btn-secondary btn-sm" style="font-size: 0.8rem; padding: 6px 12px;">Clear chat history (${sessions.length})</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachHistorySettingsListeners() {
+  const toggle = document.getElementById('ai-toggle-history');
+  const clearWrap = document.getElementById('ai-settings-clear-wrap');
+  const clearBtn = document.getElementById('btn-ai-clear-history');
+
+  if (toggle) {
+    toggle.addEventListener('change', () => {
+      setAiHistoryEnabled(toggle.checked);
+      showToast(toggle.checked ? 'Chat history enabled' : 'Chat history disabled', 'info');
+      renderHistoryPaneList();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      clearAllChatSessions();
+      startNewConversation({ toast: false });
+      if (clearWrap) clearWrap.classList.add('hidden');
+      renderHistoryPaneList();
+      showToast('All past conversations cleared', 'info');
+    });
+  }
+}
+
 export function renderAiSettingsModalBody(status) {
   const body = document.getElementById('ai-settings-modal-body');
   if (!body) return;
@@ -1109,8 +1417,11 @@ export function renderAiSettingsModalBody(status) {
           <button type="submit" id="btn-ai-settings-save-key" class="btn btn-primary">Save &amp; test</button>
         </form>
         <p class="assistant-notice">Your key is stored encrypted and used only to send your requests to Google. Card text you send goes to Google; avoid sensitive information. Remove your key anytime in AI settings.</p>
+        ${getAiHistorySectionHtml()}
       </div>
     `;
+
+    attachHistorySettingsListeners();
 
     const keyInput = document.getElementById('ai-settings-key-input');
     const eyeBtn = document.getElementById('btn-ai-settings-toggle-key');
@@ -1190,8 +1501,12 @@ export function renderAiSettingsModalBody(status) {
           <button type="button" id="btn-ai-cancel-remove" class="btn btn-secondary">Cancel</button>
         </div>
       </div>
+
+      ${getAiHistorySectionHtml()}
     </div>
   `;
+
+  attachHistorySettingsListeners();
 
   const btnReplace = document.getElementById('btn-ai-replace-key');
   const replaceWrap = document.getElementById('ai-replace-key-form-wrap');
@@ -1283,6 +1598,10 @@ export function setupAssistantModule(injectedDeps = {}) {
 
   const btnAssistant = document.getElementById('btn-assistant');
   const btnClose = document.getElementById('btn-assistant-close');
+  const btnHistory = document.getElementById('btn-assistant-history');
+  const btnNewChat = document.getElementById('btn-assistant-new-chat');
+  const btnHistoryClose = document.getElementById('btn-history-close');
+  const btnHistoryNewChat = document.getElementById('btn-history-new-chat');
   const backdrop = document.getElementById('assistant-backdrop');
   const btnProfileAi = document.getElementById('btn-profile-ai-settings');
   const textarea = document.getElementById('assistant-input');
@@ -1300,6 +1619,18 @@ export function setupAssistantModule(injectedDeps = {}) {
   }
   if (btnClose) {
     btnClose.addEventListener('click', closeAssistantPanel);
+  }
+  if (btnHistory) {
+    btnHistory.addEventListener('click', toggleHistoryPane);
+  }
+  if (btnNewChat) {
+    btnNewChat.addEventListener('click', () => startNewConversation({ toast: true }));
+  }
+  if (btnHistoryClose) {
+    btnHistoryClose.addEventListener('click', closeHistoryPane);
+  }
+  if (btnHistoryNewChat) {
+    btnHistoryNewChat.addEventListener('click', () => startNewConversation({ toast: true }));
   }
   if (backdrop) {
     backdrop.addEventListener('click', closeAssistantPanel);
@@ -1404,4 +1735,16 @@ export function setupAssistantModule(injectedDeps = {}) {
   window.formatAiErrorMessage = formatAiErrorMessage;
   window.handleAssistantPrompt = handleAssistantPrompt;
   window.renderCardSuggestions = renderCardSuggestions;
+  window.isAiHistoryEnabled = isAiHistoryEnabled;
+  window.setAiHistoryEnabled = setAiHistoryEnabled;
+  window.getChatSessions = getChatSessions;
+  window.saveChatSessions = saveChatSessions;
+  window.clearAllChatSessions = clearAllChatSessions;
+  window.startNewConversation = startNewConversation;
+  window.openHistoryPane = openHistoryPane;
+  window.closeHistoryPane = closeHistoryPane;
+  window.toggleHistoryPane = toggleHistoryPane;
+  window.renderHistoryPaneList = renderHistoryPaneList;
+  window.loadChatSession = loadChatSession;
+  window.deleteChatSession = deleteChatSession;
 }
