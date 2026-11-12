@@ -807,25 +807,54 @@ async function handleAssistantPrompt(userText, options = {}) {
   thread.insertAdjacentHTML('beforeend', thinkingHtml);
   scrollThreadToBottom();
 
-  // 3. Prepare Cards Context for Gemini
+  // 3. Prepare Cards Context for Gemini (Optimized: trimmed input & capped history)
   const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
-  const cardsSummary = liveBars.map(b => ({
+
+  // Active (incomplete) cards capped at 40 with truncated notes and checklist items
+  const activeBars = liveBars.filter(b => !b.completed).slice(0, 40);
+  const activeCardsSummary = activeBars.map(b => ({
     id: b.id,
     title: b.title,
     type: b.type || 'goal',
     current: b.currentSmallest || 0,
     target: b.targetSmallest || 100,
     unit: b.levels?.[0]?.name || '%',
-    completed: Boolean(b.completed),
+    completed: false,
     deadline: b.deadlineAt ? new Date(b.deadlineAt).toISOString() : null,
     isOverdue: Boolean(b.deadlineAt && b.deadlineAt < Date.now() && !b.completed),
-    items: Array.isArray(b.items) ? b.items.map(it => ({ id: it.id, text: it.text, done: Boolean(it.done) })) : [],
-    text: b.text || ''
+    items: Array.isArray(b.items)
+      ? b.items.slice(0, 25).map(it => ({
+          id: it.id,
+          text: (it.text || '').slice(0, 200),
+          done: Boolean(it.done)
+        }))
+      : [],
+    text: (b.text || '').slice(0, 200)
   }));
+
+  // Recently completed cards: send only titles (up to 10) to minimize tokens
+  const recentlyCompletedSummary = liveBars
+    .filter(b => b.completed)
+    .slice(-10)
+    .map(b => ({
+      id: b.id,
+      title: b.title,
+      completed: true
+    }));
+
+  const cardsSummary = [...activeCardsSummary, ...recentlyCompletedSummary];
+
+  // Trim conversation history to the last 6 turns and ensure clean {role, text} format
+  const sanitizedHistory = conversationHistory
+    .slice(-6)
+    .map(h => ({
+      role: h.role === 'model' ? 'model' : 'user',
+      text: typeof h.text === 'string' ? h.text : ''
+    }));
 
   const payload = {
     message: text,
-    history: conversationHistory.slice(-8), // Keep last 8 turns
+    history: sanitizedHistory,
     cards: cardsSummary,
     currentDate: new Date().toISOString(),
   };
@@ -916,7 +945,24 @@ function renderActionConfirmSheet(action, parentMsgId) {
   const rawCardType = (action.cardType || 'goal').toLowerCase();
   const cardType = rawCardType === 'checklist' ? 'checklist' : (rawCardType === 'note' ? 'note' : 'goal');
   const typeLabel = cardType === 'checklist' ? 'Checklist' : (cardType === 'note' ? 'Markdown Note' : 'Goal Tracker');
-  const title = action.title || (isDelete ? 'Delete Tracker' : 'New Tracker');
+
+  // Safety check: For update & delete, look up the target card locally by cardId to use the real title and verify existence
+  const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  let existingCard = null;
+  if (action.cardId && (isDelete || isUpdate)) {
+    existingCard = liveBars.find(b => String(b.id) === String(action.cardId));
+  }
+
+  let title = action.title || (isDelete ? 'Delete Tracker' : 'New Tracker');
+  let notFoundWarning = '';
+  if (isDelete || isUpdate) {
+    if (existingCard) {
+      title = existingCard.title; // Always display verified title from local state
+    } else {
+      notFoundWarning = 'Target tracker not found in your list. It may have been deleted or moved.';
+    }
+  }
+
   const explanation = action.explanation || '';
 
   let statusBadgeText = 'Ready to create';
@@ -1021,8 +1067,10 @@ function renderActionConfirmSheet(action, parentMsgId) {
 
       ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
 
+      ${notFoundWarning ? `<div class="assistant-connect-error" role="alert" style="margin-bottom: 0.75rem;">${escapeHtml(notFoundWarning)}</div>` : ''}
+
       <div class="confirm-actions">
-        <button type="button" class="btn ${primaryBtnClass} btn-confirm-primary">
+        <button type="button" class="btn ${primaryBtnClass} btn-confirm-primary" ${notFoundWarning ? 'disabled title="Tracker not found in local list"' : ''}>
           <span>${primaryBtnText}</span>
         </button>
         <button type="button" class="btn btn-secondary btn-confirm-cancel">Discard</button>
