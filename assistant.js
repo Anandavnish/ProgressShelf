@@ -180,6 +180,9 @@ export function formatAiErrorMessage(err) {
   if (lower.includes('invalid key') || lower.includes('invalid api key') || lower.includes('api_key_invalid') || lower.includes('api key not valid')) {
     return 'Invalid Gemini API key. Check your key in Google AI Studio.';
   }
+  if (lower.includes('non-2xx') || lower.includes('edge function returned a non-2xx')) {
+    return 'The AI service encountered an error processing your request. Please try again.';
+  }
   return rawMsg;
 }
 

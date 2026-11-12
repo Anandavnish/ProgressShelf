@@ -622,6 +622,7 @@ Guidelines:
           hasAction: { type: 'BOOLEAN' },
           action: {
             type: 'OBJECT',
+            nullable: true,
             properties: {
               type: { type: 'STRING' },
               cardId: { type: 'STRING' },
@@ -743,7 +744,8 @@ Guidelines:
 
     if (!geminiJson) {
       console.error(`[ai-proxy] All candidate models failed. Last status: ${lastStatus}, error: ${lastError}`);
-      return jsonResponse({ error: lastError, status: lastStatus }, lastStatus);
+      const returnStatus = (typeof lastStatus === 'number' && lastStatus >= 400 && lastStatus <= 599) ? lastStatus : 502;
+      return jsonResponse({ error: lastError, status: returnStatus }, returnStatus);
     }
 
     const candidateText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;

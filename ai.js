@@ -10,14 +10,57 @@ import { isGuestMode } from "./auth.js?v=3.2";
  */
 async function extractErrorMessage(error, defaultMsg = 'AI service request failed') {
   if (!error) return defaultMsg;
+  console.error('[ai] Edge function error details:', error, error.context);
+
   try {
-    if (error.context && typeof error.context.json === 'function') {
-      const errBody = await error.context.json();
-      if (errBody?.error) return errBody.error;
+    if (error.context) {
+      const ctx = error.context;
+      const status = ctx.status;
+
+      let rawText = '';
+      if (typeof ctx.text === 'function') {
+        try {
+          rawText = await ctx.text();
+        } catch (_) {}
+      } else if (typeof ctx.json === 'function') {
+        try {
+          const j = await ctx.json();
+          rawText = JSON.stringify(j);
+        } catch (_) {}
+      }
+
+      if (rawText) {
+        try {
+          const parsed = JSON.parse(rawText);
+          if (typeof parsed === 'string') return parsed;
+          if (typeof parsed?.error === 'string') return parsed.error;
+          if (parsed?.error?.message) return parsed.error.message;
+          if (parsed?.message) return parsed.message;
+        } catch (_) {
+          // If plain text (not JSON), return cleanly if short
+          if (rawText.length < 250 && !rawText.includes('<html') && !rawText.includes('<!DOCTYPE')) {
+            return `AI Service Error (${status || 'HTTP'}): ${rawText.trim()}`;
+          }
+        }
+      }
+
+      if (status === 429) {
+        return 'Rate limit exceeded: maximum 30 AI calls per hour. Please try again later.';
+      }
+      if (status === 401) {
+        return 'Authentication required or session expired. Please sign in again.';
+      }
+      if (status === 502 || status === 504) {
+        return 'The AI service timed out or is temporarily unreachable. Please try again.';
+      }
+      if (status) {
+        return `AI service error (${status}). Please try again.`;
+      }
     }
-  } catch (_) {
-    // Fall back to standard error message
+  } catch (err) {
+    console.warn('[ai] Error extracting message from error context:', err);
   }
+
   return error.message || defaultMsg;
 }
 
