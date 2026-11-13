@@ -8031,7 +8031,7 @@ function setupAPKButton() {
 
   const isNative = typeof window !== 'undefined' && (
     (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
-    (window.location.protocol === 'https:' && window.location.hostname === 'localhost') ||
+    (window.location.hostname === 'localhost' && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) ||
     window.location.protocol === 'capacitor:' ||
     document.documentElement.classList.contains('is-native-app')
   );
@@ -8981,18 +8981,17 @@ window.triggerPWAInstall = async function() {
     return;
   }
 
-  // 3. Fallback for Desktop: Trigger mock ProgressShelf.apk download
+  // 3. Fallback: Trigger direct download of official ProgressShelf.apk
   try {
-    const blob = new Blob(["ProgressShelf Web PWA Package"], { type: "application/vnd.android.package-archive" });
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
+    link.href = "https://github.com/Anandavnish/ProgressShelf/releases/latest/download/ProgressShelf.apk";
     link.download = "ProgressShelf.apk";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-    
-    showToast("Downloading ProgressShelf.apk...", "success");
+    showToast("Downloading latest ProgressShelf.apk...", "success");
   } catch (err) {
     showToast("Failed to start download.", "error");
   }
@@ -9001,6 +9000,18 @@ window.triggerPWAInstall = async function() {
 function setupDownloadApk() {
   const btnDownload = document.getElementById("btn-download-apk");
   if (!btnDownload) return;
+
+  const isNative = typeof window !== 'undefined' && (
+    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+    (window.location.hostname === 'localhost' && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) ||
+    window.location.protocol === 'capacitor:' ||
+    document.documentElement.classList.contains('is-native-app')
+  );
+
+  if (isNative) {
+    btnDownload.style.display = "none";
+    return;
+  }
 
   const isPWA = checkIsPWA();
   if (isPWA) {
