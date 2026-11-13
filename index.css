@@ -7218,6 +7218,9 @@ html.light-theme .nav-assistant-btn.active {
   display: none !important;
 }
 
+
+
+
 /* Assistant Drawer / Bottom Sheet */
 .assistant-panel {
   position: fixed;
@@ -7577,7 +7580,7 @@ html.light-theme .nav-assistant-btn.active {
 .assistant-state-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
 }
 
 .assistant-state-icon-box {
@@ -7885,7 +7888,7 @@ html.light-theme .nav-assistant-btn.active {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 10px 16px 6px;
+  padding: 14px 16px 8px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -8189,6 +8192,7 @@ html.light-theme .nav-assistant-btn.active {
   flex-direction: column;
   gap: 14px;
   width: 100%;
+  padding-bottom: 24px;
 }
 
 .assistant-msg {
@@ -8378,6 +8382,24 @@ html.light-theme .nav-assistant-btn.active {
   transition: border-color var(--transition-speed) ease;
 }
 
+select.confirm-input {
+  cursor: pointer;
+}
+
+select.confirm-input option {
+  background: var(--card-bg);
+  color: var(--text-primary);
+}
+
+input[type="datetime-local"].confirm-input,
+input[type="time"].confirm-input {
+  cursor: pointer;
+}
+
+.btn-confirm-clear-deadline:hover {
+  color: var(--danger) !important;
+}
+
 .confirm-input:focus {
   border-color: var(--ui-accent);
 }
@@ -8492,3 +8514,21 @@ html.light-theme .nav-assistant-btn.active {
 }
 
 
+
+.assistant-loading-skeleton-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+}
+
+.assistant-loading-skeleton-placeholder .assistant-skeleton {
+  background: var(--card-border);
+}
+
+.assistant-skeleton-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}

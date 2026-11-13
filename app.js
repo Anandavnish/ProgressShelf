@@ -3842,7 +3842,7 @@ function parseCustomCreatedAt(dateVal, timeVal) {
     datePart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   if (datePart && !timePart) {
-    timePart = "12:00";
+    timePart = "00:00";
   }
   const parsed = new Date(`${datePart}T${timePart}:00`);
   const ms = parsed.getTime();
@@ -3862,7 +3862,11 @@ function parseDeadlineDateTime(dateVal, timeVal) {
   if (datePart && !timePart) {
     timePart = "23:59:59";
   } else if (timePart && timePart.split(':').length === 2) {
-    timePart += ":00";
+    if (timePart === "23:59") {
+      timePart = "23:59:59";
+    } else {
+      timePart += ":00";
+    }
   }
   const parsed = new Date(`${datePart}T${timePart}`);
   const ms = parsed.getTime();
@@ -6401,28 +6405,44 @@ function setupDeadlineMutualExclusion(prefix = "") {
     }
   };
 
-  dateInput.addEventListener('change', () => {
+  const handleDateChange = () => {
     updateMinDate();
     if (dateInput.value) {
       hrsInput.value = '';
       minsInput.value = '';
+      if (!timeInput.value) {
+        timeInput.value = '23:59';
+      }
+    } else {
+      if (timeInput && timeInput.value === '23:59') {
+        timeInput.value = '';
+      }
     }
     validateTime();
-  });
+  };
 
+  dateInput.addEventListener('change', handleDateChange);
+  dateInput.addEventListener('input', handleDateChange);
+
+  const handleTimeInput = () => {
+    if (timeInput.value) {
+      hrsInput.value = '';
+      minsInput.value = '';
+      if (!dateInput.value) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${yyyy}-${mm}-${dd}`;
+        updateMinDate();
+      }
+    }
+  };
+
+  timeInput?.addEventListener('input', handleTimeInput);
   timeInput?.addEventListener('change', () => {
-    if (timeInput.value) {
-      hrsInput.value = '';
-      minsInput.value = '';
-    }
+    handleTimeInput();
     validateTime();
-  });
-
-  timeInput?.addEventListener('input', () => {
-    if (timeInput.value) {
-      hrsInput.value = '';
-      minsInput.value = '';
-    }
   });
 
   const clearAbsoluteInputs = () => {
@@ -6436,8 +6456,43 @@ function setupDeadlineMutualExclusion(prefix = "") {
   minsInput.addEventListener('input', clearAbsoluteInputs);
 }
 
+function setupCreatedDateAutoPickup(prefix = "") {
+  const dateInput = document.getElementById(prefix ? 'edit-created-date' : 'create-created-date');
+  const timeInput = document.getElementById(prefix ? 'edit-created-time' : 'create-created-time');
+  if (!dateInput || !timeInput) return;
+
+  const onDateChange = () => {
+    if (dateInput.value) {
+      if (!timeInput.value) {
+        timeInput.value = '00:00';
+      }
+    } else {
+      if (timeInput.value === '00:00') {
+        timeInput.value = '';
+      }
+    }
+  };
+
+  const onTimeChange = () => {
+    if (timeInput.value && !dateInput.value) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      dateInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+  };
+
+  dateInput.addEventListener('change', onDateChange);
+  dateInput.addEventListener('input', onDateChange);
+  timeInput.addEventListener('change', onTimeChange);
+  timeInput.addEventListener('input', onTimeChange);
+}
+
 setupDeadlineMutualExclusion(""); // For Create modal
 setupDeadlineMutualExclusion("edit-"); // For Edit modal
+setupCreatedDateAutoPickup(""); // For Create modal created date
+setupCreatedDateAutoPickup("edit-"); // For Edit modal created date
 
 // ==========================================
 // Reset System Modal UI Handler

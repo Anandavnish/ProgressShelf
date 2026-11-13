@@ -773,7 +773,7 @@
                   <input type="time" class="form-input form-input-time" id="create-created-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
                 <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
-                  Leave empty for current time. If time is omitted, defaults to 12:00 PM.
+                  Leave empty for current time. If time is omitted, defaults to 12:00 AM. If date is omitted, defaults to today.
                 </span>
               </div>
             </details>
@@ -1061,7 +1061,7 @@
                   <input type="time" class="form-input form-input-time" id="edit-created-time" placeholder="Select time" autocomplete="one-time-code">
                 </div>
                 <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
-                  Defaults to initial creation time. If time is omitted, defaults to 12:00 PM.
+                  Defaults to initial creation time. If time is omitted, defaults to 12:00 AM. If date is omitted, defaults to today.
                 </span>
               </div>
             </details>
@@ -1589,7 +1589,20 @@
       <div id="assistant-history-list" class="assistant-history-list"></div>
     </div>
 
-    <div id="assistant-content" class="assistant-content"></div>
+    <div id="assistant-content" class="assistant-content">
+      <div class="assistant-state-panel assistant-connected-view">
+        <div class="assistant-connected-header">
+          <div class="assistant-connected-badge assistant-skeleton" style="width: 90px; height: 24px; border-radius: 12px;"></div>
+          <div class="assistant-skeleton" style="width: 70px; height: 24px; border-radius: 6px;"></div>
+        </div>
+        <div id="assistant-today-placeholder" class="assistant-today-placeholder assistant-loading-skeleton-placeholder">
+          <div class="assistant-skeleton assistant-skeleton-icon"></div>
+          <div class="assistant-skeleton assistant-skeleton-header" style="width: 60%; height: 20px;"></div>
+          <div class="assistant-skeleton assistant-skeleton-line" style="width: 80%; height: 14px;"></div>
+          <div class="assistant-skeleton assistant-skeleton-line-sm" style="width: 50%; height: 14px;"></div>
+        </div>
+      </div>
+    </div>
 
     <div class="assistant-footer">
       <div class="assistant-chips-scroll">

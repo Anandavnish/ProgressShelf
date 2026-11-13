@@ -67,6 +67,47 @@ function formatRelativeTime(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+export function normalizeAiDeadline(deadlineStr) {
+  if (!deadlineStr || typeof deadlineStr !== 'string') return null;
+  const trimmed = deadlineStr.trim();
+  if (!trimmed) return null;
+
+  // Case A: Pure date string "YYYY-MM-DD" -> defaults to 11:59:59 PM (end of that date)
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, yyyy, mm, dd] = dateOnlyMatch;
+    const localD = new Date(Number(yyyy), Number(mm) - 1, Number(dd), 23, 59, 59, 999);
+    return localD.getTime();
+  }
+
+  // Case B: Time only "HH:MM" or "HH:MM:SS" -> defaults to today at that time
+  const timeOnlyMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeOnlyMatch) {
+    const [, hh, min, ss] = timeOnlyMatch;
+    const today = new Date();
+    today.setHours(Number(hh), Number(min), ss ? Number(ss) : 0, 0);
+    return today.getTime();
+  }
+
+  // Case C: DateTime string with 00:00:00 (midnight at start of day)
+  // Per requirement: day starts at 12:00 AM and ends at 11:59 PM.
+  // When AI specifies a date deadline that starts at 00:00, convert it to the last moment of that date (23:59:59).
+  const startOfDayMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+  if (startOfDayMatch) {
+    const [, yyyy, mm, dd] = startOfDayMatch;
+    const localD = new Date(Number(yyyy), Number(mm) - 1, Number(dd), 23, 59, 59, 999);
+    return localD.getTime();
+  }
+
+  // Case D: Standard ISO string or timestamp with specific time
+  const parsed = new Date(trimmed).getTime();
+  if (!isNaN(parsed)) {
+    return parsed;
+  }
+
+  return null;
+}
+
 let deps = {
   closeAllMenus: () => {},
   openModal: () => {},
@@ -174,8 +215,11 @@ export function formatAiErrorMessage(err) {
   }
   const rawMsg = (err && err.message) ? String(err.message).trim() : 'AI service request failed';
   const lower = rawMsg.toLowerCase();
-  if (lower.includes('rate limit') || lower.includes('rate_limit') || lower.includes('too many requests') || lower.includes('429')) {
-    return 'Rate limit exceeded. Please try again later.';
+  if (lower.includes('free-tier') || lower.includes('free_tier') || (lower.includes('quota') && lower.includes('used up')) || (lower.includes('quota') && lower.includes('exceeded'))) {
+    return 'Your Gemini free-tier quota is used up for now. It usually resets daily. Try again later or use another key.';
+  }
+  if (lower.includes('rate limit') || lower.includes('rate_limit') || lower.includes('too many requests') || lower.includes('429') || lower.includes('hourly')) {
+    return 'Rate limit exceeded: maximum 30 AI calls per hour. Please try again later.';
   }
   if (lower.includes('invalid key') || lower.includes('invalid api key') || lower.includes('api_key_invalid') || lower.includes('api key not valid')) {
     return 'Invalid Gemini API key. Check your key in Google AI Studio.';
@@ -190,11 +234,17 @@ export function renderSkeletonAssistant() {
   const container = document.getElementById('assistant-content');
   if (!container) return;
   container.innerHTML = `
-    <div class="assistant-state-panel assistant-loading-state">
-      <div class="assistant-skeleton assistant-skeleton-header"></div>
-      <div class="assistant-skeleton assistant-skeleton-card"></div>
-      <div class="assistant-skeleton assistant-skeleton-line"></div>
-      <div class="assistant-skeleton assistant-skeleton-line-sm"></div>
+    <div class="assistant-state-panel assistant-connected-view">
+      <div class="assistant-connected-header">
+        <div class="assistant-connected-badge assistant-skeleton" style="width: 90px; height: 24px; border-radius: 12px;"></div>
+        <div class="assistant-skeleton" style="width: 70px; height: 24px; border-radius: 6px;"></div>
+      </div>
+      <div id="assistant-today-placeholder" class="assistant-today-placeholder assistant-loading-skeleton-placeholder">
+        <div class="assistant-skeleton assistant-skeleton-icon"></div>
+        <div class="assistant-skeleton assistant-skeleton-header" style="width: 60%; height: 20px;"></div>
+        <div class="assistant-skeleton assistant-skeleton-line" style="width: 80%; height: 14px;"></div>
+        <div class="assistant-skeleton assistant-skeleton-line-sm" style="width: 50%; height: 14px;"></div>
+      </div>
     </div>
   `;
 }
@@ -670,6 +720,9 @@ function scrollThreadToBottom() {
   const content = document.getElementById('assistant-content');
   if (content) {
     content.scrollTop = content.scrollHeight;
+    requestAnimationFrame(() => {
+      content.scrollTop = content.scrollHeight;
+    });
   }
 }
 
@@ -792,10 +845,11 @@ async function handleAssistantPrompt(userText, options = {}) {
 
   // 2. Append Thinking Indicator
   const thinkingId = 'thinking-' + Date.now();
+  const timerSpanId = 'thinking-timer-' + Date.now();
   const thinkingHtml = `
     <div id="${thinkingId}" class="assistant-msg assistant-msg-bot">
       <div class="assistant-thinking-indicator">
-        <span>Thinking with Gemini</span>
+        <span id="${timerSpanId}">Thinking with Gemini (0s)</span>
         <div class="assistant-thinking-dots">
           <span class="assistant-thinking-dot"></span>
           <span class="assistant-thinking-dot"></span>
@@ -806,6 +860,15 @@ async function handleAssistantPrompt(userText, options = {}) {
   `;
   thread.insertAdjacentHTML('beforeend', thinkingHtml);
   scrollThreadToBottom();
+
+  const thinkingStartTime = Date.now();
+  const thinkingInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - thinkingStartTime) / 1000);
+    const span = document.getElementById(timerSpanId);
+    if (span) {
+      span.textContent = `Thinking with Gemini (${elapsed}s)`;
+    }
+  }, 1000);
 
   // 3. Prepare Cards Context for Gemini (Optimized: trimmed input & capped history)
   const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
@@ -852,11 +915,34 @@ async function handleAssistantPrompt(userText, options = {}) {
       text: typeof h.text === 'string' ? h.text : ''
     }));
 
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const localDateStr = `${yyyy}-${mm}-${dd}`;
+  const localTimeStr = `${hh}:${min}:${ss}`;
+
+  const tzOffsetMin = -now.getTimezoneOffset();
+  const tzSign = tzOffsetMin >= 0 ? '+' : '-';
+  const tzHours = String(Math.floor(Math.abs(tzOffsetMin) / 60)).padStart(2, '0');
+  const tzMins = String(Math.abs(tzOffsetMin) % 60).padStart(2, '0');
+  const tzOffsetStr = `${tzSign}${tzHours}:${tzMins}`;
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+  const weekdayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+
   const payload = {
     message: text,
     history: sanitizedHistory,
     cards: cardsSummary,
-    currentDate: new Date().toISOString(),
+    currentDate: `${localDateStr}T${localTimeStr}${tzOffsetStr}`,
+    localDate: localDateStr,
+    localTime: localTimeStr,
+    timezone: userTimezone,
+    tzOffset: tzOffsetStr,
+    weekday: weekdayName,
   };
 
   if (img && img.data && img.mimeType) {
@@ -910,6 +996,7 @@ async function handleAssistantPrompt(userText, options = {}) {
     threadHtml = thread.innerHTML;
     syncActiveSessionThread();
   } finally {
+    clearInterval(thinkingInterval);
     isGenerating = false;
     clearAttachment();
     updateAssistantControlsState();
@@ -928,6 +1015,64 @@ function syncActiveSessionThread() {
       saveChatSessions(sessions);
     }
   }
+}
+
+const CONFIRM_PRESETS = [
+  'Time',
+  'Pages',
+  'Chapters',
+  'Lectures',
+  'Videos',
+  'Problems',
+  'Tasks',
+  'Books',
+  'Custom'
+];
+
+function sanitizeUnit(rawUnit) {
+  if (!rawUnit || typeof rawUnit !== 'string') return '%';
+  let clean = rawUnit.trim();
+  // Strip any HTML or multiline text or long monologue
+  if (clean.includes('<') || clean.includes('\n') || clean.length > 20) {
+    const match = clean.match(/\b(mins?|minutes?|hours?|hrs?|pages?|chapters?|tasks?|problems?|books?|lectures?|videos?|%|km|miles?|steps?)\b/i);
+    clean = match ? match[1].toLowerCase() : '%';
+  }
+  return clean || '%';
+}
+
+function detectPreset(suggestedPreset, unit) {
+  if (suggestedPreset && CONFIRM_PRESETS.includes(suggestedPreset)) {
+    return suggestedPreset;
+  }
+  const u = (unit || '').toLowerCase();
+  if (u.includes('min') || u.includes('hour') || u.includes('hr') || u.includes('sec')) return 'Time';
+  if (u.includes('page')) return 'Pages';
+  if (u.includes('chapter')) return 'Chapters';
+  if (u.includes('lecture')) return 'Lectures';
+  if (u.includes('video')) return 'Videos';
+  if (u.includes('prob') || u.includes('quest')) return 'Problems';
+  if (u.includes('task')) return 'Tasks';
+  if (u.includes('book')) return 'Books';
+  return 'Custom';
+}
+
+function formatDatetimeLocal(val) {
+  if (!val) return '';
+  let ms = null;
+  if (typeof val === 'number') {
+    ms = val;
+  } else if (typeof val === 'string') {
+    ms = normalizeAiDeadline(val);
+  }
+  if (!ms || isNaN(ms)) return '';
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
 }
 
 /**
@@ -974,17 +1119,38 @@ function renderActionConfirmSheet(action, parentMsgId) {
   if (!isDelete) {
     if (cardType === 'goal') {
       const targetVal = typeof action.target === 'number' ? action.target : 100;
-      const unitVal = action.unit || '%';
+      const currentVal = typeof action.currentProgress === 'number' ? action.currentProgress : 0;
+      const unitVal = sanitizeUnit(action.unit);
+      const detectedPreset = detectPreset(action.preset, unitVal);
+
       typeFieldsHtml = `
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Preset Unit Type</label>
+          <select class="confirm-input confirm-preset-select">
+            <option value="Time" ${detectedPreset === 'Time' ? 'selected' : ''}>Time (hrs / min)</option>
+            <option value="Pages" ${detectedPreset === 'Pages' ? 'selected' : ''}>Pages</option>
+            <option value="Chapters" ${detectedPreset === 'Chapters' ? 'selected' : ''}>Chapters</option>
+            <option value="Lectures" ${detectedPreset === 'Lectures' ? 'selected' : ''}>Lectures</option>
+            <option value="Videos" ${detectedPreset === 'Videos' ? 'selected' : ''}>Videos</option>
+            <option value="Problems" ${detectedPreset === 'Problems' ? 'selected' : ''}>Problems</option>
+            <option value="Tasks" ${detectedPreset === 'Tasks' ? 'selected' : ''}>Tasks</option>
+            <option value="Books" ${detectedPreset === 'Books' ? 'selected' : ''}>Books</option>
+            <option value="Custom" ${detectedPreset === 'Custom' ? 'selected' : ''}>Custom</option>
+          </select>
+        </div>
         <div class="confirm-row-2col">
           <div class="confirm-field-group">
-            <label class="confirm-field-label">Target</label>
-            <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="1" step="any">
+            <label class="confirm-field-label">Target Goal</label>
+            <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="0" step="any">
           </div>
           <div class="confirm-field-group">
-            <label class="confirm-field-label">Unit</label>
-            <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}">
+            <label class="confirm-field-label">Current Progress</label>
+            <input type="number" class="confirm-input confirm-current-input" value="${currentVal}" min="0" step="any">
           </div>
+        </div>
+        <div class="confirm-field-group">
+          <label class="confirm-field-label">Unit</label>
+          <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}" placeholder="e.g. mins, pages, %">
         </div>
       `;
     } else if (cardType === 'checklist') {
@@ -1013,35 +1179,38 @@ function renderActionConfirmSheet(action, parentMsgId) {
         </div>
       `;
     }
-  }
 
-  // Meta Badges
-  let metaBadgesHtml = '';
-  if (action.deadline) {
-    let displayDeadline = action.deadline;
-    try {
-      displayDeadline = new Date(action.deadline).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (_) {}
-    metaBadgesHtml += `
-      <div class="confirm-meta-chip">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>Deadline: ${escapeHtml(displayDeadline)}</span>
+    // Editable Deadline Field with calendar picker (optional for all non-delete cards)
+    const deadlineVal = formatDatetimeLocal(action.deadline);
+    typeFieldsHtml += `
+      <div class="confirm-field-group">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+          <label class="confirm-field-label">Deadline (optional)</label>
+          <button type="button" class="btn-confirm-clear-deadline" style="background: none; border: none; font-size: 0.72rem; color: var(--text-muted); cursor: pointer; padding: 0;" title="Remove deadline">Clear</button>
+        </div>
+        <input type="datetime-local" class="confirm-input confirm-deadline-input" value="${deadlineVal}">
       </div>
     `;
-  }
 
-  if (action.isRecurring) {
-    metaBadgesHtml += `
-      <div class="confirm-meta-chip">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        <span>Repeats daily at ${escapeHtml(action.resetTime || '08:00')}</span>
-      </div>
-    `;
+    // Habit / Daily Reset Option for Goal and Checklist
+    if (cardType === 'goal' || cardType === 'checklist') {
+      const isRec = Boolean(action.isRecurring);
+      const resetTimeVal = action.resetTime || '07:00';
+      typeFieldsHtml += `
+        <div class="confirm-field-group">
+          <div class="confirm-row-2col" style="align-items: center;">
+            <label class="confirm-field-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+              <input type="checkbox" class="confirm-recurring-checkbox" ${isRec ? 'checked' : ''} style="accent-color: var(--ui-accent); cursor: pointer;">
+              <span>Daily Habit</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;">Reset at:</span>
+              <input type="time" class="confirm-input confirm-reset-time-input" value="${escapeHtml(resetTimeVal)}" style="padding: 4px 6px;">
+            </div>
+          </div>
+        </div>
+      `;
+    }
   }
 
   const primaryBtnClass = isDelete ? 'btn-danger' : 'btn-primary';
@@ -1062,8 +1231,6 @@ function renderActionConfirmSheet(action, parentMsgId) {
       </div>
 
       ${typeFieldsHtml}
-
-      ${metaBadgesHtml ? `<div class="confirm-meta-row">${metaBadgesHtml}</div>` : ''}
 
       ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
 
@@ -1099,6 +1266,32 @@ function attachActionCardListeners(card, rawAction) {
   const actionsWrap = card.querySelector('.confirm-actions');
   const actType = card.dataset.actionType || 'create';
   const cardId = card.dataset.cardId || rawAction.cardId;
+
+  // Preset change handler for goal tracker
+  const presetSelect = card.querySelector('.confirm-preset-select');
+  const unitInput = card.querySelector('.confirm-unit-input');
+  if (presetSelect && unitInput) {
+    presetSelect.addEventListener('change', () => {
+      const p = presetSelect.value;
+      if (p === 'Time') unitInput.value = 'mins';
+      else if (p === 'Pages') unitInput.value = 'pages';
+      else if (p === 'Chapters') unitInput.value = 'chapters';
+      else if (p === 'Lectures') unitInput.value = 'lectures';
+      else if (p === 'Videos') unitInput.value = 'videos';
+      else if (p === 'Problems') unitInput.value = 'problems';
+      else if (p === 'Tasks') unitInput.value = 'tasks';
+      else if (p === 'Books') unitInput.value = 'books';
+    });
+  }
+
+  // Clear deadline button handler
+  const clearDeadlineBtn = card.querySelector('.btn-confirm-clear-deadline');
+  const deadlineInput = card.querySelector('.confirm-deadline-input');
+  if (clearDeadlineBtn && deadlineInput) {
+    clearDeadlineBtn.addEventListener('click', () => {
+      deadlineInput.value = '';
+    });
+  }
 
   if (btnCancel && actionsWrap) {
     btnCancel.addEventListener('click', () => {
@@ -1143,18 +1336,39 @@ function attachActionCardListeners(card, rawAction) {
       const finalTitle = titleInput ? titleInput.value.trim() : 'New Tracker';
 
       let targetSmallest = 100;
+      let currentSmallest = 0;
       let levels = [{ name: '%', multiplier: 1, target: 100 }];
       let items = null;
       let text = null;
+      let finalPreset = 'Custom';
 
       if (type === 'goal') {
         const targetInput = card.querySelector('.confirm-target-input');
+        const currentInput = card.querySelector('.confirm-current-input');
         const unitInput = card.querySelector('.confirm-unit-input');
+        const presetSelect = card.querySelector('.confirm-preset-select');
+
         const tVal = targetInput ? parseFloat(targetInput.value) || 100 : 100;
-        const uVal = unitInput ? unitInput.value.trim() || '%' : '%';
+        const cVal = currentInput ? parseFloat(currentInput.value) || 0 : 0;
+        const uVal = unitInput ? sanitizeUnit(unitInput.value) : '%';
+        const chosenPreset = presetSelect ? presetSelect.value : detectPreset(rawAction.preset, uVal);
+
         targetSmallest = tVal;
-        levels = [{ name: uVal, multiplier: 1, target: tVal }];
+        currentSmallest = cVal;
+        finalPreset = chosenPreset;
+
+        if (chosenPreset === 'Time') {
+          levels = [
+            { name: 'Minutes', conversionToNext: 60 },
+            { name: 'Hours', conversionToNext: null }
+          ];
+        } else if (chosenPreset !== 'Custom') {
+          levels = [{ name: chosenPreset, conversionToNext: null }];
+        } else {
+          levels = [{ name: uVal, conversionToNext: null }];
+        }
       } else if (type === 'checklist') {
+        finalPreset = 'Custom';
         const itemRows = Array.from(card.querySelectorAll('.confirm-item-row'));
         const checkedItems = itemRows
           .filter(row => row.querySelector('.confirm-item-checkbox')?.checked)
@@ -1166,30 +1380,43 @@ function attachActionCardListeners(card, rawAction) {
 
         items = checkedItems.length ? checkedItems : [{ id: '1', text: 'Step 1', done: false }];
         targetSmallest = items.length;
+        currentSmallest = 0;
         levels = [{ name: 'items', multiplier: 1, target: items.length }];
       } else if (type === 'note') {
+        finalPreset = 'Custom';
         const noteArea = card.querySelector('.confirm-note-textarea');
         text = noteArea ? noteArea.value : '';
         targetSmallest = 1;
+        currentSmallest = 0;
         levels = [{ name: 'notes', multiplier: 1, target: 1 }];
       }
 
-      // Deadline
+      // Deadline (picked from calendar or pre-set)
       let deadlineAt = null;
-      if (rawAction.deadline) {
+      const dlInput = card.querySelector('.confirm-deadline-input');
+      if (dlInput && dlInput.value) {
+        const parsed = new Date(dlInput.value).getTime();
+        if (!isNaN(parsed) && parsed > 0) {
+          deadlineAt = parsed;
+        }
+      } else if (rawAction.deadline) {
         try {
-          const parsed = new Date(rawAction.deadline).getTime();
-          if (!isNaN(parsed) && parsed > Date.now()) {
+          const parsed = normalizeAiDeadline(rawAction.deadline);
+          if (parsed && !isNaN(parsed)) {
             deadlineAt = parsed;
           }
         } catch (_) {}
       }
 
-      // Repeat
+      // Repeat / Daily habit from input
+      const recurringCheckbox = card.querySelector('.confirm-recurring-checkbox');
+      const resetTimeInput = card.querySelector('.confirm-reset-time-input');
+      const isRecurring = recurringCheckbox ? recurringCheckbox.checked : Boolean(rawAction.isRecurring);
+
       let repeat = null;
-      if (rawAction.isRecurring) {
+      if (isRecurring) {
         repeat = {
-          resetTime: rawAction.resetTime || '08:00',
+          resetTime: (resetTimeInput && resetTimeInput.value) ? resetTimeInput.value : (rawAction.resetTime || '07:00'),
           resetCount: null,
           checklistResetEnabled: type === 'checklist',
           deadlineResetEnabled: false,
@@ -1204,9 +1431,9 @@ function attachActionCardListeners(card, rawAction) {
             title: finalTitle,
             ...(items ? { items, targetSmallest } : {}),
             ...(text !== null ? { text } : {}),
-            ...(type === 'goal' ? { targetSmallest, levels } : {}),
-            ...(deadlineAt ? { deadlineAt, alertAtDeadline: true } : {}),
-            ...(repeat ? { repeat } : {})
+            ...(type === 'goal' ? { targetSmallest, currentSmallest, levels, preset: finalPreset } : {}),
+            ...(deadlineAt ? { deadlineAt, alertAtDeadline: true } : { deadlineAt: null, alertAtDeadline: false }),
+            ...(repeat ? { repeat } : { repeat: null })
           };
           if (typeof deps.handleEditBarFromAi === 'function') {
             await deps.handleEditBarFromAi(cardId, updates);
@@ -1236,10 +1463,10 @@ function attachActionCardListeners(card, rawAction) {
       const cardPayload = {
         title: finalTitle,
         type: type,
-        preset: 'custom',
+        preset: finalPreset,
         levels: levels,
         targetSmallest: targetSmallest,
-        currentSmallest: 0,
+        currentSmallest: currentSmallest,
         items: items,
         text: text,
         completed: false,
@@ -1780,6 +2007,7 @@ export function setupAssistantModule(injectedDeps = {}) {
   window.fetchAndRenderAssistant = fetchAndRenderAssistant;
   window.renderAssistantState = renderAssistantState;
   window.renderAssistantErrorState = renderAssistantErrorState;
+  window.renderSkeletonAssistant = renderSkeletonAssistant;
   window.openAiSettingsModal = openAiSettingsModal;
   window.renderAiSettingsModalBody = renderAiSettingsModalBody;
   window.renderAiSettingsError = renderAiSettingsError;

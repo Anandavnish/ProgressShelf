@@ -5,7 +5,89 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ---------------------------------------------------------------------------
 const RATE_LIMIT_GENERATE_PER_HOUR = 30;
 const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB max request payload
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash';
+const TOTAL_REQUEST_DEADLINE_MS = 45000; // ~45s total request deadline
+
+// Module-level model cache (reused across requests in the same isolate)
+let cachedModel: string | null = null;
+let cachedModelResolvedAt = 0;
+const MODEL_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // ~6 hours
+
+// Preferred Gemini models in priority order (retired 1.5 entries removed)
+// Lite models prioritized to prevent 503 high demand errors on free-tier default projects
+const PREFERRED_MODELS: string[] = [
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+];
+
+const envModel = Deno.env.get('GEMINI_MODEL');
+if (envModel && !PREFERRED_MODELS.includes(envModel)) {
+  PREFERRED_MODELS.unshift(envModel);
+}
+
+function isModelNotFoundError(status: number, message: string): boolean {
+  if (status === 404) return true;
+  const lower = (message || '').toLowerCase();
+  return (
+    lower.includes('not found') ||
+    lower.includes('is no longer available') ||
+    lower.includes('not supported for generatecontent') ||
+    lower.includes('does not exist')
+  );
+}
+
+async function resolveGeminiModel(apiKey: string, remainingDeadlineMs: number): Promise<string> {
+  const now = Date.now();
+  if (cachedModel && now - cachedModelResolvedAt < MODEL_CACHE_TTL_MS) {
+    return cachedModel;
+  }
+
+  const timeoutMs = Math.max(1000, Math.min(20000, remainingDeadlineMs));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const modelsRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      headers: { 'x-goog-api-key': apiKey },
+      signal: controller.signal,
+    });
+
+    if (modelsRes.ok) {
+      const mJson = await modelsRes.json();
+      const available: string[] = (mJson.models || [])
+        .filter((m: { supportedGenerationMethods?: string[] }) =>
+          m.supportedGenerationMethods?.includes('generateContent')
+        )
+        .map((m: { name: string }) => m.name.replace(/^models\//, ''));
+
+      const match =
+        PREFERRED_MODELS.find((p) => available.includes(p)) ||
+        available.find((a) => a.includes('flash-lite')) ||
+        available.find((a) => a.includes('lite')) ||
+        available.find((a) => a.includes('flash')) ||
+        available[0];
+
+      if (match) {
+        cachedModel = match;
+        cachedModelResolvedAt = Date.now();
+        console.log(`[ai-proxy] Resolved and cached Gemini model: ${cachedModel}`);
+        return cachedModel;
+      }
+    }
+  } catch (err) {
+    console.warn('[ai-proxy] Failed to resolve models list:', err);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // Do NOT cache if call failed or no match found. Use preferred default for this request only.
+  return PREFERRED_MODELS[0] || 'gemini-flash-lite-latest';
+}
 
 // Allowed CORS origins: strictly localhost:8000 and the production URL
 const ALLOWED_ORIGINS = new Set([
@@ -262,29 +344,33 @@ Deno.serve(async (req: Request) => {
     // Validate key with Google Gemini API models endpoint (0 token cost, canonical key validation)
     // Note: API key is sent strictly via x-goog-api-key header, never in the URL.
     const validationUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
-    let validationRes: Response;
+    const validationCtrl = new AbortController();
+    const validationTimer = setTimeout(() => validationCtrl.abort(), 20000);
     try {
-      validationRes = await fetch(validationUrl, {
+      const validationRes = await fetch(validationUrl, {
         method: 'GET',
         headers: {
           'x-goog-api-key': trimmedKey,
         },
+        signal: validationCtrl.signal,
       });
+
+      if (!validationRes.ok) {
+        console.warn(`[ai-proxy] Key validation failed with status ${validationRes.status}`);
+        let errMsg = 'Invalid Gemini API key. Please check your key in Google AI Studio.';
+        try {
+          const errJson = await validationRes.json();
+          if (errJson?.error?.message) {
+            errMsg = errJson.error.message;
+          }
+        } catch (_) {}
+        return jsonResponse({ error: errMsg }, 400);
+      }
     } catch {
       console.error('[ai-proxy] Network failure connecting to Gemini validation endpoint');
       return jsonResponse({ error: 'Failed to reach Gemini API. Please check network connectivity.' }, 502);
-    }
-
-    if (!validationRes.ok) {
-      console.warn(`[ai-proxy] Key validation failed with status ${validationRes.status}`);
-      let errMsg = 'Invalid Gemini API key. Please check your key in Google AI Studio.';
-      try {
-        const errJson = await validationRes.json();
-        if (errJson?.error?.message) {
-          errMsg = errJson.error.message;
-        }
-      } catch (_) {}
-      return jsonResponse({ error: errMsg }, 400);
+    } finally {
+      clearTimeout(validationTimer);
     }
 
     // Encrypt with AES-256-GCM (random 12-byte IV generated per save)
@@ -353,7 +439,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const requestStartTime = Date.now();
+    let tDecrypt = 0;
+    let tLimitCheck = 0;
+    let tModelResolve = 0;
+    let tGeminiCall = 0;
+
     // Per-user rate limiting (30 generate calls/hour)
+    const tLimitStart = Date.now();
     const windowStart = getHourlyWindowStart();
     const { data: usageData, error: usageSelectError } = await supabaseAdmin
       .from('ai_usage')
@@ -367,9 +460,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const currentCount = usageData?.count ?? 0;
+    tLimitCheck = Date.now() - tLimitStart;
+
     if (currentCount >= RATE_LIMIT_GENERATE_PER_HOUR) {
       return jsonResponse(
-        { error: `Rate limit exceeded: maximum ${RATE_LIMIT_GENERATE_PER_HOUR} generate calls per hour.` },
+        {
+          error: `Rate limit exceeded: maximum ${RATE_LIMIT_GENERATE_PER_HOUR} generate calls per hour. Please try again later.`,
+          code: 'RATE_LIMIT_HOURLY',
+        },
         429
       );
     }
@@ -387,21 +485,29 @@ Deno.serve(async (req: Request) => {
 
     // Decrypt key server-side
     let apiKey: string;
+    const tDecryptStart = Date.now();
     try {
       apiKey = await decryptApiKey(keyRecord.key_encrypted, AI_KEY_SECRET);
     } catch {
       console.error('[ai-proxy] Decryption error for user:', user.id);
       return jsonResponse({ error: 'Failed to decrypt API key. Please re-save your key.' }, 500);
     }
+    tDecrypt = Date.now() - tDecryptStart;
 
     // Build task-specific prompts and structured JSON schema
     let parts: Array<Record<string, unknown>> = [];
     let responseSchema: Record<string, unknown> = {};
 
+    const userLocalDate = typeof (payload as any)?.localDate === 'string' ? (payload as any).localDate : '';
+    const userLocalTime = typeof (payload as any)?.localTime === 'string' ? (payload as any).localTime : '';
+    const userTimezone = typeof (payload as any)?.timezone === 'string' ? (payload as any).timezone : '';
+    const userTzOffset = typeof (payload as any)?.tzOffset === 'string' ? (payload as any).tzOffset : '';
+    const userWeekday = typeof (payload as any)?.weekday === 'string' ? (payload as any).weekday : '';
     const currentDateStr =
       typeof payload?.currentDate === 'string' && payload.currentDate
         ? payload.currentDate
         : new Date().toISOString();
+    const timeRefContext = `Current user local time: ${userLocalDate || currentDateStr} ${userLocalTime || ''} (${userWeekday || 'today'}, Timezone: ${userTimezone || 'local'}, UTC Offset: ${userTzOffset || '+00:00'}). Reference ISO: ${currentDateStr}.`;
 
     if (task === 'ping') {
       parts = [{ text: 'Respond with a valid JSON object matching the requested schema for task ping.' }];
@@ -425,7 +531,7 @@ Deno.serve(async (req: Request) => {
 
       const promptText = `You are an intelligent task planner for ProgressShelf, a personal productivity and progress tracking app.
 The user wants to create a new tracker card from text, pasted content, or an attached image.
-Current reference date and time: ${currentDateStr}.
+${timeRefContext}
 
 User Input:
 """
@@ -441,8 +547,14 @@ Analyze the user's input and determine the best tracker format:
 3. "note": For informational memos, references, or reflections without discrete checkboxes.
    - "noteText": Formatted note text.
 
-Deadline handling:
-- If the user mentions a target completion date or relative time (e.g. "by Friday", "by tomorrow at 5pm", "in 2 weeks", "by end of next month"), calculate and output the exact deadline as an ISO 8601 string (e.g. "2026-11-15T17:00:00.000Z") in "deadline".
+Deadline and Time handling:
+- A day starts at midnight 12:00:00 AM (00:00:00) and ends at midnight 11:59:59 PM (23:59:59).
+- If the user mentions a target completion date or day without an explicit hour/minute (e.g. "by Friday", "by tomorrow", "this saturday", "in 2 weeks", "by end of next month", "by Nov 20"):
+  The deadline MUST be the LAST MOMENT of that date: 11:59:59 PM (23:59:59) in the user's local timezone offset (e.g. "YYYY-MM-DDT23:59:59${userTzOffset || ''}"). NEVER set it to 00:00:00, 09:00:00, 12:00:00, or 17:00:00 unless the user explicitly requested that time.
+- If the user mentions only a time without a date (e.g. "by 5pm", "by 18:00", "at 9pm"):
+  It refers to TODAY (${userLocalDate || 'current date'}) at that time, formatted as "${userLocalDate || 'YYYY-MM-DD'}THH:MM:00${userTzOffset || ''}".
+- If the user specifies both a date and an exact time (e.g. "tomorrow at 5pm", "this saturday by 3:30 PM"):
+  Set "deadline" to that exact date and time with the user's timezone offset, e.g. "YYYY-MM-DDTHH:MM:00${userTzOffset || ''}".
 - If no deadline is specified, set "deadline" to "".
 
 Recurring / Habit handling:
@@ -465,8 +577,10 @@ Provide a concise title, type ("goal", "checklist", or "note"), relevant fields,
         properties: {
           title: { type: 'STRING' },
           type: { type: 'STRING' },
+          preset: { type: 'STRING' },
           unit: { type: 'STRING' },
           target: { type: 'NUMBER' },
+          currentProgress: { type: 'NUMBER' },
           items: {
             type: 'ARRAY',
             items: {
@@ -575,7 +689,7 @@ Provide an appropriate title for the task checklist in "title", the checklist it
 
       const promptText = `You are an intelligent, friendly, and proactive personal AI companion for ProgressShelf, a personal progress and habit tracking app.
 The user is having a conversation with you.
-Current reference date and time: ${currentDateStr}.
+${timeRefContext}
 
 The user's current cards and trackers:
 ${JSON.stringify(cardsContext, null, 2)}
@@ -601,9 +715,23 @@ Guidelines:
    - "delete": Deleting an existing card. Specify cardId and title.
    - "plan_day": When user asks to plan their day, organize today's priorities based on active cards and deadlines, explain in "message", and suggest a checklist plan in action.
    - "clean_overdue": When user asks to clean up overdue tasks, identify overdue trackers, explain what to do in "message", and suggest actions in action.
+   - Deadline rules for action.deadline:
+     * A day starts at midnight 12:00:00 AM (00:00:00) and ends at midnight 11:59:59 PM (23:59:59).
+     * If the user mentions a target date or day without an explicit hour/minute (e.g. "this saturday", "by tomorrow", "by Friday", "by next Monday", "by Nov 20"):
+       Calculate that date and set the deadline to the LAST MOMENT of that date: 11:59:59 PM (23:59:59) in the user's local timezone offset: "YYYY-MM-DDT23:59:59${userTzOffset || ''}". Never set it to 00:00:00, 09:00:00, or 12:00:00.
+     * If the user mentions only a time without a date (e.g. "by 5pm", "by 18:00", "at 9pm"):
+       It refers to TODAY (${userLocalDate || 'current date'}) at that time: "${userLocalDate || 'YYYY-MM-DD'}THH:MM:00${userTzOffset || ''}".
+     * If both date and time are specified (e.g. "tomorrow at 5pm", "this saturday by 3:30 PM"):
+       Set the deadline to that exact date and time with offset: "YYYY-MM-DDTHH:MM:00${userTzOffset || ''}".
+     * If no deadline is specified, set "deadline" to "".
 5. If the user asks to break down or edit a card but did NOT specify which one and it's ambiguous:
    - Ask them politely in "message" which of their cards they want to focus on (mentioning their card titles), and set "hasAction": false, "action": null.
-6. Provide a concise rationale in action.explanation if an action is suggested.`;
+6. For numeric goals/habits ("cardType": "goal"):
+   - "preset": Select the best preset type: 'Time' (for habits/trackers measured in minutes or hours), 'Pages', 'Chapters', 'Lectures', 'Videos', 'Problems', 'Tasks', 'Books', or 'Custom'.
+   - "unit": MUST BE A SHORT CONCISE WORD (e.g. 'mins', 'hours', 'pages', 'chapters', 'tasks', 'problems', '%'). NEVER put internal reasoning, sentences, or thoughts in "unit".
+   - "target": Target goal number (e.g. 30).
+   - "currentProgress": Starting progress amount (default 0).
+7. Provide a concise rationale in action.explanation if an action is suggested.`;
 
       parts = [{ text: promptText }];
       if (payload?.image?.data && payload?.image?.mimeType) {
@@ -628,8 +756,10 @@ Guidelines:
               cardId: { type: 'STRING' },
               title: { type: 'STRING' },
               cardType: { type: 'STRING' },
+              preset: { type: 'STRING' },
               unit: { type: 'STRING' },
               target: { type: 'NUMBER' },
+              currentProgress: { type: 'NUMBER' },
               items: {
                 type: 'ARRAY',
                 items: {
@@ -653,57 +783,68 @@ Guidelines:
       };
     }
 
-    // Dynamic model resolution: query models list to use the exact working model
-    let candidateModels: string[] = [];
-    const preferredOrder = [
-      'gemini-3.8-flash',
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-001',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.5-flash',
-      'gemini-1.5-pro',
-    ];
+    // Resolve Gemini model (cached module-level variable, refreshed ~6h or on model-not-found)
+    const tResolveStart = Date.now();
+    let activeModel = await resolveGeminiModel(
+      apiKey,
+      TOTAL_REQUEST_DEADLINE_MS - (Date.now() - requestStartTime)
+    );
+    tModelResolve = Date.now() - tResolveStart;
 
-    try {
-      const modelsRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
-        headers: { 'x-goog-api-key': apiKey },
-      });
-      if (modelsRes.ok) {
-        const mJson = await modelsRes.json();
-        const available: string[] = (mJson.models || [])
-          .filter((m: { supportedGenerationMethods?: string[] }) =>
-            m.supportedGenerationMethods?.includes('generateContent')
-          )
-          .map((m: { name: string }) => m.name.replace(/^models\//, ''));
+    const hasImage = Boolean(payload?.image?.data && payload?.image?.mimeType);
+    const perCallTimeoutMs = hasImage ? 30000 : 20000;
+    const MAX_GEMINI_ATTEMPTS = 3;
+    let geminiAttempts = 0;
+    let fallbackModelTried = false;
+    let retriedInvalidJson = false;
+    let omitThinking = false;
 
-        console.log('[ai-proxy] Available models for user key:', available);
-        candidateModels = [
-          ...preferredOrder.filter((p) => available.includes(p)),
-          ...available.filter((a) => !preferredOrder.includes(a) && a.includes('flash')),
-          ...available.filter((a) => !preferredOrder.includes(a) && !a.includes('flash')),
-        ];
-      }
-    } catch (e) {
-      console.warn('[ai-proxy] Error querying available models:', e);
-    }
-
-    if (!candidateModels.length) {
-      candidateModels = preferredOrder;
-    }
-
-    // Execute structured JSON Gemini call with automatic model fallback
-    // Note: x-goog-api-key header is used; key is never in URL.
-    // Guard: Never log card text, payload, or decrypted keys.
-    let geminiJson: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } | null = null;
+    let geminiJson: { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }> } | null = null;
+    let candidateText: string | null = null;
+    let parsedResult: unknown = null;
     let lastError = 'Gemini generation request failed';
     let lastStatus = 502;
+    let isTimeout = false;
 
-    for (const modelToTry of candidateModels) {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
+    const tGeminiStart = Date.now();
+
+    while (geminiAttempts < MAX_GEMINI_ATTEMPTS) {
+      const totalElapsed = Date.now() - requestStartTime;
+      const totalRemaining = TOTAL_REQUEST_DEADLINE_MS - totalElapsed;
+      if (totalRemaining <= 0) {
+        isTimeout = true;
+        break;
+      }
+
+      const callTimeout = Math.min(perCallTimeoutMs, totalRemaining);
+      const abortCtrl = new AbortController();
+      const abortTimer = setTimeout(() => abortCtrl.abort(), callTimeout);
+
+      geminiAttempts++;
+
+      const maxOutputTokens = task === 'chat' ? 2048 : 4096;
+      const generationConfig: Record<string, unknown> = {
+        responseMimeType: 'application/json',
+        responseSchema,
+        maxOutputTokens,
+      };
+
+      // Minimize or disable thinking
+      // Gemini 3.x, 4.x, and -latest models use thinkingLevel: "minimal"; 2.5 models use thinkingBudget: 0
+      if (!omitThinking) {
+        if (activeModel.includes('2.5')) {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        } else {
+          generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+        }
+      }
+
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
+      let resOk = false;
+      let rawJson: any = null;
+
       try {
-        const geminiRes = await fetch(geminiUrl, {
+        const res = await fetch(geminiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -711,56 +852,282 @@ Guidelines:
           },
           body: JSON.stringify({
             contents: [{ parts }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema,
-            },
+            generationConfig,
           }),
+          signal: abortCtrl.signal,
         });
 
-        if (geminiRes.ok) {
-          geminiJson = await geminiRes.json();
-          break; // Succeeded!
-        }
+        lastStatus = res.status;
+        resOk = res.ok;
 
-        lastStatus = geminiRes.status;
-        try {
-          const errJson = await geminiRes.json();
-          if (errJson?.error?.message) {
-            lastError = errJson.error.message;
+        if (res.ok) {
+          rawJson = await res.json();
+        } else {
+          try {
+            const errJson = await res.json();
+            if (errJson?.error?.message) {
+              lastError = errJson.error.message;
+            }
+          } catch (_) {
+            try {
+              const errText = await res.text();
+              if (errText) lastError = errText;
+            } catch (_) {}
           }
-        } catch (_) {}
+        }
+      } catch (fetchErr: unknown) {
+        const isAbort =
+          (fetchErr as { name?: string })?.name === 'AbortError' ||
+          abortCtrl.signal.aborted;
 
-        console.warn(`[ai-proxy] Model ${modelToTry} call failed (${lastStatus}): ${lastError}. Trying fallback model...`);
-
-        // If credentials are completely invalid or rate limit hit, do not loop
-        if (lastStatus === 401 || (lastError && lastError.toLowerCase().includes('api key not valid'))) {
+        if (isAbort || Date.now() - requestStartTime >= TOTAL_REQUEST_DEADLINE_MS) {
+          isTimeout = true;
+          // If call timed out but total request deadline has enough time, try fallback model once
+          if (
+            !fallbackModelTried &&
+            geminiAttempts < MAX_GEMINI_ATTEMPTS &&
+            TOTAL_REQUEST_DEADLINE_MS - (Date.now() - requestStartTime) > 15000
+          ) {
+            fallbackModelTried = true;
+            cachedModel = null;
+            cachedModelResolvedAt = 0;
+            const fallback = PREFERRED_MODELS.find((m) => m !== activeModel) || 'gemini-3.5-flash-lite';
+            console.warn(`[ai-proxy] Call timed out on ${activeModel}. Trying fallback model: ${fallback}`);
+            activeModel = fallback;
+            isTimeout = false;
+            continue;
+          }
           break;
         }
-      } catch (networkErr) {
-        console.warn(`[ai-proxy] Network failure trying model ${modelToTry}:`, networkErr);
+
+        console.warn(`[ai-proxy] Network or body read error on attempt ${geminiAttempts}:`, fetchErr);
+        lastStatus = 503;
+        lastError = 'Network failure connecting to Gemini';
+
+        if (
+          geminiAttempts < MAX_GEMINI_ATTEMPTS &&
+          TOTAL_REQUEST_DEADLINE_MS - (Date.now() - requestStartTime) > 1000
+        ) {
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        break;
+      } finally {
+        clearTimeout(abortTimer);
       }
+
+      if (resOk) {
+        geminiJson = rawJson;
+
+        // Check candidates & blocked finishReason
+        const candidate = geminiJson?.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+
+        // If finishReason is MAX_TOKENS, don't retry the same call; return code 'TOO_LONG' with a clear message
+        if (finishReason === 'MAX_TOKENS') {
+          console.warn('[ai-proxy] Generation stopped due to MAX_TOKENS');
+          tGeminiCall = Date.now() - tGeminiStart;
+          const tTotal = Date.now() - requestStartTime;
+          console.log(
+            `[ai-proxy] Timings (ms) - decrypt: ${tDecrypt}ms, limit_check: ${tLimitCheck}ms, model_resolve: ${tModelResolve}ms, gemini_call: ${tGeminiCall}ms, total: ${tTotal}ms`
+          );
+
+          if (task === 'chat') {
+            return jsonResponse(
+              {
+                message:
+                  "The response was too long to complete and was cut short. Please ask a more specific or concise question.",
+                hasAction: false,
+                action: null,
+                code: 'TOO_LONG',
+              },
+              200
+            );
+          }
+          return jsonResponse(
+            {
+              error:
+                'The generated response exceeded the maximum token limit. Please break down your request into smaller parts.',
+              code: 'TOO_LONG',
+            },
+            422
+          );
+        }
+
+        const isBlocked =
+          finishReason &&
+          finishReason !== 'STOP';
+
+        candidateText = candidate?.content?.parts?.[0]?.text ?? null;
+
+        if (!candidate || isBlocked || !candidateText) {
+          console.warn(`[ai-proxy] Empty or blocked candidate. finishReason: ${finishReason}`);
+          tGeminiCall = Date.now() - tGeminiStart;
+          const tTotal = Date.now() - requestStartTime;
+          console.log(
+            `[ai-proxy] Timings (ms) - decrypt: ${tDecrypt}ms, limit_check: ${tLimitCheck}ms, model_resolve: ${tModelResolve}ms, gemini_call: ${tGeminiCall}ms, total: ${tTotal}ms`
+          );
+
+          if (task === 'chat') {
+            return jsonResponse(
+              {
+                message:
+                  "I'm sorry, I wasn't able to complete that request due to content safety or policy restrictions. Please try phrasing your request differently.",
+                hasAction: false,
+                action: null,
+                code: 'BLOCKED',
+              },
+              200
+            );
+          }
+          return jsonResponse(
+            {
+              error: 'The request could not be processed due to content safety or policy restrictions.',
+              code: 'BLOCKED',
+            },
+            422
+          );
+        }
+
+        // Validate JSON parsing; retry once if invalid, otherwise return friendly message with no action
+        try {
+          parsedResult = JSON.parse(candidateText);
+          break; // Successfully parsed!
+        } catch (jsonErr) {
+          console.warn(`[ai-proxy] JSON parse failed on candidate text:`, jsonErr);
+          if (!retriedInvalidJson && geminiAttempts < MAX_GEMINI_ATTEMPTS) {
+            retriedInvalidJson = true;
+            await new Promise((r) => setTimeout(r, 500));
+            continue;
+          }
+
+          tGeminiCall = Date.now() - tGeminiStart;
+          const tTotal = Date.now() - requestStartTime;
+          console.log(
+            `[ai-proxy] Timings (ms) - decrypt: ${tDecrypt}ms, limit_check: ${tLimitCheck}ms, model_resolve: ${tModelResolve}ms, gemini_call: ${tGeminiCall}ms, total: ${tTotal}ms`
+          );
+
+          if (task === 'chat') {
+            return jsonResponse(
+              {
+                message:
+                  "I received a response, but couldn't format it properly. Please try again or rephrase your request.",
+                hasAction: false,
+                action: null,
+                code: 'BAD_FORMAT',
+              },
+              200
+            );
+          }
+          return jsonResponse(
+            {
+              error: 'Failed to format structured data. Please try again or rephrase your request.',
+              code: 'BAD_FORMAT',
+            },
+            422
+          );
+        }
+      }
+
+      console.warn(`[ai-proxy] Attempt ${geminiAttempts} failed (${lastStatus}): ${lastError}`);
+
+      // Handle thinkingConfig format or unsupported errors without failing
+      if (
+        lastStatus === 400 &&
+        !omitThinking &&
+        generationConfig.thinkingConfig
+      ) {
+        if ((generationConfig.thinkingConfig as { thinkingLevel?: string })?.thinkingLevel) {
+          console.log('[ai-proxy] thinkingLevel returned 400. Retrying with thinkingBudget: 0...');
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        } else {
+          console.log('[ai-proxy] Model does not support thinkingConfig (status 400). Retrying without thinkingConfig...');
+          omitThinking = true;
+        }
+        continue;
+      }
+
+      // 429 mapping: tell apart Google's quota error from our hourly limit
+      if (lastStatus === 429) {
+        const lower = (lastError || '').toLowerCase();
+        if (lower.includes('quota') || lower.includes('free_tier') || lower.includes('resource_exhausted')) {
+          lastError = 'Your Gemini free-tier quota is used up for now. It usually resets daily. Try again later or use another key.';
+        }
+        break;
+      }
+
+      // No retry on 400/401/429
+      if (lastStatus === 400 || lastStatus === 401) {
+        break;
+      }
+
+      // Model-not-found: refresh cache and try at most one fallback model
+      if (isModelNotFoundError(lastStatus, lastError)) {
+        console.warn(`[ai-proxy] Model ${activeModel} not found. Invalidating cache.`);
+        cachedModel = null;
+        cachedModelResolvedAt = 0;
+
+        if (!fallbackModelTried && geminiAttempts < MAX_GEMINI_ATTEMPTS) {
+          fallbackModelTried = true;
+          const fallback = PREFERRED_MODELS.find((m) => m !== activeModel) || 'gemini-3.5-flash-lite';
+          console.log(`[ai-proxy] Trying fallback model: ${fallback}`);
+          activeModel = fallback;
+          continue;
+        }
+        break;
+      }
+
+      // Retry Gemini once or twice with short backoff on 500/503 only
+      if (lastStatus === 500 || lastStatus === 503) {
+        if (
+          geminiAttempts < MAX_GEMINI_ATTEMPTS &&
+          TOTAL_REQUEST_DEADLINE_MS - (Date.now() - requestStartTime) > 1000
+        ) {
+          console.log(`[ai-proxy] Transient error ${lastStatus}. Retrying after short backoff...`);
+          await new Promise((r) => setTimeout(r, 600));
+
+          // If high demand 503 on current model and fallback not tried yet, switch to fallback model
+          if (lastStatus === 503 && !fallbackModelTried) {
+            fallbackModelTried = true;
+            cachedModel = null;
+            cachedModelResolvedAt = 0;
+            const fallback = PREFERRED_MODELS.find((m) => m !== activeModel) || 'gemini-3.5-flash-lite';
+            console.warn(`[ai-proxy] Switching from 503 model ${activeModel} to fallback: ${fallback}`);
+            activeModel = fallback;
+          }
+
+          continue;
+        }
+        break;
+      }
+
+      // Any other error: do not retry
+      break;
     }
 
-    if (!geminiJson) {
-      console.error(`[ai-proxy] All candidate models failed. Last status: ${lastStatus}, error: ${lastError}`);
-      const returnStatus = (typeof lastStatus === 'number' && lastStatus >= 400 && lastStatus <= 599) ? lastStatus : 502;
+    tGeminiCall = Date.now() - tGeminiStart;
+    const tTotal = Date.now() - requestStartTime;
+
+    console.log(
+      `[ai-proxy] Timings (ms) - decrypt: ${tDecrypt}ms, limit_check: ${tLimitCheck}ms, model_resolve: ${tModelResolve}ms, gemini_call: ${tGeminiCall}ms, total: ${tTotal}ms`
+    );
+
+    // Total request deadline or per-call timeout
+    if (isTimeout || (Date.now() - requestStartTime >= TOTAL_REQUEST_DEADLINE_MS && !parsedResult)) {
+      console.warn(`[ai-proxy] Request timed out after ${tTotal}ms`);
+      return jsonResponse({ error: 'timeout', code: 'TIMEOUT' }, 504);
+    }
+
+    if (!parsedResult) {
+      console.error(`[ai-proxy] Gemini call failed permanently (${lastStatus}): ${lastError}`);
+      const returnStatus =
+        typeof lastStatus === 'number' && lastStatus >= 400 && lastStatus <= 599
+          ? lastStatus
+          : 502;
       return jsonResponse({ error: lastError, status: returnStatus }, returnStatus);
     }
 
-    const candidateText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidateText) {
-      return jsonResponse({ error: 'No content received from Gemini model' }, 502);
-    }
-
-    let parsedResult: unknown;
-    try {
-      parsedResult = JSON.parse(candidateText);
-    } catch {
-      return jsonResponse({ error: 'Failed to parse structured JSON from model output' }, 502);
-    }
-
-    // Increment user rate limit usage upon successful execution
+    // Count a request against the hourly limit only if the Gemini call succeeded
     await supabaseAdmin
       .from('ai_usage')
       .upsert(
@@ -772,7 +1139,6 @@ Guidelines:
         { onConflict: 'user_id,window_start' }
       );
 
-    // Return parsed JSON
     return jsonResponse(parsedResult, 200);
   }
 

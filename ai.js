@@ -32,6 +32,21 @@ async function extractErrorMessage(error, defaultMsg = 'AI service request faile
       if (rawText) {
         try {
           const parsed = JSON.parse(rawText);
+          if (parsed?.code === 'TIMEOUT' || parsed?.error === 'timeout' || status === 504) {
+            return 'This is taking too long. Try again.';
+          }
+          if (
+            parsed?.code === 'GOOGLE_QUOTA_EXCEEDED' ||
+            (typeof parsed?.error === 'string' &&
+              (parsed.error.includes('free-tier quota') ||
+                parsed.error.includes('free_tier') ||
+                parsed.error.includes('Quota exceeded')))
+          ) {
+            return 'Your Gemini free-tier quota is used up for now. It usually resets daily. Try again later or use another key.';
+          }
+          if (parsed?.code === 'RATE_LIMIT_HOURLY') {
+            return 'Rate limit exceeded: maximum 30 AI calls per hour. Please try again later.';
+          }
           if (typeof parsed === 'string') return parsed;
           if (typeof parsed?.error === 'string') return parsed.error;
           if (parsed?.error?.message) return parsed.error.message;
@@ -42,6 +57,10 @@ async function extractErrorMessage(error, defaultMsg = 'AI service request faile
             return `AI Service Error (${status || 'HTTP'}): ${rawText.trim()}`;
           }
         }
+      }
+
+      if (status === 504) {
+        return 'This is taking too long. Try again.';
       }
 
       if (status === 429) {
@@ -167,18 +186,34 @@ export async function aiGenerate(task, payload = {}) {
     throw new Error('An AI task name is required.');
   }
 
-  const { data, error } = await supabase.functions.invoke('ai-proxy', {
-    body: {
-      action: 'generate',
-      task,
-      payload
-    }
+  const CLIENT_TIMEOUT_MS = 60000;
+  let timerId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timerId = setTimeout(() => {
+      reject(new Error('This is taking too long. Try again.'));
+    }, CLIENT_TIMEOUT_MS);
   });
 
-  if (error) {
-    const message = await extractErrorMessage(error, 'AI generation request failed');
-    throw new Error(message);
-  }
+  try {
+    const invokePromise = (async () => {
+      const { data, error } = await supabase.functions.invoke('ai-proxy', {
+        body: {
+          action: 'generate',
+          task,
+          payload
+        }
+      });
 
-  return data;
+      if (error) {
+        const message = await extractErrorMessage(error, 'AI generation request failed');
+        throw new Error(message);
+      }
+
+      return data;
+    })();
+
+    return await Promise.race([invokePromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timerId);
+  }
 }
