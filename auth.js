@@ -1,6 +1,6 @@
 // auth.js
-import { supabase, isConfigured } from "./supabase-config.js?v=3.2";
-import { updateUserSettings } from "./db.js?v=3.2";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.3";
+import { updateUserSettings } from "./db.js?v=3.3";
 
 const isDashboard = window.location.pathname.includes("dashboard") || (typeof document !== 'undefined' && !!document.getElementById("cards-grid"));
 

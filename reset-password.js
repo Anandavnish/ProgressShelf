@@ -1,6 +1,6 @@
 // reset-password.js
 // Handles the Supabase PASSWORD_RECOVERY flow on the dedicated reset page.
-import { supabase } from "./supabase-config.js?v=3.2";
+import { supabase } from "./supabase-config.js?v=3.3";
 
 const stateLoading = document.getElementById("state-loading");
 const stateInvalid = document.getElementById("state-invalid");

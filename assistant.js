@@ -4,8 +4,8 @@
  * full card awareness, and interactive Shared Confirmation Sheets for create, update, breakdown, and delete.
  */
 
-import { isGuestMode, exitGuestMode } from "./auth.js?v=3.2";
-import { aiStatus, aiSaveKey, aiRemoveKey, aiGenerate } from "./ai.js?v=3.2";
+import { isGuestMode, exitGuestMode, loginWithGoogle } from "./auth.js?v=3.3";
+import { aiStatus, aiSaveKey, aiRemoveKey, aiGenerate } from "./ai.js?v=4.0";
 
 export let isAssistantPanelOpen = false;
 export function isAssistantOpen() {
@@ -30,12 +30,58 @@ export function setAiHistoryEnabled(enabled) {
   localStorage.setItem(STORAGE_KEY_HISTORY_ENABLED, enabled ? 'true' : 'false');
 }
 
+/**
+ * Strips base64/data-URL images from HTML to keep chat history lightweight and prevent storage overflow.
+ * Replaces user image tags with an elegant [Attached image] pill.
+ * @param {string} html
+ * @returns {string}
+ */
+export function stripImagesFromThreadHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+  let clean = html.replace(/<img[^>]*class=["'][^"']*assistant-msg-user-img[^"']*["'][^>]*>/gi, () => {
+    return `<div class="assistant-msg-attachment-pill" title="Image was attached (not stored in history)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+        <circle cx="9" cy="9" r="2"/>
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+      </svg>
+      <span>Attached image</span>
+    </div>`;
+  });
+  clean = clean.replace(/src=["']data:image\/[^"']+["']/gi, 'src=""');
+  return clean;
+}
+
 export function getChatSessions() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CHAT_SESSIONS);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    let mutated = false;
+    const sanitized = parsed.map(s => {
+      if (!s) return s;
+      if (s.threadHtml && s.threadHtml.includes('data:image/')) {
+        s.threadHtml = stripImagesFromThreadHtml(s.threadHtml);
+        mutated = true;
+      }
+      if (Array.isArray(s.history)) {
+        s.history = s.history.map(h => {
+          if (h && typeof h.text === 'string' && h.text.startsWith('data:image')) {
+            mutated = true;
+            return { ...h, text: '[Attached image]' };
+          }
+          return h;
+        });
+      }
+      return s;
+    });
+    if (mutated) {
+      try {
+        localStorage.setItem(STORAGE_KEY_CHAT_SESSIONS, JSON.stringify(sanitized));
+      } catch (_) {}
+    }
+    return sanitized;
   } catch (_) {
     return [];
   }
@@ -43,7 +89,20 @@ export function getChatSessions() {
 
 export function saveChatSessions(sessions) {
   try {
-    localStorage.setItem(STORAGE_KEY_CHAT_SESSIONS, JSON.stringify(sessions));
+    const sanitized = Array.isArray(sessions) ? sessions.map(s => {
+      const cleanSession = { ...s };
+      if (cleanSession.threadHtml) {
+        cleanSession.threadHtml = stripImagesFromThreadHtml(cleanSession.threadHtml);
+      }
+      if (Array.isArray(cleanSession.history)) {
+        cleanSession.history = cleanSession.history.map(h => ({
+          role: h.role,
+          text: (typeof h.text === 'string' && h.text.startsWith('data:image')) ? '[Attached image]' : (h.text || '')
+        }));
+      }
+      return cleanSession;
+    }) : [];
+    localStorage.setItem(STORAGE_KEY_CHAT_SESSIONS, JSON.stringify(sanitized));
   } catch (e) {
     console.warn('[Assistant] Failed to save chat sessions:', e);
   }
@@ -117,7 +176,72 @@ let deps = {
   handleEditBarFromAi: async () => {},
   handleDeleteBarFromAi: async () => {},
   getLiveBars: () => [],
+  getUserId: () => null,
+  getUserFirstName: () => '',
+  updateUserSettings: async () => {},
+  getUserSettings: async () => ({}),
+  onHomeBriefingVisibilityChanged: () => {}
 };
+
+function getActiveUserFirstName() {
+  function clean(raw) {
+    if (typeof raw !== 'string') return '';
+    let s = raw.trim().split(/\s+/)[0] || '';
+    if (s.includes('@')) {
+      s = s.split('@')[0].replace(/[0-9_.-]+$/g, '');
+    }
+    if (s && s.toLowerCase() !== 'guest' && s.toLowerCase() !== 'tracker user' && s.toLowerCase() !== 'tracker') {
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    return '';
+  }
+  if (typeof deps.getUserFirstName === 'function') {
+    const fn = deps.getUserFirstName();
+    const cleaned = clean(fn);
+    if (cleaned) return cleaned;
+  }
+  const profileEl = document.getElementById('profile-name');
+  if (profileEl && profileEl.textContent) {
+    const fromEl = clean(profileEl.textContent);
+    if (fromEl) return fromEl;
+  }
+  return '';
+}
+
+function getTimeOfDayGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getPersonalizedGreetingHeadline(rawHeadline) {
+  const name = getActiveUserFirstName();
+  const timeGreeting = getTimeOfDayGreeting();
+  const defaultBase = 'Keep track of your active goals and daily habits right here.';
+
+  if (!rawHeadline || rawHeadline.trim() === 'Keep track of your active goals and daily habits right here.' || rawHeadline.trim() === 'Here is your progress breakdown for today:') {
+    return name ? `${timeGreeting}, ${name}! ${defaultBase}` : `${timeGreeting}! ${defaultBase}`;
+  }
+
+  // If the headline already contains the user's name, return as is
+  if (name && rawHeadline.toLowerCase().includes(name.toLowerCase())) {
+    return rawHeadline;
+  }
+
+  // If the headline starts with a greeting like "Good morning", "Hi", "Hello", inject name
+  const greetingRegex = /^(Good morning|Good afternoon|Good evening|Hi|Hello|Hey)(?: there)?([!,.]?\s*)/i;
+  if (name && greetingRegex.test(rawHeadline)) {
+    return rawHeadline.replace(greetingRegex, `${timeGreeting}, ${name}! `);
+  }
+
+  // If no greeting at all and user has a name, prepend greeting
+  if (name && !/^(Good|Hi|Hello|Hey)\b/i.test(rawHeadline)) {
+    return `${timeGreeting}, ${name}! ${rawHeadline}`;
+  }
+
+  return rawHeadline;
+}
 
 function safeEscapeHtml(str) {
   if (typeof str !== "string") return "";
@@ -239,14 +363,794 @@ export function renderSkeletonAssistant() {
         <div class="assistant-connected-badge assistant-skeleton" style="width: 90px; height: 24px; border-radius: 12px;"></div>
         <div class="assistant-skeleton" style="width: 70px; height: 24px; border-radius: 6px;"></div>
       </div>
-      <div id="assistant-today-placeholder" class="assistant-today-placeholder assistant-loading-skeleton-placeholder">
-        <div class="assistant-skeleton assistant-skeleton-icon"></div>
-        <div class="assistant-skeleton assistant-skeleton-header" style="width: 60%; height: 20px;"></div>
-        <div class="assistant-skeleton assistant-skeleton-line" style="width: 80%; height: 14px;"></div>
-        <div class="assistant-skeleton assistant-skeleton-line-sm" style="width: 50%; height: 14px;"></div>
+      <div id="assistant-daily-briefing-wrap" class="assistant-daily-briefing-wrap">
+        <div class="briefing-skeleton-card">
+          <div class="briefing-skeleton-row">
+            <div class="briefing-skeleton-line" style="width: 110px; height: 18px;"></div>
+            <div class="briefing-skeleton-line" style="width: 24px; height: 24px; border-radius: 6px;"></div>
+          </div>
+          <div class="briefing-skeleton-line" style="width: 90%; height: 16px;"></div>
+          <div class="briefing-skeleton-line" style="width: 75%; height: 14px;"></div>
+        </div>
       </div>
     </div>
   `;
+}
+
+/* ==========================================================================
+   DAILY BRIEFING / TODAY'S FOCUS MODULE
+   ========================================================================== */
+
+export const STORAGE_KEY_DAILY_BRIEFING = 'progressshelf_assistant_daily_briefing';
+let cachedDailyBriefing = null;
+let isFetchingBriefing = false;
+let isBriefingExpandedInChat = false;
+let triggerSubmitPrompt = null;
+
+export function getTodayLocalDateStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function computeCardsHash(bars) {
+  if (!Array.isArray(bars) || bars.length === 0) return 'empty';
+  const tokens = bars.map(b => {
+    const id = b.id || '';
+    const title = b.title || '';
+    const prog = `${b.currentSmallest ?? ''}/${b.targetSmallest ?? ''}`;
+    const comp = b.completed ? '1' : '0';
+    const dead = b.deadlineAt || '';
+    const rep = b.repeat || '';
+    const upd = b.updatedAt || '';
+    return `${id}:${title}:${prog}:${comp}:${dead}:${rep}:${upd}`;
+  });
+  return tokens.sort().join('|');
+}
+
+export function getCachedBriefing() {
+  if (cachedDailyBriefing && cachedDailyBriefing.data) {
+    return cachedDailyBriefing;
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DAILY_BRIEFING);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data) {
+        cachedDailyBriefing = parsed;
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+export function saveCachedBriefing(cacheObj) {
+  cachedDailyBriefing = cacheObj;
+  try {
+    localStorage.setItem(STORAGE_KEY_DAILY_BRIEFING, JSON.stringify(cacheObj));
+  } catch (_) {}
+
+  try {
+    const uid = deps.getUserId ? deps.getUserId() : null;
+    if (uid && typeof deps.updateUserSettings === 'function') {
+      deps.updateUserSettings(uid, { daily_briefing: cacheObj }).catch(err => {
+        console.warn('[Assistant] Failed to sync briefing to Supabase settings:', err);
+      });
+    }
+  } catch (_) {}
+}
+
+export const STORAGE_KEY_HIDE_HOME_BRIEFING = 'progressshelf_hide_home_briefing';
+export const STORAGE_KEY_DISMISS_GUEST_AI_CARD = 'progressshelf_dismiss_guest_ai_card';
+export const STORAGE_KEY_DISMISS_UNCONFIGURED_AI_CARD = 'progressshelf_dismiss_unconfigured_ai_card';
+
+export function isGuestAiCardDismissed() {
+  return localStorage.getItem(STORAGE_KEY_DISMISS_GUEST_AI_CARD) === 'true';
+}
+
+export function setGuestAiCardDismissed(dismissed) {
+  if (dismissed) {
+    localStorage.setItem(STORAGE_KEY_DISMISS_GUEST_AI_CARD, 'true');
+  } else {
+    localStorage.removeItem(STORAGE_KEY_DISMISS_GUEST_AI_CARD);
+  }
+  if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+    deps.onHomeBriefingVisibilityChanged();
+  }
+}
+
+export function isUnconfiguredAiCardDismissed() {
+  return localStorage.getItem(STORAGE_KEY_DISMISS_UNCONFIGURED_AI_CARD) === 'true';
+}
+
+export function setUnconfiguredAiCardDismissed(dismissed) {
+  if (dismissed) {
+    localStorage.setItem(STORAGE_KEY_DISMISS_UNCONFIGURED_AI_CARD, 'true');
+  } else {
+    localStorage.removeItem(STORAGE_KEY_DISMISS_UNCONFIGURED_AI_CARD);
+  }
+  if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+    deps.onHomeBriefingVisibilityChanged();
+  }
+}
+
+export function isHomeBriefingHidden() {
+  return localStorage.getItem(STORAGE_KEY_HIDE_HOME_BRIEFING) === 'true';
+}
+
+export function setHomeBriefingHidden(hidden) {
+  localStorage.setItem(STORAGE_KEY_HIDE_HOME_BRIEFING, hidden ? 'true' : 'false');
+  try {
+    const uid = deps.getUserId ? deps.getUserId() : null;
+    if (uid && typeof deps.updateUserSettings === 'function') {
+      deps.updateUserSettings(uid, { hide_home_briefing: hidden }).catch(err => {
+        console.warn('[Assistant] Failed to sync hide_home_briefing setting:', err);
+      });
+    }
+  } catch (_) {}
+
+  if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+    deps.onHomeBriefingVisibilityChanged();
+  }
+}
+
+export function setHomeBriefingHiddenFromRemote(hidden) {
+  if (hidden === undefined || hidden === null) return;
+  const current = isHomeBriefingHidden();
+  if (current !== Boolean(hidden)) {
+    localStorage.setItem(STORAGE_KEY_HIDE_HOME_BRIEFING, hidden ? 'true' : 'false');
+    if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+      deps.onHomeBriefingVisibilityChanged();
+    }
+  }
+}
+
+export function setCachedBriefingFromSupabase(remoteBriefing) {
+  if (!remoteBriefing || !remoteBriefing.data || !remoteBriefing.date) return;
+  const local = getCachedBriefing();
+  if (!local || (remoteBriefing.updatedAt && (!local.updatedAt || remoteBriefing.updatedAt > local.updatedAt))) {
+    cachedDailyBriefing = remoteBriefing;
+    try {
+      localStorage.setItem(STORAGE_KEY_DAILY_BRIEFING, JSON.stringify(remoteBriefing));
+    } catch (_) {}
+
+    const wrap = document.getElementById('assistant-daily-briefing-wrap');
+    if (wrap) {
+      const activeNow = Boolean(threadHtml && threadHtml.trim().length > 0);
+      renderBriefingContainer(wrap, remoteBriefing.data, remoteBriefing.updatedAt, activeNow);
+    }
+
+    const homeCard = document.getElementById('home-daily-briefing-card');
+    if (homeCard && !isHomeBriefingHidden()) {
+      getHomeBriefingCardElement();
+    }
+  }
+}
+
+export function isBriefingValid(cached, currentBars) {
+  if (!cached || !cached.data || !cached.date) return false;
+  if (cached.date !== getTodayLocalDateStr()) return false;
+  const expectedHash = computeCardsHash(currentBars);
+  if (cached.cardHash !== expectedHash) return false;
+  return true;
+}
+
+function formatBriefingTime(timestamp) {
+  if (!timestamp) return '';
+  try {
+    const d = new Date(timestamp);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch (_) {
+    return '';
+  }
+}
+
+function getBriefingBadgeClass(badge) {
+  const b = (badge || '').toLowerCase();
+  if (b.includes('habit')) return 'badge-habit';
+  if (b.includes('overdue')) return 'badge-overdue';
+  if (b.includes('urgent') || b.includes('today')) return 'badge-urgent';
+  return 'badge-default';
+}
+
+function renderBriefingFullCardMarkup(data, updatedAt) {
+  const timeStr = formatBriefingTime(updatedAt);
+  const headline = getPersonalizedGreetingHeadline(data.headline);
+  const priorities = Array.isArray(data.priorities) ? data.priorities : [];
+  const pills = Array.isArray(data.actionPills) ? data.actionPills : [];
+
+  let prioritiesHtml = '';
+  if (priorities.length > 0) {
+    prioritiesHtml = `
+      <div class="briefing-priorities-list">
+        ${priorities.map(p => {
+          const badgeClass = getBriefingBadgeClass(p.badge);
+          const badgeMarkup = p.badge ? `<span class="briefing-priority-badge ${badgeClass}">${escapeHtml(p.badge)}</span>` : '';
+          return `
+            <div class="briefing-priority-item">
+              ${badgeMarkup}
+              <div class="briefing-priority-text">
+                <span class="briefing-priority-title">${escapeHtml(p.title || '')}</span>
+                ${p.detail ? `<span class="briefing-priority-detail">${escapeHtml(p.detail)}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  let pillsHtml = '';
+  if (pills.length > 0) {
+    pillsHtml = `
+      <div class="briefing-pills-row">
+        ${pills.map(pill => `
+          <button type="button" class="briefing-action-pill" data-action="${escapeHtml(pill)}">
+            <span>✦</span>
+            <span>${escapeHtml(pill)}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="daily-briefing-card">
+      <div class="briefing-header">
+        <div class="briefing-title-wrap">
+          <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+          </svg>
+          <span class="briefing-title">Today's Focus</span>
+          ${timeStr ? `<span class="briefing-timestamp">· ${timeStr}</span>` : ''}
+        </div>
+        <button type="button" class="btn-briefing-refresh ${isFetchingBriefing ? 'spinning' : ''}" title="Refresh Today's Breakdown">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+        </button>
+      </div>
+      <p class="briefing-headline">${escapeHtml(headline)}</p>
+      ${prioritiesHtml}
+      ${pillsHtml}
+    </div>
+  `;
+}
+
+function renderBriefingCollapsedMarkup(data, updatedAt) {
+  const priorities = Array.isArray(data.priorities) ? data.priorities : [];
+  const count = priorities.length;
+  const countText = count > 0 ? `${count} ${count === 1 ? 'priority' : 'priorities'}` : 'Up to date';
+
+  return `
+    <div class="briefing-collapsed-banner">
+      <div class="briefing-collapsed-info">
+        <svg class="briefing-sparkle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+        </svg>
+        <span class="briefing-collapsed-text">Today's Focus: ${countText}</span>
+      </div>
+      <div class="briefing-collapsed-actions">
+        <button type="button" class="btn-briefing-toggle" id="btn-briefing-toggle">
+          ${isBriefingExpandedInChat ? 'Collapse ▴' : 'Expand ▾'}
+        </button>
+        <button type="button" class="btn-briefing-refresh ${isFetchingBriefing ? 'spinning' : ''}" title="Refresh Today's Breakdown">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    ${isBriefingExpandedInChat ? `<div class="briefing-expanded-drawer">${renderBriefingFullCardMarkup(data, updatedAt)}</div>` : ''}
+  `;
+}
+
+function renderBriefingSkeletonMarkup() {
+  return `
+    <div class="briefing-skeleton-card">
+      <div class="briefing-skeleton-row">
+        <div class="briefing-skeleton-line" style="width: 120px; height: 18px;"></div>
+        <div class="briefing-skeleton-line" style="width: 22px; height: 22px; border-radius: 6px;"></div>
+      </div>
+      <div class="briefing-skeleton-line" style="width: 90%; height: 16px;"></div>
+      <div class="briefing-skeleton-line" style="width: 75%; height: 14px;"></div>
+      <div style="display: flex; gap: 6px; margin-top: 4px;">
+        <div class="briefing-skeleton-line" style="width: 80px; height: 24px; border-radius: 12px;"></div>
+        <div class="briefing-skeleton-line" style="width: 95px; height: 24px; border-radius: 12px;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function attachBriefingListeners(wrap) {
+  if (!wrap) return;
+
+  wrap.querySelectorAll('.btn-briefing-refresh').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetchAndRenderDailyBriefing(true);
+    });
+  });
+
+  const toggleBtn = wrap.querySelector('#btn-briefing-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      isBriefingExpandedInChat = !isBriefingExpandedInChat;
+      const cached = getCachedBriefing();
+      if (cached && cached.data) {
+        renderBriefingContainer(wrap, cached.data, cached.updatedAt, Boolean(threadHtml && threadHtml.trim().length > 0));
+      }
+    });
+  }
+
+  wrap.querySelectorAll('.briefing-action-pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const actionText = pill.getAttribute('data-action') || pill.textContent.trim().replace(/^✦\s*/, '');
+      const textarea = document.getElementById('assistant-input');
+      if (textarea && actionText) {
+        textarea.value = actionText;
+        updateAssistantControlsState();
+        if (typeof triggerSubmitPrompt === 'function') {
+          triggerSubmitPrompt();
+        } else {
+          const sendBtn = document.getElementById('btn-assistant-send');
+          if (sendBtn) sendBtn.click();
+        }
+      }
+    });
+  });
+}
+
+function renderBriefingContainer(wrap, data, updatedAt, isChatActive) {
+  if (!wrap) return;
+  if (isChatActive) {
+    wrap.innerHTML = renderBriefingCollapsedMarkup(data, updatedAt);
+  } else {
+    wrap.innerHTML = renderBriefingFullCardMarkup(data, updatedAt);
+  }
+  attachBriefingListeners(wrap);
+}
+
+export function updateBriefingDisplayMode(isChatActive) {
+  const wrap = document.getElementById('assistant-daily-briefing-wrap');
+  if (!wrap) return;
+  const cached = getCachedBriefing();
+  if (cached && cached.data) {
+    renderBriefingContainer(wrap, cached.data, cached.updatedAt, isChatActive);
+  }
+}
+
+export async function fetchAndRenderDailyBriefing(forceRefresh = false) {
+  const wrap = document.getElementById('assistant-daily-briefing-wrap');
+  const homeCard = document.getElementById('home-daily-briefing-card');
+
+  // If neither wrap nor homeCard is in the DOM, nothing to render
+  if (!wrap && !homeCard) return;
+
+  if (isGuestMode() || !currentAiStatus || !currentAiStatus.connected) {
+    if (wrap) wrap.innerHTML = '';
+    if (homeCard) getHomeBriefingCardElement();
+    return;
+  }
+
+  // If initial bars have not yet loaded from remote database, wait for realtime sync to deliver them
+  if (typeof deps.hasInitialBarsLoaded === 'function' && !deps.hasInitialBarsLoaded() && !isGuestMode()) {
+    return;
+  }
+
+  const currentBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  const isChatActive = Boolean(threadHtml && threadHtml.trim().length > 0);
+
+  if (!forceRefresh) {
+    const cached = getCachedBriefing();
+    if (cached && isBriefingValid(cached, currentBars)) {
+      if (wrap) renderBriefingContainer(wrap, cached.data, cached.updatedAt, isChatActive);
+      if (homeCard) getHomeBriefingCardElement();
+      return;
+    }
+  }
+
+  if (isFetchingBriefing) return;
+  isFetchingBriefing = true;
+
+  if (wrap) {
+    const existingCard = wrap.querySelector('.daily-briefing-card, .briefing-collapsed-banner');
+    if (!existingCard) {
+      wrap.innerHTML = renderBriefingSkeletonMarkup();
+    }
+  }
+  if (homeCard) {
+    const existingCard = homeCard.querySelector('.home-briefing-header');
+    if (!existingCard) {
+      homeCard.className = 'card-home-briefing card-home-briefing-skeleton';
+      homeCard.innerHTML = renderBriefingSkeletonMarkup();
+    }
+  }
+
+  document.querySelectorAll('.btn-briefing-refresh').forEach(b => b.classList.add('spinning'));
+
+  try {
+    const cardsSummary = currentBars.map(b => ({
+      title: b.title || 'Untitled',
+      type: b.type || (b.repeat ? 'habit' : (b.checklist ? 'checklist' : 'tracker')),
+      current: b.currentSmallest ?? b.current ?? 0,
+      target: b.targetSmallest ?? b.target ?? 1,
+      unit: b.unit || '',
+      completed: Boolean(b.completed),
+      deadlineAt: b.deadlineAt || null,
+      isOverdue: Boolean(b.deadlineAt && new Date(b.deadlineAt) < new Date() && !b.completed),
+      isHabit: Boolean(b.repeat),
+      resetTime: b.resetTime || null
+    }));
+
+    const now = new Date();
+    const timeContext = `Local User Time: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, Date: ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`;
+
+    const activeFirstName = typeof getActiveUserFirstName === 'function' ? getActiveUserFirstName() : '';
+    const result = await aiGenerate('daily_briefing', {
+      cards: cardsSummary,
+      timeContext: timeContext,
+      firstName: activeFirstName || undefined,
+      userFirstName: activeFirstName || undefined
+    });
+
+    if (result && (result.headline || Array.isArray(result.priorities))) {
+      const cacheObj = {
+        date: getTodayLocalDateStr(),
+        cardHash: computeCardsHash(currentBars),
+        updatedAt: Date.now(),
+        data: {
+          headline: result.headline || '',
+          priorities: Array.isArray(result.priorities) ? result.priorities : [],
+          actionPills: Array.isArray(result.actionPills) ? result.actionPills : []
+        }
+      };
+      saveCachedBriefing(cacheObj);
+      const activeNow = Boolean(threadHtml && threadHtml.trim().length > 0);
+      if (wrap) {
+        renderBriefingContainer(wrap, cacheObj.data, cacheObj.updatedAt, activeNow);
+      }
+      if (homeCard) {
+        getHomeBriefingCardElement();
+      }
+    }
+  } catch (err) {
+    console.warn('[Assistant] Failed to fetch daily briefing:', err);
+    const cached = getCachedBriefing();
+    if (cached && cached.data) {
+      if (wrap) renderBriefingContainer(wrap, cached.data, cached.updatedAt, isChatActive);
+      if (homeCard) getHomeBriefingCardElement();
+    } else {
+      if (wrap) {
+        wrap.innerHTML = `
+          <div class="daily-briefing-card">
+            <div class="briefing-header">
+              <div class="briefing-title-wrap">
+                <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <span class="briefing-title">Today's Focus</span>
+              </div>
+              <button type="button" class="btn-briefing-refresh" title="Retry">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+              </button>
+            </div>
+            <p class="briefing-headline">Keep track of your active goals and daily habits right here.</p>
+          </div>
+        `;
+        attachBriefingListeners(wrap);
+      }
+      if (homeCard) {
+        getHomeBriefingCardElement();
+      }
+    }
+  } finally {
+    isFetchingBriefing = false;
+    document.querySelectorAll('.btn-briefing-refresh').forEach(b => b.classList.remove('spinning'));
+  }
+}
+
+/**
+ * Returns the DOM element for the AI card on the home dashboard.
+ * Supports 3 states:
+ * 1. Guest user: asks user to sign in via Google account (with dismiss cross).
+ * 2. Logged-in user without Gemini key: asks user to connect key (with dismiss cross).
+ * 3. Logged-in user with active Gemini key: fully functional Today's Focus card (exact copy
+ *    from assistant drawer, with refresh, pills, and cross button that turns off Today's Focus and lets them know).
+ */
+export function getHomeBriefingCardElement() {
+  let el = document.getElementById('home-daily-briefing-card');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'home-daily-briefing-card';
+  }
+
+  // -------------------------------------------------------------
+  // STATE 1: Guest User (not signed in / guest mode)
+  // -------------------------------------------------------------
+  const isGuest = isGuestMode() || !deps.getUserId || !deps.getUserId();
+  if (isGuest) {
+    if (isGuestAiCardDismissed()) {
+      if (el.parentNode) el.remove();
+      return null;
+    }
+
+    el.className = 'card-progress card-home-briefing card-home-ai-guest';
+    el.innerHTML = `
+      <div class="home-briefing-header">
+        <div class="home-briefing-title-wrap" role="button" tabindex="0" title="Sign in to unlock AI">
+          <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+          </svg>
+          <span class="briefing-title">Unlock AI Assistant</span>
+        </div>
+        <button type="button" class="btn-home-briefing-hide" title="Dismiss card" aria-label="Dismiss card">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <p class="briefing-headline">Sign in with Google to get daily focus breakdowns, smart habit recommendations, and AI card management.</p>
+      <div class="home-briefing-cta-footer">
+        <button type="button" class="btn btn-primary btn-sm btn-home-login-google">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink: 0;">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+          </svg>
+          <span>Sign in with Google</span>
+        </button>
+      </div>
+    `;
+
+    const hideBtn = el.querySelector('.btn-home-briefing-hide');
+    if (hideBtn) {
+      hideBtn.onclick = (e) => {
+        e.stopPropagation();
+        setGuestAiCardDismissed(true);
+        showUndoToast({
+          message: "AI card dismissed.",
+          onUndo: () => setGuestAiCardDismissed(false),
+          duration: 7000
+        });
+      };
+    }
+
+    const loginBtn = el.querySelector('.btn-home-login-google');
+    const titleWrap = el.querySelector('.home-briefing-title-wrap');
+    const handleLogin = (e) => {
+      e.stopPropagation();
+      loginWithGoogle();
+    };
+    if (loginBtn) loginBtn.onclick = handleLogin;
+    if (titleWrap) titleWrap.onclick = handleLogin;
+
+    return el;
+  }
+
+  // -------------------------------------------------------------
+  // STATE 2: Logged-in user without Gemini API key
+  // -------------------------------------------------------------
+  const isAiConnected = !!(currentAiStatus && currentAiStatus.connected);
+  if (!isAiConnected) {
+    if (isUnconfiguredAiCardDismissed()) {
+      if (el.parentNode) el.remove();
+      return null;
+    }
+
+    el.className = 'card-progress card-home-briefing card-home-ai-unconfigured';
+    el.innerHTML = `
+      <div class="home-briefing-header">
+        <div class="home-briefing-title-wrap" role="button" tabindex="0" title="Connect Gemini Key">
+          <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+          </svg>
+          <span class="briefing-title">Activate AI Companion</span>
+        </div>
+        <button type="button" class="btn-home-briefing-hide" title="Dismiss card" aria-label="Dismiss card">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <p class="briefing-headline">Connect your free Gemini API key to activate daily focus breakdowns, habit tracking, and goal planning.</p>
+      <div class="home-briefing-cta-footer">
+        <button type="button" class="btn btn-primary btn-sm btn-home-connect-key">
+          <span>Connect Gemini Key</span>
+        </button>
+      </div>
+    `;
+
+    const hideBtn = el.querySelector('.btn-home-briefing-hide');
+    if (hideBtn) {
+      hideBtn.onclick = (e) => {
+        e.stopPropagation();
+        setUnconfiguredAiCardDismissed(true);
+        showUndoToast({
+          message: "AI card dismissed.",
+          onUndo: () => setUnconfiguredAiCardDismissed(false),
+          duration: 7000
+        });
+      };
+    }
+
+    const connectBtn = el.querySelector('.btn-home-connect-key');
+    const titleWrap = el.querySelector('.home-briefing-title-wrap');
+    const handleConnect = (e) => {
+      e.stopPropagation();
+      openAiSettingsModal();
+    };
+    if (connectBtn) connectBtn.onclick = handleConnect;
+    if (titleWrap) titleWrap.onclick = handleConnect;
+
+    return el;
+  }
+
+  // -------------------------------------------------------------
+  // STATE 3: Signed in + Gemini active -> Today's Focus Card
+  // -------------------------------------------------------------
+  if (isHomeBriefingHidden()) {
+    if (el.parentNode) el.remove();
+    return null;
+  }
+
+  const cached = getCachedBriefing();
+  const currentBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+
+  if (!cached || !isBriefingValid(cached, currentBars)) {
+    if (!isFetchingBriefing) {
+      const hasLoaded = typeof deps.hasInitialBarsLoaded !== 'function' || deps.hasInitialBarsLoaded();
+      if (hasLoaded) {
+        setTimeout(() => {
+          fetchAndRenderDailyBriefing(false);
+        }, 50);
+      }
+    }
+  }
+
+  if (isFetchingBriefing && (!cached || !cached.data)) {
+    el.className = 'card-progress card-home-briefing card-home-briefing-skeleton';
+    el.innerHTML = renderBriefingSkeletonMarkup();
+    return el;
+  }
+
+  const data = cached && cached.data ? cached.data : {
+    headline: "Keep track of your active goals and daily habits right here.",
+    priorities: [],
+    actionPills: ["Plan my day", "Clean up overdue", "Break down a goal"]
+  };
+  const timeStr = formatBriefingTime(cached ? cached.updatedAt : null);
+
+  el.className = 'card-progress card-home-briefing card-home-briefing-active';
+  const priorities = Array.isArray(data.priorities) ? data.priorities : [];
+  const pills = Array.isArray(data.actionPills) ? data.actionPills : [];
+
+  let prioritiesHtml = '';
+  if (priorities.length > 0) {
+    prioritiesHtml = `
+      <div class="briefing-priorities-list">
+        ${priorities.slice(0, 3).map(p => {
+          const badgeClass = getBriefingBadgeClass(p.badge);
+          const badgeMarkup = p.badge ? `<span class="briefing-priority-badge ${badgeClass}">${escapeHtml(p.badge)}</span>` : '';
+          return `
+            <div class="briefing-priority-item">
+              ${badgeMarkup}
+              <div class="briefing-priority-text">
+                <span class="briefing-priority-title">${escapeHtml(p.title || '')}</span>
+                ${p.detail ? `<span class="briefing-priority-detail">${escapeHtml(p.detail)}</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  let pillsHtml = '';
+  if (pills.length > 0) {
+    pillsHtml = `
+      <div class="home-briefing-actions-panel">
+        <div class="home-briefing-actions-header">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+          </svg>
+          <span>QUICK ACTIONS</span>
+        </div>
+        <div class="briefing-pills-col">
+          ${pills.map(pill => `
+            <button type="button" class="briefing-action-pill" data-action="${escapeHtml(pill)}">
+              <span class="pill-sparkle">✦</span>
+              <span class="pill-label">${escapeHtml(pill)}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="home-briefing-header">
+      <div class="home-briefing-title-wrap" role="button" tabindex="0" title="Open AI Assistant">
+        <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+        </svg>
+        <span class="briefing-title">Today's Focus</span>
+        ${timeStr ? `<span class="briefing-timestamp">· ${timeStr}</span>` : ''}
+        <span class="home-briefing-open-badge" title="Open AI Assistant">
+          <span>AI</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+        </span>
+      </div>
+      <div class="home-briefing-actions">
+        <button type="button" class="btn-briefing-refresh ${isFetchingBriefing ? 'spinning' : ''}" title="Refresh Today's Focus">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+        </button>
+        <button type="button" class="btn-home-briefing-hide" title="Turn off Today's Focus on dashboard" aria-label="Turn off Today's Focus on dashboard">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="home-briefing-body">
+      <div class="home-briefing-main-col">
+        <p class="briefing-headline">${escapeHtml(getPersonalizedGreetingHeadline(data.headline))}</p>
+        ${prioritiesHtml}
+      </div>
+      ${pillsHtml}
+    </div>
+  `;
+
+  const titleWrap = el.querySelector('.home-briefing-title-wrap');
+  if (titleWrap) {
+    titleWrap.onclick = (e) => {
+      e.stopPropagation();
+      openAssistantPanel();
+    };
+  }
+
+  const refreshBtn = el.querySelector('.btn-briefing-refresh');
+  if (refreshBtn) {
+    refreshBtn.onclick = (e) => {
+      e.stopPropagation();
+      fetchAndRenderDailyBriefing(true);
+    };
+  }
+
+  const hideBtn = el.querySelector('.btn-home-briefing-hide');
+  if (hideBtn) {
+    hideBtn.onclick = (e) => {
+      e.stopPropagation();
+      setHomeBriefingHidden(true);
+      showUndoToast({
+        message: "Today's Focus turned off on dashboard. You can re-enable it in AI Settings.",
+        onUndo: () => setHomeBriefingHidden(false),
+        duration: 7000
+      });
+    };
+  }
+
+  el.querySelectorAll('.briefing-action-pill').forEach(pill => {
+    pill.onclick = (e) => {
+      e.stopPropagation();
+      const actionText = pill.getAttribute('data-action') || pill.textContent.trim().replace(/^✦\s*/, '');
+      openAssistantPanel();
+      setTimeout(() => {
+        executeBriefingPrompt(actionText);
+      }, 150);
+    };
+  });
+
+  return el;
 }
 
 /**
@@ -258,19 +1162,22 @@ function updateAssistantControlsState() {
   const chipPlan = document.getElementById('chip-plan-day');
   const chipClean = document.getElementById('chip-cleanup-overdue');
   const chipBreakdown = document.getElementById('chip-breakdown-goal');
+  const chipMention = document.getElementById('chip-mention-card');
   const btnAttach = document.getElementById('btn-assistant-attach');
   const btnSend = document.getElementById('btn-assistant-send');
   const textarea = document.getElementById('assistant-input');
 
   const hasInput = textarea && textarea.value.trim().length > 0;
   const hasAttachment = attachedImage !== null;
+  const hasCardContext = activeCardContext !== null;
 
   if (chipPlan) chipPlan.disabled = !isConnected || isGenerating;
   if (chipClean) chipClean.disabled = !isConnected || isGenerating;
   if (chipBreakdown) chipBreakdown.disabled = !isConnected || isGenerating;
+  if (chipMention) chipMention.disabled = !isConnected || isGenerating;
   if (btnAttach) btnAttach.disabled = !isConnected || isGenerating;
   if (btnSend) {
-    btnSend.disabled = !isConnected || isGenerating || (!hasInput && !hasAttachment);
+    btnSend.disabled = !isConnected || isGenerating || (!hasInput && !hasAttachment && !hasCardContext);
   }
 }
 
@@ -297,8 +1204,17 @@ export async function renderAssistantState(status) {
     `;
     const loginBtn = document.getElementById('btn-assistant-login-cta');
     if (loginBtn) {
-      loginBtn.addEventListener('click', () => {
-        exitGuestMode();
+      loginBtn.addEventListener('click', async () => {
+        try {
+          loginBtn.style.pointerEvents = 'none';
+          loginBtn.textContent = 'Signing in...';
+          await loginWithGoogle();
+        } catch (e) {
+          console.error('Login from assistant CTA failed:', e);
+          showToast('Authentication failed. Please try again.', 'error');
+          loginBtn.style.pointerEvents = 'all';
+          loginBtn.textContent = 'Sign in';
+        }
       });
     }
     return;
@@ -323,18 +1239,7 @@ export async function renderAssistantState(status) {
           </button>
         </div>
 
-        <div id="assistant-today-placeholder" class="assistant-today-placeholder ${threadHtml ? 'hidden' : ''}">
-          <div class="assistant-today-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          </div>
-          <h4 class="assistant-today-title">Your Personal Progress Companion</h4>
-          <p class="assistant-today-sub">I can see your cards, help you plan your day, break down complex goals, or chat about your habits.</p>
-        </div>
+        <div id="assistant-daily-briefing-wrap" class="assistant-daily-briefing-wrap"></div>
 
         <div id="assistant-thread" class="assistant-thread">${threadHtml}</div>
       </div>
@@ -347,6 +1252,7 @@ export async function renderAssistantState(status) {
       });
     }
 
+    fetchAndRenderDailyBriefing(false);
     attachThreadCardListeners();
     return;
   }
@@ -390,7 +1296,7 @@ export async function renderAssistantState(status) {
         <button type="submit" id="btn-assistant-save-key" class="btn btn-primary assistant-save-btn">Save &amp; test</button>
       </form>
 
-      <p class="assistant-notice">Your key is stored encrypted and used only to send your requests to Google. Card text you send goes to Google; avoid sensitive information. Remove your key anytime in AI settings.</p>
+      <p class="assistant-notice">Your key is stored encrypted and used only to send your requests to Google. Card text and photos you send go to Google; avoid sensitive information. Remove your key anytime in AI settings.</p>
     </div>
   `;
 
@@ -496,42 +1402,54 @@ export async function fetchAndRenderAssistant(showLoading = true) {
   }
 }
 
+let lastAssistantToggleTimestamp = 0;
+
 export function openAssistantPanel() {
-  if (isAssistantPanelOpen) return;
+  const panel = document.getElementById('assistant-panel');
+  if (isAssistantPanelOpen && panel && !panel.classList.contains('hidden')) return;
   isAssistantPanelOpen = true;
   closeAllMenus();
 
   const backdrop = document.getElementById('assistant-backdrop');
-  const panel = document.getElementById('assistant-panel');
   const btn = document.getElementById('btn-assistant');
+  const fabAi = document.getElementById('btn-fab-ai');
 
   if (backdrop) backdrop.classList.remove('hidden');
   if (panel) panel.classList.remove('hidden');
   if (btn) btn.classList.add('active');
+  if (fabAi) fabAi.classList.add('active');
 
   fetchAndRenderAssistant();
 }
 
 export function closeAssistantPanel() {
-  if (!isAssistantPanelOpen) return;
+  const panel = document.getElementById('assistant-panel');
+  if (!isAssistantPanelOpen && panel && panel.classList.contains('hidden')) return;
   isAssistantPanelOpen = false;
 
   closeHistoryPane();
 
   const backdrop = document.getElementById('assistant-backdrop');
-  const panel = document.getElementById('assistant-panel');
   const btn = document.getElementById('btn-assistant');
+  const fabAi = document.getElementById('btn-fab-ai');
 
   if (backdrop) backdrop.classList.add('hidden');
   if (panel) panel.classList.add('hidden');
   if (btn) btn.classList.remove('active');
+  if (fabAi) fabAi.classList.remove('active');
 }
 
 export function toggleAssistantPanel() {
-  if (isAssistantPanelOpen) {
-    closeAssistantPanel();
-  } else {
+  const now = Date.now();
+  if (now - lastAssistantToggleTimestamp < 200) return;
+  lastAssistantToggleTimestamp = now;
+
+  const panel = document.getElementById('assistant-panel');
+  const isCurrentlyHidden = panel ? panel.classList.contains('hidden') : !isAssistantPanelOpen;
+  if (isCurrentlyHidden) {
     openAssistantPanel();
+  } else {
+    closeAssistantPanel();
   }
 }
 
@@ -549,10 +1467,8 @@ export function startNewConversation(options = { toast: true }) {
     thread.innerHTML = '';
   }
 
-  const placeholder = document.getElementById('assistant-today-placeholder');
-  if (placeholder) {
-    placeholder.classList.remove('hidden');
-  }
+  isBriefingExpandedInChat = false;
+  updateBriefingDisplayMode(false);
 
   const textarea = document.getElementById('assistant-input');
   if (textarea) {
@@ -676,11 +1592,34 @@ export function renderHistoryPaneList() {
   });
 }
 
+export function replaceExpiredProposals(html) {
+  if (!html || typeof html !== 'string') return '';
+  if (!html.includes('assistant-proposals-sheet') && !html.includes('assistant-confirm-card')) {
+    return html;
+  }
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<body><div id="__expired_wrap">${html}</div></body>`, 'text/html');
+    const wrap = doc.getElementById('__expired_wrap');
+    if (!wrap) return html;
+    const sheets = wrap.querySelectorAll('.assistant-proposals-sheet, .assistant-confirm-card');
+    sheets.forEach(sheet => {
+      const note = doc.createElement('div');
+      note.className = 'confirm-discarded-state assistant-proposal-expired';
+      note.textContent = 'This proposal has expired. Ask again.';
+      sheet.parentNode.replaceChild(note, sheet);
+    });
+    return wrap.innerHTML;
+  } catch (_) {
+    return html;
+  }
+}
+
 export function loadChatSession(session) {
   if (!session) return;
   activeSessionId = session.id;
   conversationHistory = Array.isArray(session.history) ? [...session.history] : [];
-  threadHtml = session.threadHtml || '';
+  threadHtml = replaceExpiredProposals(stripImagesFromThreadHtml(session.threadHtml || ''));
 
   const thread = document.getElementById('assistant-thread');
   if (thread) {
@@ -688,14 +1627,8 @@ export function loadChatSession(session) {
     attachThreadCardListeners();
   }
 
-  const placeholder = document.getElementById('assistant-today-placeholder');
-  if (placeholder) {
-    if (threadHtml) {
-      placeholder.classList.add('hidden');
-    } else {
-      placeholder.classList.remove('hidden');
-    }
-  }
+  isBriefingExpandedInChat = false;
+  updateBriefingDisplayMode(Boolean(threadHtml && threadHtml.trim().length > 0));
 
   closeHistoryPane();
   scrollThreadToBottom();
@@ -724,6 +1657,170 @@ function scrollThreadToBottom() {
       content.scrollTop = content.scrollHeight;
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Card Context & @-Mention System
+// ---------------------------------------------------------------------------
+let activeCardContext = null;
+let mentionPopoverSelectedIndex = 0;
+let mentionFilteredCards = [];
+
+function getCardIconSvg(type) {
+  if (type === 'checklist') {
+    return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`;
+  }
+  if (type === 'note') {
+    return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+  }
+  // goal / default
+  return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`;
+}
+
+function getCardMetaText(card) {
+  if (card.type === 'checklist') {
+    const items = Array.isArray(card.items) ? card.items : [];
+    const done = items.filter(i => i.done).length;
+    return `Checklist • ${done}/${items.length} items`;
+  }
+  if (card.type === 'note') {
+    return 'Note';
+  }
+  const curr = card.currentSmallest || card.current || 0;
+  const target = card.targetSmallest || card.target || 100;
+  const unit = card.levels?.[0]?.name || card.unit || '';
+  return `Goal • ${curr}/${target}${unit ? ' ' + unit : ''}`;
+}
+
+function highlightMatchedText(text, query) {
+  if (!query) return escapeHtml(text);
+  const safeText = escapeHtml(text);
+  const q = escapeHtml(query);
+  const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return safeText.replace(regex, '<mark class="mention-highlight">$1</mark>');
+}
+
+export function setActiveCardContext(card) {
+  activeCardContext = card;
+  const wrap = document.getElementById('assistant-context-pill-wrap');
+  const titleEl = document.getElementById('assistant-context-pill-title');
+  const chips = document.getElementById('assistant-chips-scroll');
+  const input = document.getElementById('assistant-input');
+
+  if (wrap) wrap.classList.remove('hidden');
+  if (titleEl) titleEl.textContent = card.title || 'Untitled';
+  if (chips) chips.classList.add('hidden');
+  if (input) {
+    input.placeholder = 'Ask about this card (or press send to break down)...';
+    input.focus();
+  }
+  hideCardSuggestions();
+  closeMentionPopover();
+  updateAssistantControlsState();
+}
+
+export function clearActiveCardContext() {
+  activeCardContext = null;
+  const wrap = document.getElementById('assistant-context-pill-wrap');
+  const chips = document.getElementById('assistant-chips-scroll');
+  const input = document.getElementById('assistant-input');
+
+  if (wrap) wrap.classList.add('hidden');
+  if (chips) chips.classList.remove('hidden');
+  if (input) {
+    input.placeholder = 'Ask Assistant...';
+  }
+  updateAssistantControlsState();
+}
+
+export function openMentionPopover(filterQuery = '') {
+  const popover = document.getElementById('assistant-mention-popover');
+  const listEl = document.getElementById('assistant-mention-list');
+  const countEl = document.getElementById('assistant-mention-count');
+  if (!popover || !listEl) return;
+
+  const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  const query = (filterQuery || '').toLowerCase().trim();
+
+  mentionFilteredCards = liveBars.filter(b => {
+    if (!query) return true;
+    return (b.title || '').toLowerCase().includes(query);
+  });
+
+  if (countEl) {
+    countEl.textContent = `${mentionFilteredCards.length} card${mentionFilteredCards.length === 1 ? '' : 's'}`;
+  }
+
+  if (!liveBars.length) {
+    listEl.innerHTML = '<div class="assistant-mention-empty">No cards found. Create a tracker first.</div>';
+  } else if (!mentionFilteredCards.length) {
+    listEl.innerHTML = `<div class="assistant-mention-empty">No cards matching "@${escapeHtml(filterQuery)}"</div>`;
+  } else {
+    listEl.innerHTML = mentionFilteredCards.map((card, idx) => `
+      <div class="assistant-mention-item ${idx === 0 ? 'selected' : ''}" data-idx="${idx}" data-card-id="${escapeHtml(card.id)}" data-card-title="${escapeHtml(card.title || 'Untitled')}">
+        <div class="assistant-mention-item-icon ${escapeHtml(card.type || 'goal')}">
+          ${getCardIconSvg(card.type)}
+        </div>
+        <div class="assistant-mention-item-info">
+          <div class="assistant-mention-item-title">${highlightMatchedText(card.title || 'Untitled', filterQuery)}</div>
+          <div class="assistant-mention-item-meta">${escapeHtml(getCardMetaText(card))}</div>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.assistant-mention-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.idx, 10);
+        const card = mentionFilteredCards[idx];
+        if (card) {
+          selectMentionCard(card);
+        }
+      });
+    });
+  }
+
+  mentionPopoverSelectedIndex = 0;
+  popover.classList.remove('hidden');
+}
+
+export function closeMentionPopover() {
+  const popover = document.getElementById('assistant-mention-popover');
+  if (popover) popover.classList.add('hidden');
+  mentionPopoverSelectedIndex = 0;
+  mentionFilteredCards = [];
+}
+
+export function selectMentionCard(card) {
+  const textarea = document.getElementById('assistant-input');
+  if (textarea) {
+    // Strip trailing @query that was being typed
+    const val = textarea.value;
+    const cursorPos = textarea.selectionStart;
+    const before = val.slice(0, cursorPos);
+    const after = val.slice(cursorPos);
+    const atIndex = before.lastIndexOf('@');
+    if (atIndex !== -1) {
+      textarea.value = (before.slice(0, atIndex) + after).trim();
+    }
+  }
+  setActiveCardContext(card);
+}
+
+function updateMentionSelection(newIdx) {
+  const listEl = document.getElementById('assistant-mention-list');
+  if (!listEl || !mentionFilteredCards.length) return;
+  const items = listEl.querySelectorAll('.assistant-mention-item');
+  if (!items.length) return;
+
+  mentionPopoverSelectedIndex = (newIdx + items.length) % items.length;
+  items.forEach((item, idx) => {
+    if (idx === mentionPopoverSelectedIndex) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
 }
 
 /**
@@ -764,12 +1861,14 @@ function renderCardSuggestions(filterText = '') {
 
   wrap.querySelectorAll('.assistant-suggestion-pill').forEach(pill => {
     pill.addEventListener('click', () => {
-      const title = pill.dataset.cardTitle;
-      const textarea = document.getElementById('assistant-input');
-      if (textarea) {
-        textarea.value = `Break down: ${title}`;
-        textarea.focus();
-        updateAssistantControlsState();
+      const cardId = pill.dataset.cardId;
+      const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+      const found = liveBars.find(b => b.id === cardId);
+      if (found) {
+        setActiveCardContext(found);
+      } else {
+        const title = pill.dataset.cardTitle;
+        setActiveCardContext({ id: cardId, title, type: 'goal' });
       }
       wrap.classList.add('hidden');
     });
@@ -791,18 +1890,33 @@ async function handleAssistantPrompt(userText, options = {}) {
   }
   if (isGenerating) return;
 
-  const text = (userText || '').trim();
+  const targetCard = activeCardContext;
+  const rawInput = (userText || '').trim();
   const img = options.image || attachedImage;
 
-  if (!text && !img) return;
+  if (!rawInput && !img && !targetCard) return;
+
+  // Validation: If image is provided, verify size and format constraints
+  if (img) {
+    if (img.sizeBytes && img.sizeBytes > MAX_IMAGE_BYTES) {
+      showAttachmentError('Image size exceeds 3 MB limit after compression.');
+      clearAttachment();
+      return;
+    }
+    const mime = (img.mimeType || '').toLowerCase();
+    if (mime && !ACCEPTED_IMAGE_TYPES.includes(mime)) {
+      showAttachmentError('Only PNG, JPEG, and WebP images are supported.');
+      clearAttachment();
+      return;
+    }
+  }
 
   isGenerating = true;
   hideCardSuggestions();
+  closeMentionPopover();
+  clearActiveCardContext();
   updateAssistantControlsState();
-
-  // Hide today placeholder if visible
-  const placeholder = document.getElementById('assistant-today-placeholder');
-  if (placeholder) placeholder.classList.add('hidden');
+  updateBriefingDisplayMode(true);
 
   let thread = document.getElementById('assistant-thread');
   if (!thread) {
@@ -816,8 +1930,15 @@ async function handleAssistantPrompt(userText, options = {}) {
   if (img && img.dataUrl) {
     userContentHtml += `<img src="${escapeHtml(img.dataUrl)}" class="assistant-msg-user-img" alt="Attached image">`;
   }
-  if (text) {
-    userContentHtml += `<div>${escapeHtml(text)}</div>`;
+  if (targetCard) {
+    userContentHtml += `
+      <div class="assistant-msg-user-line">
+        <span class="assistant-thread-mention">@${escapeHtml(targetCard.title || 'Card')}</span>
+        <span>${escapeHtml(rawInput || 'Break down this card')}</span>
+      </div>
+    `;
+  } else if (rawInput) {
+    userContentHtml += `<div>${escapeHtml(rawInput)}</div>`;
   }
 
   const userMsgHtml = `
@@ -827,18 +1948,24 @@ async function handleAssistantPrompt(userText, options = {}) {
   `;
   thread.insertAdjacentHTML('beforeend', userMsgHtml);
 
-  // Initialize and persist session if history is enabled
+  // Initialize and persist session if history is enabled (never store image bytes in history)
+  const userTurnText = targetCard
+    ? `@${targetCard.title}: ${rawInput || 'Break down this card'}`
+    : (rawInput || '[Attached image]');
+
   if (isAiHistoryEnabled() && !activeSessionId) {
     activeSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    const titleText = text ? (text.length > 36 ? text.slice(0, 33) + '...' : text) : 'Image prompt';
+    const titleText = targetCard
+      ? `@${targetCard.title}`
+      : (rawInput ? (rawInput.length > 36 ? rawInput.slice(0, 33) + '...' : rawInput) : 'Image prompt');
     const sessions = getChatSessions();
     sessions.unshift({
       id: activeSessionId,
       title: titleText,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      history: [{ role: 'user', text }],
-      threadHtml: thread.innerHTML
+      history: [{ role: 'user', text: userTurnText }],
+      threadHtml: stripImagesFromThreadHtml(thread.innerHTML)
     });
     saveChatSessions(sessions);
   }
@@ -933,16 +2060,29 @@ async function handleAssistantPrompt(userText, options = {}) {
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
   const weekdayName = now.toLocaleDateString('en-US', { weekday: 'long' });
 
+  let promptToSend = rawInput;
+  if (targetCard) {
+    if (!rawInput) {
+      promptToSend = `Break down: ${targetCard.title}`;
+    } else {
+      promptToSend = `Regarding card "${targetCard.title}" (ID: ${targetCard.id}): ${rawInput}`;
+    }
+  }
+
+  const activeFirstName = getActiveUserFirstName();
   const payload = {
-    message: text,
+    message: promptToSend,
     history: sanitizedHistory,
     cards: cardsSummary,
+    targetCardId: targetCard ? targetCard.id : null,
     currentDate: `${localDateStr}T${localTimeStr}${tzOffsetStr}`,
     localDate: localDateStr,
     localTime: localTimeStr,
     timezone: userTimezone,
     tzOffset: tzOffsetStr,
     weekday: weekdayName,
+    firstName: activeFirstName || undefined,
+    userFirstName: activeFirstName || undefined,
   };
 
   if (img && img.data && img.mimeType) {
@@ -961,7 +2101,10 @@ async function handleAssistantPrompt(userText, options = {}) {
 
     // 4. Append Conversational Message from AI
     const replyMsg = result.message || 'I have analyzed your request.';
-    conversationHistory.push({ role: 'user', text });
+    conversationHistory.push({
+      role: 'user',
+      text: userTurnText
+    });
     conversationHistory.push({ role: 'model', text: replyMsg });
 
     const replyId = 'reply-' + Date.now();
@@ -974,9 +2117,16 @@ async function handleAssistantPrompt(userText, options = {}) {
     `;
     thread.insertAdjacentHTML('beforeend', replyHtml);
 
-    // 5. If AI proposes an action (create, update, delete, breakdown), render Confirmation Sheet!
-    if (result.hasAction && result.action) {
-      renderActionConfirmSheet(result.action, replyId);
+    // 5. If AI proposes actions (or legacy single action), render Confirmation Sheet!
+    let proposedActions = [];
+    if (Array.isArray(result.actions)) {
+      proposedActions = result.actions;
+    } else if (result.action && typeof result.action === 'object') {
+      proposedActions = [result.action];
+    }
+
+    if (proposedActions.length > 0) {
+      renderActionConfirmSheet(proposedActions, replyId);
     }
 
     threadHtml = thread.innerHTML;
@@ -1011,7 +2161,7 @@ function syncActiveSessionThread() {
     if (idx !== -1) {
       sessions[idx].updatedAt = Date.now();
       sessions[idx].history = [...conversationHistory];
-      sessions[idx].threadHtml = threadHtml;
+      sessions[idx].threadHtml = stripImagesFromThreadHtml(threadHtml);
       saveChatSessions(sessions);
     }
   }
@@ -1076,177 +2226,294 @@ function formatDatetimeLocal(val) {
 }
 
 /**
- * Renders the Confirmation Sheet card directly below an assistant reply.
+ * Shows an undo toast that remains visible for 10 seconds.
+ * Allows the user to revert a create or update action.
  */
-function renderActionConfirmSheet(action, parentMsgId) {
+export function showUndoToast({ message, onUndo, duration = 10000, undoText = 'Undo' }) {
+  let container = document.getElementById('toast-container') || document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-info toast-with-undo';
+  toast.innerHTML = `
+    <span class="toast-message">${escapeHtml(message)}</span>
+    <button type="button" class="btn-toast-undo">${escapeHtml(undoText)}</button>
+    <button type="button" class="btn-close-toast" aria-label="Close">&times;</button>
+  `;
+
+  let timer = null;
+  const dismiss = () => {
+    if (timer) clearTimeout(timer);
+    toast.classList.add('toast-out');
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
+  };
+
+  const undoBtn = toast.querySelector('.btn-toast-undo');
+  if (undoBtn) {
+    undoBtn.addEventListener('click', async () => {
+      undoBtn.disabled = true;
+      undoBtn.textContent = 'Undoing...';
+      try {
+        if (typeof onUndo === 'function') {
+          await onUndo();
+        }
+      } catch (err) {
+        console.error('[Assistant] Undo failed:', err);
+        showToast(err.message || 'Failed to undo action', 'error');
+      } finally {
+        dismiss();
+      }
+    });
+  }
+
+  const closeBtn = toast.querySelector('.btn-close-toast');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', dismiss);
+  }
+
+  container.appendChild(toast);
+
+  if (duration > 0) {
+    timer = setTimeout(dismiss, duration);
+  }
+
+  return toast;
+}
+
+/**
+ * Renders the Confirmation Sheet containing one list of proposals with checkboxes
+ * (delete unchecked by default), editable fields per item, real card titles looked up
+ * locally by cardId, "Apply selected (n)" button, per-item result, clear partial failure
+ * handling, and 10s undo toasts for create and update.
+ */
+export function renderActionConfirmSheet(actionsOrAction, parentMsgId) {
   const parentMsg = document.getElementById(parentMsgId);
   if (!parentMsg) return;
 
-  const cardId = 'confirm-' + Date.now();
-  const actType = (action.type || 'create').toLowerCase();
-  const isDelete = actType === 'delete';
-  const isUpdate = actType === 'update';
+  const rawList = Array.isArray(actionsOrAction)
+    ? actionsOrAction
+    : (actionsOrAction && typeof actionsOrAction === 'object' ? [actionsOrAction] : []);
 
-  const rawCardType = (action.cardType || 'goal').toLowerCase();
-  const cardType = rawCardType === 'checklist' ? 'checklist' : (rawCardType === 'note' ? 'note' : 'goal');
-  const typeLabel = cardType === 'checklist' ? 'Checklist' : (cardType === 'note' ? 'Markdown Note' : 'Goal Tracker');
+  if (!rawList.length) return;
 
-  // Safety check: For update & delete, look up the target card locally by cardId to use the real title and verify existence
+  const sheetId = 'confirm-sheet-' + Date.now();
   const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
-  let existingCard = null;
-  if (action.cardId && (isDelete || isUpdate)) {
-    existingCard = liveBars.find(b => String(b.id) === String(action.cardId));
-  }
 
-  let title = action.title || (isDelete ? 'Delete Tracker' : 'New Tracker');
-  let notFoundWarning = '';
-  if (isDelete || isUpdate) {
-    if (existingCard) {
-      title = existingCard.title; // Always display verified title from local state
-    } else {
-      notFoundWarning = 'Target tracker not found in your list. It may have been deleted or moved.';
-    }
-  }
+  let itemsHtml = '';
+  let defaultCheckedCount = 0;
 
-  const explanation = action.explanation || '';
+  rawList.forEach((act, idx) => {
+    const actType = (act.type || 'create').toLowerCase();
+    const isDelete = actType === 'delete';
+    const isUpdate = actType === 'update';
+    const isCreate = actType === 'create';
 
-  let statusBadgeText = 'Ready to create';
-  if (isDelete) statusBadgeText = 'Confirm deletion';
-  if (isUpdate) statusBadgeText = 'Ready to update';
+    // Delete is unchecked by default; create and update are checked by default
+    const isChecked = !isDelete;
+    if (isChecked) defaultCheckedCount++;
 
-  // Fields markup
-  let typeFieldsHtml = '';
-  if (!isDelete) {
-    if (cardType === 'goal') {
-      const targetVal = typeof action.target === 'number' ? action.target : 100;
-      const currentVal = typeof action.currentProgress === 'number' ? action.currentProgress : 0;
-      const unitVal = sanitizeUnit(action.unit);
-      const detectedPreset = detectPreset(action.preset, unitVal);
-
-      typeFieldsHtml = `
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Preset Unit Type</label>
-          <select class="confirm-input confirm-preset-select">
-            <option value="Time" ${detectedPreset === 'Time' ? 'selected' : ''}>Time (hrs / min)</option>
-            <option value="Pages" ${detectedPreset === 'Pages' ? 'selected' : ''}>Pages</option>
-            <option value="Chapters" ${detectedPreset === 'Chapters' ? 'selected' : ''}>Chapters</option>
-            <option value="Lectures" ${detectedPreset === 'Lectures' ? 'selected' : ''}>Lectures</option>
-            <option value="Videos" ${detectedPreset === 'Videos' ? 'selected' : ''}>Videos</option>
-            <option value="Problems" ${detectedPreset === 'Problems' ? 'selected' : ''}>Problems</option>
-            <option value="Tasks" ${detectedPreset === 'Tasks' ? 'selected' : ''}>Tasks</option>
-            <option value="Books" ${detectedPreset === 'Books' ? 'selected' : ''}>Books</option>
-            <option value="Custom" ${detectedPreset === 'Custom' ? 'selected' : ''}>Custom</option>
-          </select>
-        </div>
-        <div class="confirm-row-2col">
-          <div class="confirm-field-group">
-            <label class="confirm-field-label">Target Goal</label>
-            <input type="number" class="confirm-input confirm-target-input" value="${targetVal}" min="0" step="any">
-          </div>
-          <div class="confirm-field-group">
-            <label class="confirm-field-label">Current Progress</label>
-            <input type="number" class="confirm-input confirm-current-input" value="${currentVal}" min="0" step="any">
-          </div>
-        </div>
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Unit</label>
-          <input type="text" class="confirm-input confirm-unit-input" value="${escapeHtml(unitVal)}" placeholder="e.g. mins, pages, %">
-        </div>
-      `;
-    } else if (cardType === 'checklist') {
-      const items = Array.isArray(action.items) && action.items.length ? action.items : [{ text: 'Step 1' }];
-      const itemsHtml = items.map((it, idx) => `
-        <div class="confirm-item-row" data-idx="${idx}">
-          <input type="checkbox" class="confirm-item-checkbox" checked title="Include in tracker">
-          <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
-        </div>
-      `).join('');
-
-      typeFieldsHtml = `
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Checklist Items (${items.length})</label>
-          <div class="confirm-items-list">
-            ${itemsHtml}
-          </div>
-        </div>
-      `;
-    } else if (cardType === 'note') {
-      const noteText = action.noteText || '';
-      typeFieldsHtml = `
-        <div class="confirm-field-group">
-          <label class="confirm-field-label">Note Content</label>
-          <textarea class="confirm-input confirm-note-textarea" rows="4">${escapeHtml(noteText)}</textarea>
-        </div>
-      `;
+    // Safety lookup: look up target card locally by cardId
+    let existingCard = null;
+    if (act.cardId) {
+      existingCard = liveBars.find(b => String(b.id) === String(act.cardId));
     }
 
-    // Editable Deadline Field with calendar picker (optional for all non-delete cards)
-    const deadlineVal = formatDatetimeLocal(action.deadline);
-    typeFieldsHtml += `
-      <div class="confirm-field-group">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
-          <label class="confirm-field-label">Deadline (optional)</label>
-          <button type="button" class="btn-confirm-clear-deadline" style="background: none; border: none; font-size: 0.72rem; color: var(--text-muted); cursor: pointer; padding: 0;" title="Remove deadline">Clear</button>
-        </div>
-        <input type="datetime-local" class="confirm-input confirm-deadline-input" value="${deadlineVal}">
-      </div>
-    `;
+    const realTitle = existingCard ? existingCard.title : '';
+    let displayTitle = act.title || (isDelete ? 'Delete Tracker' : 'New Tracker');
+    let notFoundWarning = '';
 
-    // Habit / Daily Reset Option for Goal and Checklist
-    if (cardType === 'goal' || cardType === 'checklist') {
-      const isRec = Boolean(action.isRecurring);
-      const resetTimeVal = action.resetTime || '07:00';
+    if (isDelete || isUpdate) {
+      if (existingCard) {
+        displayTitle = realTitle;
+      } else {
+        notFoundWarning = 'Target tracker not found in your list.';
+      }
+    }
+
+    const isReschedule = isUpdate && act.deadline && !act.items && !act.noteText && !act.target;
+    const badgeText = isCreate ? 'Create' : (isDelete ? 'Delete' : (isReschedule ? 'Reschedule' : 'Update'));
+
+    const rawCardType = (act.cardType || existingCard?.type || 'goal').toLowerCase();
+    const cardType = rawCardType === 'checklist' ? 'checklist' : (rawCardType === 'note' ? 'note' : 'goal');
+
+    // Fields markup
+    let typeFieldsHtml = '';
+    if (!isDelete) {
+      // Editable Title
       typeFieldsHtml += `
         <div class="confirm-field-group">
-          <div class="confirm-row-2col" style="align-items: center;">
-            <label class="confirm-field-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-              <input type="checkbox" class="confirm-recurring-checkbox" ${isRec ? 'checked' : ''} style="accent-color: var(--ui-accent); cursor: pointer;">
-              <span>Daily Habit</span>
-            </label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;">Reset at:</span>
-              <input type="time" class="confirm-input confirm-reset-time-input" value="${escapeHtml(resetTimeVal)}" style="padding: 4px 6px;">
+          <label class="confirm-field-label">Title</label>
+          <input type="text" class="confirm-input proposal-title-input" value="${escapeHtml(act.title || displayTitle)}">
+        </div>
+      `;
+
+      if (cardType === 'goal') {
+        const targetVal = typeof act.target === 'number' ? act.target : (existingCard?.targetSmallest || 100);
+        const currentVal = typeof act.currentProgress === 'number' ? act.currentProgress : (existingCard?.currentSmallest || 0);
+        const unitVal = sanitizeUnit(act.unit || existingCard?.levels?.[0]?.name);
+        const detectedPreset = detectPreset(act.preset || existingCard?.preset, unitVal);
+
+        typeFieldsHtml += `
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Preset Unit</label>
+            <select class="confirm-input proposal-preset-select">
+              <option value="Time" ${detectedPreset === 'Time' ? 'selected' : ''}>Time (hrs / min)</option>
+              <option value="Pages" ${detectedPreset === 'Pages' ? 'selected' : ''}>Pages</option>
+              <option value="Chapters" ${detectedPreset === 'Chapters' ? 'selected' : ''}>Chapters</option>
+              <option value="Lectures" ${detectedPreset === 'Lectures' ? 'selected' : ''}>Lectures</option>
+              <option value="Videos" ${detectedPreset === 'Videos' ? 'selected' : ''}>Videos</option>
+              <option value="Problems" ${detectedPreset === 'Problems' ? 'selected' : ''}>Problems</option>
+              <option value="Tasks" ${detectedPreset === 'Tasks' ? 'selected' : ''}>Tasks</option>
+              <option value="Books" ${detectedPreset === 'Books' ? 'selected' : ''}>Books</option>
+              <option value="Custom" ${detectedPreset === 'Custom' ? 'selected' : ''}>Custom</option>
+            </select>
+          </div>
+          <div class="confirm-row-2col">
+            <div class="confirm-field-group">
+              <label class="confirm-field-label">Target</label>
+              <input type="number" class="confirm-input proposal-target-input" value="${targetVal}" min="0" step="any">
+            </div>
+            <div class="confirm-field-group">
+              <label class="confirm-field-label">Current</label>
+              <input type="number" class="confirm-input proposal-current-input" value="${currentVal}" min="0" step="any">
             </div>
           </div>
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Unit</label>
+            <input type="text" class="confirm-input proposal-unit-input" value="${escapeHtml(unitVal)}" placeholder="e.g. mins, pages, %">
+          </div>
+        `;
+      } else if (cardType === 'checklist') {
+        const items = Array.isArray(act.items) && act.items.length
+          ? act.items
+          : (existingCard?.items || [{ text: 'Step 1' }]);
+        const itemsListHtml = items.map((it, iIdx) => `
+          <div class="confirm-item-row" data-idx="${iIdx}">
+            <input type="checkbox" class="confirm-item-checkbox" checked title="Include item">
+            <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
+          </div>
+        `).join('');
+
+        typeFieldsHtml += `
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Checklist Items (${items.length})</label>
+            <div class="confirm-items-list proposal-items-list">
+              ${itemsListHtml}
+            </div>
+          </div>
+        `;
+      } else if (cardType === 'note') {
+        const noteText = act.noteText || existingCard?.text || '';
+        typeFieldsHtml += `
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Note Content</label>
+            <textarea class="confirm-input proposal-note-textarea" rows="3">${escapeHtml(noteText)}</textarea>
+          </div>
+        `;
+      }
+
+      // Editable Deadline with calendar picker & Clear button
+      const rawDl = act.deadline || existingCard?.deadlineAt;
+      const dlVal = formatDatetimeLocal(rawDl);
+      typeFieldsHtml += `
+        <div class="confirm-field-group">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+            <label class="confirm-field-label">Deadline (optional)</label>
+            <button type="button" class="btn-proposal-clear-deadline" style="background: none; border: none; font-size: 0.72rem; color: var(--text-muted); cursor: pointer; padding: 0;" title="Clear deadline">Clear</button>
+          </div>
+          <input type="datetime-local" class="confirm-input proposal-deadline-input" value="${dlVal}">
+        </div>
+      `;
+
+      // Daily habit
+      if (cardType === 'goal' || cardType === 'checklist') {
+        const isRec = Boolean(act.isRecurring ?? existingCard?.repeat);
+        const resetTimeVal = act.resetTime || existingCard?.repeat?.resetTime || '07:00';
+        typeFieldsHtml += `
+          <div class="confirm-field-group">
+            <div class="confirm-row-2col" style="align-items: center;">
+              <label class="confirm-field-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+                <input type="checkbox" class="proposal-recurring-checkbox" ${isRec ? 'checked' : ''} style="accent-color: var(--ui-accent); cursor: pointer;">
+                <span>Daily Habit</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;">Reset:</span>
+                <input type="time" class="confirm-input proposal-reset-time-input" value="${escapeHtml(resetTimeVal)}" style="padding: 4px 6px;">
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      typeFieldsHtml = `
+        <div class="proposal-delete-warning">
+          Will permanently delete: <strong>${escapeHtml(displayTitle)}</strong>
         </div>
       `;
     }
-  }
 
-  const primaryBtnClass = isDelete ? 'btn-danger' : 'btn-primary';
-  const primaryBtnText = isDelete ? 'Delete Tracker' : (isUpdate ? 'Apply Update' : 'Create Tracker');
+    const explanation = act.explanation || '';
 
-  const confirmCardHtml = `
-    <div id="${cardId}" class="assistant-confirm-card" data-action-type="${actType}" data-card-id="${escapeHtml(action.cardId || '')}" data-card-type="${cardType}">
-      <div class="confirm-card-header">
-        <div class="confirm-type-badge ${cardType}">
-          <span>${typeLabel}</span>
+    itemsHtml += `
+      <div class="proposal-item" data-idx="${idx}" data-action-type="${actType}" data-card-id="${escapeHtml(act.cardId || '')}" data-card-type="${cardType}">
+        <div class="proposal-item-header">
+          <label class="proposal-item-check-label">
+            <input type="checkbox" class="proposal-item-checkbox" ${isChecked ? 'checked' : ''} ${notFoundWarning ? 'disabled' : ''}>
+            <span class="proposal-action-badge ${actType}">${badgeText}</span>
+            <span class="proposal-item-main-title" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</span>
+          </label>
+          <div class="proposal-item-header-right">
+            <span class="proposal-item-status-pill pending">Pending</span>
+            <button type="button" class="proposal-item-discard-btn" title="Discard this item">&times;</button>
+          </div>
         </div>
-        <span class="confirm-status-text">${statusBadgeText}</span>
+
+        <div class="proposal-item-body">
+          ${isUpdate && existingCard ? `<div class="proposal-target-title">Target: <strong>${escapeHtml(realTitle)}</strong></div>` : ''}
+          ${notFoundWarning ? `<div class="assistant-connect-error" role="alert">${escapeHtml(notFoundWarning)}</div>` : ''}
+          ${typeFieldsHtml}
+          ${explanation ? `<div class="confirm-explanation">${escapeHtml(explanation)}</div>` : ''}
+          <div class="proposal-item-error hidden"></div>
+        </div>
+      </div>
+    `;
+  });
+
+  const sheetHtml = `
+    <div id="${sheetId}" class="assistant-proposals-sheet">
+      <div class="proposal-sheet-header">
+        <div class="proposal-sheet-title">
+          <span>Proposed Changes</span>
+          <span class="proposal-sheet-count-badge">${rawList.length}</span>
+        </div>
+        <span class="proposal-sheet-hint">Review, edit, and apply selected changes</span>
       </div>
 
-      <div class="confirm-field-group">
-        <label class="confirm-field-label">Title</label>
-        <input type="text" class="confirm-input confirm-title-input" value="${escapeHtml(title)}" ${isDelete ? 'readonly' : ''}>
+      <div class="proposal-sheet-list">
+        ${itemsHtml}
       </div>
 
-      ${typeFieldsHtml}
-
-      ${explanation ? `<p class="confirm-explanation">${escapeHtml(explanation)}</p>` : ''}
-
-      ${notFoundWarning ? `<div class="assistant-connect-error" role="alert" style="margin-bottom: 0.75rem;">${escapeHtml(notFoundWarning)}</div>` : ''}
-
-      <div class="confirm-actions">
-        <button type="button" class="btn ${primaryBtnClass} btn-confirm-primary" ${notFoundWarning ? 'disabled title="Tracker not found in local list"' : ''}>
-          <span>${primaryBtnText}</span>
-        </button>
-        <button type="button" class="btn btn-secondary btn-confirm-cancel">Discard</button>
+      <div class="proposal-sheet-footer">
+        <span class="proposal-selection-count">${defaultCheckedCount} of ${rawList.length} selected</span>
+        <div class="proposal-sheet-actions">
+          <button type="button" class="btn btn-secondary btn-proposal-discard-all">Discard all</button>
+          <button type="button" class="btn btn-primary btn-proposal-apply-all" ${defaultCheckedCount === 0 ? 'disabled' : ''}>
+            Apply selected (${defaultCheckedCount})
+          </button>
+        </div>
       </div>
     </div>
   `;
 
-  parentMsg.insertAdjacentHTML('beforeend', confirmCardHtml);
-  attachActionCardListeners(document.getElementById(cardId), action);
+  parentMsg.insertAdjacentHTML('beforeend', sheetHtml);
+  attachProposalsSheetListeners(document.getElementById(sheetId), rawList);
 }
 
 function attachThreadCardListeners() {
@@ -1256,303 +2523,794 @@ function attachThreadCardListeners() {
       attachActionCardListeners(card, {});
     }
   });
+  const sheets = document.querySelectorAll('.assistant-proposals-sheet');
+  sheets.forEach(sheet => {
+    if (sheet.querySelector('.btn-proposal-apply-all')) {
+      attachProposalsSheetListeners(sheet, []);
+    }
+  });
 }
 
-function attachActionCardListeners(card, rawAction) {
-  if (!card) return;
+function attachProposalsSheetListeners(sheet, rawList) {
+  if (!sheet) return;
 
-  const btnPrimary = card.querySelector('.btn-confirm-primary');
-  const btnCancel = card.querySelector('.btn-confirm-cancel');
-  const actionsWrap = card.querySelector('.confirm-actions');
-  const actType = card.dataset.actionType || 'create';
-  const cardId = card.dataset.cardId || rawAction.cardId;
+  const countLabel = sheet.querySelector('.proposal-selection-count');
+  const btnApply = sheet.querySelector('.btn-proposal-apply-all');
+  const btnDiscardAll = sheet.querySelector('.btn-proposal-discard-all');
 
-  // Preset change handler for goal tracker
-  const presetSelect = card.querySelector('.confirm-preset-select');
-  const unitInput = card.querySelector('.confirm-unit-input');
-  if (presetSelect && unitInput) {
-    presetSelect.addEventListener('change', () => {
-      const p = presetSelect.value;
-      if (p === 'Time') unitInput.value = 'mins';
-      else if (p === 'Pages') unitInput.value = 'pages';
-      else if (p === 'Chapters') unitInput.value = 'chapters';
-      else if (p === 'Lectures') unitInput.value = 'lectures';
-      else if (p === 'Videos') unitInput.value = 'videos';
-      else if (p === 'Problems') unitInput.value = 'problems';
-      else if (p === 'Tasks') unitInput.value = 'tasks';
-      else if (p === 'Books') unitInput.value = 'books';
+  function updateCheckedCount() {
+    const allItems = Array.from(sheet.querySelectorAll('.proposal-item:not(.proposal-item-discarded):not(.proposal-item-applied)'));
+    const checkedItems = allItems.filter(item => {
+      const cb = item.querySelector('.proposal-item-checkbox');
+      return cb && cb.checked;
     });
+
+    const totalActive = allItems.length;
+    const n = checkedItems.length;
+
+    if (countLabel) {
+      countLabel.textContent = `${n} of ${totalActive} selected`;
+    }
+
+    if (btnApply) {
+      btnApply.textContent = `Apply selected (${n})`;
+      btnApply.disabled = n === 0;
+    }
   }
 
-  // Clear deadline button handler
-  const clearDeadlineBtn = card.querySelector('.btn-confirm-clear-deadline');
-  const deadlineInput = card.querySelector('.confirm-deadline-input');
-  if (clearDeadlineBtn && deadlineInput) {
-    clearDeadlineBtn.addEventListener('click', () => {
-      deadlineInput.value = '';
-    });
-  }
+  // Preset changes & Clear deadline buttons inside items
+  sheet.querySelectorAll('.proposal-item').forEach(item => {
+    const presetSelect = item.querySelector('.proposal-preset-select');
+    const unitInput = item.querySelector('.proposal-unit-input');
+    if (presetSelect && unitInput) {
+      presetSelect.addEventListener('change', () => {
+        const p = presetSelect.value;
+        if (p === 'Time') unitInput.value = 'mins';
+        else if (p === 'Pages') unitInput.value = 'pages';
+        else if (p === 'Chapters') unitInput.value = 'chapters';
+        else if (p === 'Lectures') unitInput.value = 'lectures';
+        else if (p === 'Videos') unitInput.value = 'videos';
+        else if (p === 'Problems') unitInput.value = 'problems';
+        else if (p === 'Tasks') unitInput.value = 'tasks';
+        else if (p === 'Books') unitInput.value = 'books';
+      });
+    }
 
-  if (btnCancel && actionsWrap) {
-    btnCancel.addEventListener('click', () => {
-      actionsWrap.innerHTML = `<div class="confirm-discarded-state">Action proposal discarded.</div>`;
+    const clearDlBtn = item.querySelector('.btn-proposal-clear-deadline');
+    const dlInput = item.querySelector('.proposal-deadline-input');
+    if (clearDlBtn && dlInput) {
+      clearDlBtn.addEventListener('click', () => {
+        dlInput.value = '';
+      });
+    }
+
+    // Individual item checkbox
+    const cb = item.querySelector('.proposal-item-checkbox');
+    if (cb) {
+      cb.addEventListener('change', () => {
+        updateCheckedCount();
+      });
+    }
+
+    // Individual item discard button
+    const discardBtn = item.querySelector('.proposal-item-discard-btn');
+    if (discardBtn) {
+      discardBtn.addEventListener('click', () => {
+        item.classList.add('proposal-item-discarded');
+        const pill = item.querySelector('.proposal-item-status-pill');
+        if (pill) {
+          pill.className = 'proposal-item-status-pill pending';
+          pill.textContent = 'Discarded';
+        }
+        const itemCb = item.querySelector('.proposal-item-checkbox');
+        if (itemCb) {
+          itemCb.checked = false;
+          itemCb.disabled = true;
+        }
+        item.style.opacity = '0.4';
+        updateCheckedCount();
+      });
+    }
+  });
+
+  // Discard all button
+  if (btnDiscardAll) {
+    btnDiscardAll.addEventListener('click', () => {
+      sheet.querySelectorAll('.proposal-item:not(.proposal-item-applied)').forEach(item => {
+        item.classList.add('proposal-item-discarded');
+        const pill = item.querySelector('.proposal-item-status-pill');
+        if (pill) {
+          pill.className = 'proposal-item-status-pill pending';
+          pill.textContent = 'Discarded';
+        }
+        const itemCb = item.querySelector('.proposal-item-checkbox');
+        if (itemCb) {
+          itemCb.checked = false;
+          itemCb.disabled = true;
+        }
+        item.style.opacity = '0.4';
+      });
+      const footer = sheet.querySelector('.proposal-sheet-footer');
+      if (footer) {
+        footer.innerHTML = `<div class="confirm-discarded-state" style="width: 100%;">Proposals discarded.</div>`;
+      }
       const thread = document.getElementById('assistant-thread');
       if (thread) threadHtml = thread.innerHTML;
       syncActiveSessionThread();
     });
   }
 
-  if (btnPrimary && actionsWrap) {
-    btnPrimary.addEventListener('click', async () => {
-      btnPrimary.disabled = true;
-      btnPrimary.textContent = 'Processing...';
+  // Apply selected button
+  if (btnApply) {
+    btnApply.addEventListener('click', async () => {
+      const itemsToApply = Array.from(sheet.querySelectorAll('.proposal-item:not(.proposal-item-discarded):not(.proposal-item-applied)'))
+        .filter(item => {
+          const cb = item.querySelector('.proposal-item-checkbox');
+          return cb && cb.checked;
+        });
 
-      // 1. DELETE ACTION
-      if (actType === 'delete') {
-        if (!cardId) {
-          showToast('No card ID specified to delete', 'error');
-          btnPrimary.disabled = false;
-          return;
+      if (!itemsToApply.length) return;
+
+      btnApply.disabled = true;
+      btnApply.textContent = 'Applying...';
+
+      let successCount = 0;
+      let failCount = 0;
+      const appliedActions = [];
+
+      for (const item of itemsToApply) {
+        const idx = parseInt(item.dataset.idx, 10);
+        const rawAction = rawList[idx] || {};
+        const actType = item.dataset.actionType || 'create';
+        const cardId = item.dataset.cardId || rawAction.cardId;
+        const cardType = item.dataset.cardType || 'goal';
+
+        const statusPill = item.querySelector('.proposal-item-status-pill');
+        const errorBox = item.querySelector('.proposal-item-error');
+
+        if (statusPill) {
+          statusPill.className = 'proposal-item-status-pill applying';
+          statusPill.textContent = 'Applying...';
         }
+        if (errorBox) {
+          errorBox.classList.add('hidden');
+          errorBox.textContent = '';
+        }
+
         try {
-          if (typeof deps.handleDeleteBarFromAi === 'function') {
-            await deps.handleDeleteBarFromAi(cardId);
+          // Read user-edited values from DOM
+          const titleInput = item.querySelector('.proposal-title-input');
+          const finalTitle = titleInput ? titleInput.value.trim() : (rawAction.title || 'Untitled');
+
+          let targetSmallest = 100;
+          let currentSmallest = 0;
+          let levels = [{ name: '%', multiplier: 1, target: 100 }];
+          let items = null;
+          let text = null;
+          let finalPreset = 'Custom';
+
+          if (cardType === 'goal') {
+            const targetInput = item.querySelector('.proposal-target-input');
+            const currentInput = item.querySelector('.proposal-current-input');
+            const unitInput = item.querySelector('.proposal-unit-input');
+            const presetSelect = item.querySelector('.proposal-preset-select');
+
+            const tVal = targetInput ? parseFloat(targetInput.value) || 100 : 100;
+            const cVal = currentInput ? parseFloat(currentInput.value) || 0 : 0;
+            const uVal = unitInput ? sanitizeUnit(unitInput.value) : '%';
+            const chosenPreset = presetSelect ? presetSelect.value : detectPreset(rawAction.preset, uVal);
+
+            targetSmallest = tVal;
+            currentSmallest = cVal;
+            finalPreset = chosenPreset;
+
+            if (chosenPreset === 'Time') {
+              levels = [
+                { name: 'Minutes', conversionToNext: 60 },
+                { name: 'Hours', conversionToNext: null }
+              ];
+            } else if (chosenPreset !== 'Custom') {
+              levels = [{ name: chosenPreset, conversionToNext: null }];
+            } else {
+              levels = [{ name: uVal, conversionToNext: null }];
+            }
+          } else if (cardType === 'checklist') {
+            finalPreset = 'Custom';
+            const itemRows = Array.from(item.querySelectorAll('.confirm-item-row'));
+            const checkedItems = itemRows
+              .filter(row => row.querySelector('.confirm-item-checkbox')?.checked)
+              .map((row, iIdx) => ({
+                id: String(iIdx + 1),
+                text: row.querySelector('.confirm-item-text')?.value.trim() || `Item ${iIdx + 1}`,
+                done: false
+              }));
+
+            items = checkedItems.length ? checkedItems : [{ id: '1', text: 'Step 1', done: false }];
+            targetSmallest = items.length;
+            currentSmallest = 0;
+            levels = [{ name: 'items', multiplier: 1, target: items.length }];
+          } else if (cardType === 'note') {
+            finalPreset = 'Custom';
+            const noteArea = item.querySelector('.proposal-note-textarea');
+            text = noteArea ? noteArea.value : '';
+            targetSmallest = 1;
+            currentSmallest = 0;
+            levels = [{ name: 'notes', multiplier: 1, target: 1 }];
           }
-          actionsWrap.innerHTML = `<div class="confirm-success-state"><span>Tracker deleted ✓</span></div>`;
-          const thread = document.getElementById('assistant-thread');
-          if (thread) threadHtml = thread.innerHTML;
-          syncActiveSessionThread();
+
+          // Deadline
+          let deadlineAt = null;
+          const dlInput = item.querySelector('.proposal-deadline-input');
+          if (dlInput && dlInput.value) {
+            const parsed = new Date(dlInput.value).getTime();
+            if (!isNaN(parsed) && parsed > 0) deadlineAt = parsed;
+          } else if (rawAction.deadline) {
+            try {
+              const parsed = normalizeAiDeadline(rawAction.deadline);
+              if (parsed && !isNaN(parsed)) deadlineAt = parsed;
+            } catch (_) {}
+          }
+
+          // Repeat / Daily habit
+          const recurringCheckbox = item.querySelector('.proposal-recurring-checkbox');
+          const resetTimeInput = item.querySelector('.proposal-reset-time-input');
+          const isRecurring = recurringCheckbox ? recurringCheckbox.checked : Boolean(rawAction.isRecurring);
+
+          let repeat = null;
+          if (isRecurring) {
+            repeat = {
+              resetTime: (resetTimeInput && resetTimeInput.value) ? resetTimeInput.value : (rawAction.resetTime || '07:00'),
+              resetCount: null,
+              checklistResetEnabled: cardType === 'checklist',
+              deadlineResetEnabled: false,
+              lastResetAt: Date.now()
+            };
+          }
+
+          if (actType === 'delete') {
+            if (!cardId) throw new Error('No card ID specified for delete');
+            const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+            const existingCard = liveBars.find(b => String(b.id) === String(cardId));
+            const originalSnapshot = existingCard ? JSON.parse(JSON.stringify(existingCard)) : null;
+
+            if (typeof deps.handleDeleteBarFromAi === 'function') {
+              await deps.handleDeleteBarFromAi(cardId);
+            }
+            if (statusPill) {
+              statusPill.className = 'proposal-item-status-pill applied';
+              statusPill.textContent = '✓ Deleted';
+            }
+            if (originalSnapshot) {
+              appliedActions.push({
+                type: 'delete',
+                cardId,
+                title: originalSnapshot.title || 'tracker',
+                undo: async () => {
+                  if (typeof deps.handleCreateBarFromAi === 'function') {
+                    await deps.handleCreateBarFromAi(originalSnapshot);
+                  }
+                }
+              });
+            }
+          } else if (actType === 'update') {
+            if (!cardId) throw new Error('No card ID specified for update');
+            const liveBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+            const existingCard = liveBars.find(b => String(b.id) === String(cardId));
+            if (!existingCard) throw new Error('Target tracker not found locally');
+
+            // Snapshot for undo
+            const originalSnapshot = JSON.parse(JSON.stringify(existingCard));
+
+            const updates = {};
+
+            // 1. Title (only if changed)
+            if (finalTitle && finalTitle !== existingCard.title) {
+              updates.title = finalTitle;
+            }
+
+            // 2. Type-specific fields (Never send target, progress, items or type unchanged)
+            if (cardType === 'goal') {
+              const targetInput = item.querySelector('.proposal-target-input');
+              const currentInput = item.querySelector('.proposal-current-input');
+              const unitInput = item.querySelector('.proposal-unit-input');
+              const presetSelect = item.querySelector('.proposal-preset-select');
+
+              const existingTarget = existingCard.targetSmallest !== null && existingCard.targetSmallest !== undefined ? Number(existingCard.targetSmallest) : null;
+              const existingCurrent = existingCard.currentSmallest !== null && existingCard.currentSmallest !== undefined ? Number(existingCard.currentSmallest) : null;
+              const existingUnit = existingCard.levels?.[0]?.name || '%';
+              const existingPreset = existingCard.preset || 'Custom';
+
+              if (targetInput) {
+                const tVal = parseFloat(targetInput.value);
+                if (!isNaN(tVal) && tVal !== existingTarget) {
+                  updates.targetSmallest = tVal;
+                }
+              }
+
+              if (currentInput) {
+                const cVal = parseFloat(currentInput.value);
+                if (!isNaN(cVal) && cVal !== existingCurrent) {
+                  updates.currentSmallest = cVal;
+                }
+              }
+
+              const uVal = unitInput ? sanitizeUnit(unitInput.value) : existingUnit;
+              const chosenPreset = presetSelect ? presetSelect.value : detectPreset(rawAction.preset, uVal);
+
+              if (chosenPreset !== existingPreset || uVal !== existingUnit) {
+                updates.preset = chosenPreset;
+                if (chosenPreset === 'Time') {
+                  updates.levels = [
+                    { name: 'Minutes', conversionToNext: 60 },
+                    { name: 'Hours', conversionToNext: null }
+                  ];
+                } else if (chosenPreset !== 'Custom') {
+                  updates.levels = [{ name: chosenPreset, conversionToNext: null }];
+                } else {
+                  updates.levels = [{ name: uVal, conversionToNext: null }];
+                }
+              }
+            } else if (cardType === 'checklist') {
+              const itemRows = Array.from(item.querySelectorAll('.confirm-item-row'));
+              const checkedItems = itemRows
+                .filter(row => row.querySelector('.confirm-item-checkbox')?.checked)
+                .map((row, iIdx) => ({
+                  id: String(iIdx + 1),
+                  text: row.querySelector('.confirm-item-text')?.value.trim() || `Item ${iIdx + 1}`,
+                  done: false
+                }));
+              const finalItems = checkedItems.length ? checkedItems : [{ id: '1', text: 'Step 1', done: false }];
+              const existingItems = Array.isArray(existingCard.items) ? existingCard.items : [];
+              const itemsChanged = finalItems.length !== existingItems.length ||
+                finalItems.some((it, i) => it.text !== existingItems[i]?.text);
+              if (itemsChanged) {
+                updates.items = finalItems;
+                updates.targetSmallest = finalItems.length;
+              }
+            } else if (cardType === 'note') {
+              const noteArea = item.querySelector('.proposal-note-textarea');
+              const newText = noteArea ? noteArea.value : '';
+              if (newText !== (existingCard.text || '')) {
+                updates.text = newText;
+              }
+            }
+
+            // 3. Deadline (Rescheduling must change only the deadline)
+            let newDeadlineAt = null;
+            let deadlineProvided = false;
+            const dlInput = item.querySelector('.proposal-deadline-input');
+            if (dlInput && dlInput.value) {
+              const parsed = new Date(dlInput.value).getTime();
+              if (!isNaN(parsed) && parsed > 0) {
+                newDeadlineAt = parsed;
+                deadlineProvided = true;
+              }
+            } else if (dlInput && !dlInput.value && existingCard.deadlineAt) {
+              newDeadlineAt = null;
+              deadlineProvided = true;
+            } else if (rawAction.deadline) {
+              try {
+                const parsed = normalizeAiDeadline(rawAction.deadline);
+                if (parsed && !isNaN(parsed)) {
+                  newDeadlineAt = parsed;
+                  deadlineProvided = true;
+                }
+              } catch (_) {}
+            }
+
+            const existingDeadline = existingCard.deadlineAt ? Number(existingCard.deadlineAt) : null;
+            if (deadlineProvided && newDeadlineAt !== existingDeadline) {
+              updates.deadlineAt = newDeadlineAt;
+              updates.updateDeadline = true;
+              updates.alertAtDeadline = !!newDeadlineAt;
+            }
+
+            // 4. Repeat / Recurring
+            const recurringCheckbox = item.querySelector('.proposal-recurring-checkbox');
+            const resetTimeInput = item.querySelector('.proposal-reset-time-input');
+            if (recurringCheckbox) {
+              const isRecurring = recurringCheckbox.checked;
+              const newResetTime = (resetTimeInput && resetTimeInput.value) ? resetTimeInput.value : (rawAction.resetTime || '07:00');
+              const existingIsRec = Boolean(existingCard.repeat);
+              const existingResetTime = existingCard.repeat?.resetTime || '07:00';
+
+              if (isRecurring !== existingIsRec || (isRecurring && newResetTime !== existingResetTime)) {
+                if (isRecurring) {
+                  updates.repeat = {
+                    resetTime: newResetTime,
+                    resetCount: null,
+                    checklistResetEnabled: cardType === 'checklist',
+                    deadlineResetEnabled: false,
+                    lastResetAt: Date.now()
+                  };
+                } else {
+                  updates.repeat = null;
+                }
+              }
+            }
+
+            if (typeof deps.handleEditBarFromAi === 'function') {
+              await deps.handleEditBarFromAi(cardId, updates);
+            }
+
+            if (statusPill) {
+              statusPill.className = 'proposal-item-status-pill applied';
+              statusPill.textContent = '✓ Updated';
+            }
+
+            appliedActions.push({
+              type: 'update',
+              cardId: cardId,
+              title: existingCard.title,
+              undo: async () => {
+                if (typeof deps.handleEditBarFromAi === 'function') {
+                  await deps.handleEditBarFromAi(cardId, originalSnapshot);
+                }
+              }
+            });
+          } else {
+            // Create
+            const cardPayload = {
+              title: finalTitle,
+              type: cardType,
+              preset: finalPreset,
+              levels: levels,
+              targetSmallest: targetSmallest,
+              currentSmallest: currentSmallest,
+              items: items,
+              text: text,
+              completed: false,
+              createdAt: Date.now(),
+              deadlineAt: deadlineAt,
+              deadlineSetAt: deadlineAt ? Date.now() : null,
+              notifyAt: null,
+              notified: false,
+              notifyPercent: null,
+              alertAtDeadline: !!deadlineAt,
+              deadlineNotified: false,
+              repeat: repeat
+            };
+
+            let newBarId = null;
+            if (typeof deps.handleCreateBarFromAi === 'function') {
+              newBarId = await deps.handleCreateBarFromAi(cardPayload);
+            }
+
+            if (statusPill) {
+              statusPill.className = 'proposal-item-status-pill applied';
+              statusPill.textContent = '✓ Created';
+            }
+
+            appliedActions.push({
+              type: 'create',
+              newBarId: newBarId,
+              title: finalTitle,
+              undo: async () => {
+                if (newBarId && typeof deps.handleDeleteBarFromAi === 'function') {
+                  await deps.handleDeleteBarFromAi(newBarId);
+                }
+              }
+            });
+          }
+
+          // Mark applied
+          item.classList.add('proposal-item-applied');
+          const cb = item.querySelector('.proposal-item-checkbox');
+          if (cb) {
+            cb.checked = false;
+            cb.disabled = true;
+          }
+          item.querySelectorAll('input, select, textarea, button').forEach(el => {
+            if (!el.classList.contains('proposal-item-discard-btn')) el.disabled = true;
+          });
+          successCount++;
         } catch (err) {
-          showToast(err.message || 'Failed to delete tracker', 'error');
-          btnPrimary.disabled = false;
-          btnPrimary.textContent = 'Delete Tracker';
+          console.error('[Assistant] Proposal apply failed:', err);
+          failCount++;
+          if (statusPill) {
+            statusPill.className = 'proposal-item-status-pill failed';
+            statusPill.textContent = '✕ Failed';
+          }
+          if (errorBox) {
+            errorBox.classList.remove('hidden');
+            errorBox.textContent = err.message || 'Operation failed';
+          }
         }
-        return;
       }
 
-      // 2. CREATE or UPDATE ACTION
-      const type = card.dataset.cardType || 'goal';
-      const titleInput = card.querySelector('.confirm-title-input');
-      const finalTitle = titleInput ? titleInput.value.trim() : 'New Tracker';
+      // Batch / Single Undo Toast
+      if (appliedActions.length > 1) {
+        const creates = appliedActions.filter(a => a.type === 'create');
+        const updates = appliedActions.filter(a => a.type === 'update');
 
-      let targetSmallest = 100;
-      let currentSmallest = 0;
-      let levels = [{ name: '%', multiplier: 1, target: 100 }];
-      let items = null;
-      let text = null;
-      let finalPreset = 'Custom';
-
-      if (type === 'goal') {
-        const targetInput = card.querySelector('.confirm-target-input');
-        const currentInput = card.querySelector('.confirm-current-input');
-        const unitInput = card.querySelector('.confirm-unit-input');
-        const presetSelect = card.querySelector('.confirm-preset-select');
-
-        const tVal = targetInput ? parseFloat(targetInput.value) || 100 : 100;
-        const cVal = currentInput ? parseFloat(currentInput.value) || 0 : 0;
-        const uVal = unitInput ? sanitizeUnit(unitInput.value) : '%';
-        const chosenPreset = presetSelect ? presetSelect.value : detectPreset(rawAction.preset, uVal);
-
-        targetSmallest = tVal;
-        currentSmallest = cVal;
-        finalPreset = chosenPreset;
-
-        if (chosenPreset === 'Time') {
-          levels = [
-            { name: 'Minutes', conversionToNext: 60 },
-            { name: 'Hours', conversionToNext: null }
-          ];
-        } else if (chosenPreset !== 'Custom') {
-          levels = [{ name: chosenPreset, conversionToNext: null }];
+        let batchMessage = '';
+        if (creates.length === appliedActions.length) {
+          batchMessage = `Created ${creates.length} cards`;
+        } else if (updates.length === appliedActions.length) {
+          batchMessage = `Updated ${updates.length} cards`;
         } else {
-          levels = [{ name: uVal, conversionToNext: null }];
+          batchMessage = `Applied ${appliedActions.length} cards`;
         }
-      } else if (type === 'checklist') {
-        finalPreset = 'Custom';
-        const itemRows = Array.from(card.querySelectorAll('.confirm-item-row'));
-        const checkedItems = itemRows
-          .filter(row => row.querySelector('.confirm-item-checkbox')?.checked)
-          .map((row, idx) => ({
-            id: String(idx + 1),
-            text: row.querySelector('.confirm-item-text')?.value.trim() || `Item ${idx + 1}`,
-            done: false
-          }));
 
-        items = checkedItems.length ? checkedItems : [{ id: '1', text: 'Step 1', done: false }];
-        targetSmallest = items.length;
-        currentSmallest = 0;
-        levels = [{ name: 'items', multiplier: 1, target: items.length }];
-      } else if (type === 'note') {
-        finalPreset = 'Custom';
-        const noteArea = card.querySelector('.confirm-note-textarea');
-        text = noteArea ? noteArea.value : '';
-        targetSmallest = 1;
-        currentSmallest = 0;
-        levels = [{ name: 'notes', multiplier: 1, target: 1 }];
-      }
-
-      // Deadline (picked from calendar or pre-set)
-      let deadlineAt = null;
-      const dlInput = card.querySelector('.confirm-deadline-input');
-      if (dlInput && dlInput.value) {
-        const parsed = new Date(dlInput.value).getTime();
-        if (!isNaN(parsed) && parsed > 0) {
-          deadlineAt = parsed;
-        }
-      } else if (rawAction.deadline) {
-        try {
-          const parsed = normalizeAiDeadline(rawAction.deadline);
-          if (parsed && !isNaN(parsed)) {
-            deadlineAt = parsed;
+        showUndoToast({
+          message: batchMessage,
+          undoText: 'Undo all',
+          duration: 10000,
+          onUndo: async () => {
+            for (const action of [...appliedActions].reverse()) {
+              try {
+                await action.undo();
+              } catch (e) {
+                console.error('[Assistant] Batch undo step failed:', e);
+              }
+            }
+            showToast('Undone: all changes reverted', 'info');
           }
-        } catch (_) {}
-      }
-
-      // Repeat / Daily habit from input
-      const recurringCheckbox = card.querySelector('.confirm-recurring-checkbox');
-      const resetTimeInput = card.querySelector('.confirm-reset-time-input');
-      const isRecurring = recurringCheckbox ? recurringCheckbox.checked : Boolean(rawAction.isRecurring);
-
-      let repeat = null;
-      if (isRecurring) {
-        repeat = {
-          resetTime: (resetTimeInput && resetTimeInput.value) ? resetTimeInput.value : (rawAction.resetTime || '07:00'),
-          resetCount: null,
-          checklistResetEnabled: type === 'checklist',
-          deadlineResetEnabled: false,
-          lastResetAt: Date.now()
-        };
-      }
-
-      if (actType === 'update' && cardId) {
-        // UPDATE EXISTING CARD
-        try {
-          const updates = {
-            title: finalTitle,
-            ...(items ? { items, targetSmallest } : {}),
-            ...(text !== null ? { text } : {}),
-            ...(type === 'goal' ? { targetSmallest, currentSmallest, levels, preset: finalPreset } : {}),
-            ...(deadlineAt ? { deadlineAt, alertAtDeadline: true } : { deadlineAt: null, alertAtDeadline: false }),
-            ...(repeat ? { repeat } : { repeat: null })
-          };
-          if (typeof deps.handleEditBarFromAi === 'function') {
-            await deps.handleEditBarFromAi(cardId, updates);
+        });
+      } else if (appliedActions.length === 1) {
+        const single = appliedActions[0];
+        const actionWord = single.type === 'create' ? 'Created' : 'Updated';
+        showUndoToast({
+          message: `${actionWord} "${single.title}"`,
+          undoText: 'Undo',
+          duration: 10000,
+          onUndo: async () => {
+            await single.undo();
+            showToast(`Undone: "${single.title}" ${single.type === 'create' ? 'removed' : 'restored'}`, 'info');
           }
-          actionsWrap.innerHTML = `
-            <div class="confirm-success-state">
-              <span>Tracker updated ✓</span>
-              <button type="button" class="btn btn-secondary confirm-view-btn">View card</button>
+        });
+      }
+
+      // Check remaining proposals
+      const remainingUnapplied = sheet.querySelectorAll('.proposal-item:not(.proposal-item-discarded):not(.proposal-item-applied)');
+      if (remainingUnapplied.length === 0) {
+        const footer = sheet.querySelector('.proposal-sheet-footer');
+        if (footer) {
+          footer.innerHTML = `
+            <div class="confirm-success-state" style="width: 100%;">
+              <span>All proposals applied ✓</span>
+              <button type="button" class="btn btn-secondary confirm-view-btn">View dashboard</button>
             </div>
           `;
-          const viewBtn = actionsWrap.querySelector('.confirm-view-btn');
+          const viewBtn = footer.querySelector('.confirm-view-btn');
           if (viewBtn) {
             viewBtn.addEventListener('click', () => closeAssistantPanel());
           }
-          const thread = document.getElementById('assistant-thread');
-          if (thread) threadHtml = thread.innerHTML;
-          syncActiveSessionThread();
-        } catch (err) {
-          showToast(err.message || 'Failed to update tracker', 'error');
-          btnPrimary.disabled = false;
-          btnPrimary.textContent = 'Apply Update';
         }
-        return;
+      } else {
+        updateCheckedCount();
+        if (failCount > 0) {
+          showToast(`${successCount} applied, ${failCount} failed. Check errors above.`, 'warning');
+        }
       }
 
-      // CREATE NEW CARD
-      const cardPayload = {
-        title: finalTitle,
-        type: type,
-        preset: finalPreset,
-        levels: levels,
-        targetSmallest: targetSmallest,
-        currentSmallest: currentSmallest,
-        items: items,
-        text: text,
-        completed: false,
-        createdAt: Date.now(),
-        deadlineAt: deadlineAt,
-        deadlineSetAt: deadlineAt ? Date.now() : null,
-        notifyAt: null,
-        notified: false,
-        notifyPercent: null,
-        alertAtDeadline: !!deadlineAt,
-        deadlineNotified: false,
-        repeat: repeat
-      };
-
-      try {
-        let newBarId = null;
-        if (typeof deps.handleCreateBarFromAi === 'function') {
-          newBarId = await deps.handleCreateBarFromAi(cardPayload);
-        }
-
-        actionsWrap.innerHTML = `
-          <div class="confirm-success-state">
-            <span>Tracker created ✓</span>
-            <button type="button" class="btn btn-secondary confirm-view-btn">View card</button>
-          </div>
-        `;
-
-        const viewBtn = actionsWrap.querySelector('.confirm-view-btn');
-        if (viewBtn) {
-          viewBtn.addEventListener('click', () => closeAssistantPanel());
-        }
-
-        showToast(`Successfully created "${finalTitle}"!`, 'success');
-        const thread = document.getElementById('assistant-thread');
-        if (thread) threadHtml = thread.innerHTML;
-        syncActiveSessionThread();
-      } catch (err) {
-        showToast(err.message || 'Failed to create tracker', 'error');
-        btnPrimary.disabled = false;
-        btnPrimary.textContent = 'Create Tracker';
-      }
+      const thread = document.getElementById('assistant-thread');
+      if (thread) threadHtml = thread.innerHTML;
+      syncActiveSessionThread();
     });
   }
 }
 
-function clearAttachment() {
-  attachedImage = null;
-  const preview = document.getElementById('assistant-attachment-preview');
-  const fileInput = document.getElementById('assistant-file-input');
-  if (preview) preview.classList.add('hidden');
-  if (fileInput) fileInput.value = '';
+// Retain legacy single-card listener for backwards compatibility
+function attachActionCardListeners(card, rawAction) {
+  if (!card) return;
+  attachProposalsSheetListeners(card.closest('.assistant-proposals-sheet'), [rawAction]);
 }
 
-function setAttachment(file) {
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    showToast('Please select a valid image file (PNG, JPG, WebP).', 'warning');
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    showToast('Image size exceeds 5MB limit.', 'warning');
-    return;
-  }
+export const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+export const ACCEPTED_IMAGE_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
+export const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3 MB
+export const MAX_IMAGE_DIMENSION = 1600; // max 1600px on the longest side
+export const JPEG_QUALITY = 0.8; // ~0.8
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const dataUrl = e.target.result;
-    const base64Data = dataUrl.split(',')[1];
-    attachedImage = {
-      name: file.name,
-      mimeType: file.type,
-      data: base64Data,
-      dataUrl: dataUrl
+/**
+ * Checks if a file is an accepted image format (PNG, JPEG, WebP).
+ * @param {File|Blob} file
+ * @returns {boolean}
+ */
+export function isAcceptedImageType(file) {
+  if (!file) return false;
+  const mime = (file.type || '').toLowerCase();
+  if (mime && ACCEPTED_IMAGE_TYPES.includes(mime)) {
+    return true;
+  }
+  const name = file.name || '';
+  return ACCEPTED_IMAGE_EXTENSIONS.test(name);
+}
+
+/**
+ * Downscales an image to max 1600px on the longest side and re-encodes as JPEG ~0.8.
+ * @param {File|Blob} file
+ * @returns {Promise<{ dataUrl: string, base64Data: string, sizeBytes: number, width: number, height: number, mimeType: string }>}
+ */
+export function processImageForAttachment(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      return reject(new Error('No file provided for processing.'));
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (!width || !height) {
+          return reject(new Error('Could not determine image dimensions. File may be corrupt.'));
+        }
+
+        // Downscale to max 1600px on the longest side
+        const longestSide = Math.max(width, height);
+        if (longestSide > MAX_IMAGE_DIMENSION) {
+          const ratio = MAX_IMAGE_DIMENSION / longestSide;
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Canvas 2D context is not supported in this environment.'));
+        }
+
+        // Fill background with white in case source has alpha transparency (PNG, WebP)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        if (typeof canvas.toBlob === 'function') {
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              return reject(new Error('Failed to encode image to JPEG.'));
+            }
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const dataUrl = reader.result;
+              const base64Data = typeof dataUrl === 'string' ? dataUrl.split(',')[1] || '' : '';
+              resolve({
+                dataUrl,
+                base64Data,
+                sizeBytes: blob.size,
+                width,
+                height,
+                mimeType: 'image/jpeg'
+              });
+            };
+            reader.onerror = () => reject(new Error('Failed to read encoded image.'));
+            reader.readAsDataURL(blob);
+          }, 'image/jpeg', JPEG_QUALITY);
+        } else {
+          const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+          const base64Data = dataUrl.split(',')[1] || '';
+          const sizeBytes = Math.round((base64Data.length * 3) / 4);
+          resolve({
+            dataUrl,
+            base64Data,
+            sizeBytes,
+            width,
+            height,
+            mimeType: 'image/jpeg'
+          });
+        }
+      } catch (err) {
+        reject(err);
+      }
     };
 
-    const preview = document.getElementById('assistant-attachment-preview');
-    const thumb = document.getElementById('assistant-attachment-thumb');
-    const nameSpan = document.getElementById('assistant-attachment-name');
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not load image. Please verify it is a valid image file.'));
+    };
 
-    if (thumb) thumb.src = dataUrl;
-    if (nameSpan) nameSpan.textContent = file.name;
-    if (preview) preview.classList.remove('hidden');
+    img.src = objectUrl;
+  });
+}
+
+export function showAttachmentError(msg) {
+  const errEl = document.getElementById('assistant-attachment-error');
+  if (errEl) {
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+  }
+  showToast(msg, 'error');
+}
+
+export function clearAttachmentError() {
+  const errEl = document.getElementById('assistant-attachment-error');
+  if (errEl) {
+    errEl.textContent = '';
+    errEl.classList.add('hidden');
+  }
+}
+
+export function clearAttachment() {
+  attachedImage = null;
+  clearAttachmentError();
+  const preview = document.getElementById('assistant-attachment-preview');
+  const thumb = document.getElementById('assistant-attachment-thumb');
+  const nameSpan = document.getElementById('assistant-attachment-name');
+  const fileInput = document.getElementById('assistant-file-input');
+
+  if (preview) preview.classList.add('hidden');
+  if (thumb) thumb.src = '';
+  if (nameSpan) {
+    nameSpan.textContent = '';
+    nameSpan.title = '';
+  }
+  if (fileInput) fileInput.value = '';
+
+  updateAssistantControlsState();
+}
+
+export async function setAttachment(file) {
+  if (!file) return;
+
+  clearAttachmentError();
+
+  if (!isAcceptedImageType(file)) {
+    clearAttachment();
+    showAttachmentError('Unsupported file type. Please attach a PNG, JPEG, or WebP image.');
+    return;
+  }
+
+  // Provide immediate processing feedback
+  const preview = document.getElementById('assistant-attachment-preview');
+  const nameSpan = document.getElementById('assistant-attachment-name');
+  if (nameSpan) {
+    nameSpan.textContent = 'Processing image...';
+  }
+  if (preview) {
+    preview.classList.remove('hidden');
+  }
+
+  try {
+    const processed = await processImageForAttachment(file);
+
+    // Verify compressed result does not exceed 3 MB
+    if (processed.sizeBytes > MAX_IMAGE_BYTES) {
+      clearAttachment();
+      const mbSize = (processed.sizeBytes / (1024 * 1024)).toFixed(1);
+      showAttachmentError(`Image size (${mbSize} MB after compression) exceeds the 3 MB limit. Please choose a smaller image.`);
+      return;
+    }
+
+    attachedImage = {
+      name: file.name,
+      mimeType: processed.mimeType, // 'image/jpeg'
+      data: processed.base64Data,
+      dataUrl: processed.dataUrl,
+      sizeBytes: processed.sizeBytes,
+      width: processed.width,
+      height: processed.height
+    };
+
+    const thumb = document.getElementById('assistant-attachment-thumb');
+    if (thumb) {
+      thumb.src = processed.dataUrl;
+    }
+    if (nameSpan) {
+      const displaySize = processed.sizeBytes >= 1024 * 1024
+        ? `${(processed.sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(processed.sizeBytes / 1024)} KB`;
+      nameSpan.textContent = `${file.name} (${displaySize})`;
+      nameSpan.title = `${file.name} (${displaySize}, ${processed.width}×${processed.height}px)`;
+    }
+    if (preview) {
+      preview.classList.remove('hidden');
+    }
 
     updateAssistantControlsState();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.error('[Assistant] Image attachment processing error:', err);
+    clearAttachment();
+    showAttachmentError(err.message || 'Failed to process image attachment.');
+  }
 }
 
 /* ==========================================================================
@@ -1643,12 +3401,23 @@ function getAiHistorySectionHtml() {
       <div id="ai-settings-clear-wrap" class="ai-settings-clear-wrap ${sessions.length > 0 ? '' : 'hidden'}">
         <button type="button" id="btn-ai-clear-history" class="btn btn-secondary btn-sm" style="font-size: 0.8rem; padding: 6px 12px;">Clear chat history (${sessions.length})</button>
       </div>
+      <div class="ai-settings-history-row" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border);">
+        <div class="ai-settings-history-info">
+          <span class="ai-settings-history-title">Show Today's Focus on dashboard</span>
+          <span class="ai-settings-history-sub">Display your daily breakdown card next to Add New Tracker on home.</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="ai-toggle-home-briefing" ${isHomeBriefingHidden() ? '' : 'checked'}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
   `;
 }
 
 function attachHistorySettingsListeners() {
   const toggle = document.getElementById('ai-toggle-history');
+  const toggleHome = document.getElementById('ai-toggle-home-briefing');
   const clearWrap = document.getElementById('ai-settings-clear-wrap');
   const clearBtn = document.getElementById('btn-ai-clear-history');
 
@@ -1657,6 +3426,13 @@ function attachHistorySettingsListeners() {
       setAiHistoryEnabled(toggle.checked);
       showToast(toggle.checked ? 'Chat history enabled' : 'Chat history disabled', 'info');
       renderHistoryPaneList();
+    });
+  }
+
+  if (toggleHome) {
+    toggleHome.addEventListener('change', () => {
+      setHomeBriefingHidden(!toggleHome.checked);
+      showToast(toggleHome.checked ? "Today's Focus enabled on dashboard" : "Today's Focus hidden from dashboard", 'info');
     });
   }
 
@@ -1694,7 +3470,7 @@ export function renderAiSettingsModalBody(status) {
           <div id="ai-settings-connect-error" class="assistant-connect-error hidden" role="alert"></div>
           <button type="submit" id="btn-ai-settings-save-key" class="btn btn-primary">Save &amp; test</button>
         </form>
-        <p class="assistant-notice">Your key is stored encrypted and used only to send your requests to Google. Card text you send goes to Google; avoid sensitive information. Remove your key anytime in AI settings.</p>
+        <p class="assistant-notice">Your key is stored encrypted and used only to send your requests to Google. Card text and photos you send go to Google; avoid sensitive information. Remove your key anytime in AI settings.</p>
         ${getAiHistorySectionHtml()}
       </div>
     `;
@@ -1779,6 +3555,8 @@ export function renderAiSettingsModalBody(status) {
           <button type="button" id="btn-ai-cancel-remove" class="btn btn-secondary">Cancel</button>
         </div>
       </div>
+
+      <p class="assistant-notice">Card text and photos you send go to Google; avoid sensitive information.</p>
 
       ${getAiHistorySectionHtml()}
     </div>
@@ -1874,7 +3652,20 @@ export function renderAiSettingsModalBody(status) {
 export function setupAssistantModule(injectedDeps = {}) {
   deps = { ...deps, ...injectedDeps };
 
+  // Background check for AI status to power the home dashboard briefing card immediately
+  if (!isGuestMode() && !currentAiStatus) {
+    aiStatus().then(status => {
+      currentAiStatus = status;
+      if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+        deps.onHomeBriefingVisibilityChanged();
+      }
+    }).catch(e => {
+      console.warn('[Assistant] Initial AI status check notice:', e);
+    });
+  }
+
   const btnAssistant = document.getElementById('btn-assistant');
+  const btnFabAi = document.getElementById('btn-fab-ai');
   const btnClose = document.getElementById('btn-assistant-close');
   const btnHistory = document.getElementById('btn-assistant-history');
   const btnNewChat = document.getElementById('btn-assistant-new-chat');
@@ -1891,9 +3682,21 @@ export function setupAssistantModule(injectedDeps = {}) {
   const chipPlan = document.getElementById('chip-plan-day');
   const chipClean = document.getElementById('chip-cleanup-overdue');
   const chipBreakdown = document.getElementById('chip-breakdown-goal');
+  const chipMention = document.getElementById('chip-mention-card');
+  const btnRemoveContext = document.getElementById('btn-remove-context');
+  const inputCard = document.querySelector('.assistant-input-card');
 
   if (btnAssistant) {
-    btnAssistant.addEventListener('click', toggleAssistantPanel);
+    btnAssistant.onclick = (e) => {
+      e.stopPropagation();
+      toggleAssistantPanel();
+    };
+  }
+  if (btnFabAi) {
+    btnFabAi.onclick = (e) => {
+      e.stopPropagation();
+      toggleAssistantPanel();
+    };
   }
   if (btnClose) {
     btnClose.addEventListener('click', closeAssistantPanel);
@@ -1917,36 +3720,154 @@ export function setupAssistantModule(injectedDeps = {}) {
     btnProfileAi.addEventListener('click', openAiSettingsModal);
   }
 
-  // Auto-growing textarea & send button state
+  // Focus textarea when clicking in prompt card container (excluding action buttons and remove context button)
+  if (inputCard && textarea) {
+    inputCard.addEventListener('click', (e) => {
+      if (
+        e.target.closest('#btn-remove-context') ||
+        e.target.closest('#btn-assistant-attach') ||
+        e.target.closest('#btn-assistant-send') ||
+        e.target.closest('.assistant-input-toolbar-left')
+      ) {
+        return;
+      }
+      textarea.focus();
+    });
+  }
+
+  // Remove card context pill listener
+  if (btnRemoveContext) {
+    btnRemoveContext.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearActiveCardContext();
+      if (textarea) textarea.focus();
+    });
+  }
+
+  // Auto-growing textarea, @-mention detection & key navigation
   if (textarea) {
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
       updateAssistantControlsState();
-      renderCardSuggestions(textarea.value);
+
+      const val = textarea.value;
+      const cursorPos = textarea.selectionStart;
+      const before = val.slice(0, cursorPos);
+      const atMatch = before.match(/@([^@\s]*)$/);
+
+      if (atMatch) {
+        openMentionPopover(atMatch[1]);
+      } else {
+        closeMentionPopover();
+        renderCardSuggestions(val);
+      }
     });
 
     textarea.addEventListener('keydown', (e) => {
+      const popover = document.getElementById('assistant-mention-popover');
+      const isPopoverOpen = popover && !popover.classList.contains('hidden');
+
+      if (isPopoverOpen) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          updateMentionSelection(mentionPopoverSelectedIndex + 1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          updateMentionSelection(mentionPopoverSelectedIndex - 1);
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (mentionFilteredCards.length > 0 && mentionFilteredCards[mentionPopoverSelectedIndex]) {
+            selectMentionCard(mentionFilteredCards[mentionPopoverSelectedIndex]);
+          } else {
+            closeMentionPopover();
+          }
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeMentionPopover();
+          return;
+        }
+      }
+
+      // Backspace with empty text removes active card context
+      if (e.key === 'Backspace' && textarea.value === '' && activeCardContext) {
+        e.preventDefault();
+        clearActiveCardContext();
+        return;
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         submitCurrentPrompt();
       }
     });
+
+    // Paste listener for images on textarea
+    textarea.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            setAttachment(file);
+            break;
+          }
+        }
+      }
+    });
   }
+
+  // Drag & drop support on the prompt card
+  if (inputCard) {
+    inputCard.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    inputCard.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer?.files?.[0]) {
+        setAttachment(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  // Global click outside to dismiss @-mention popover
+  document.addEventListener('click', (e) => {
+    const popover = document.getElementById('assistant-mention-popover');
+    if (popover && !popover.classList.contains('hidden')) {
+      if (
+        !e.target.closest('#assistant-mention-popover') &&
+        !e.target.closest('#chip-mention-card') &&
+        e.target !== textarea
+      ) {
+        closeMentionPopover();
+      }
+    }
+  });
 
   if (btnSend) {
     btnSend.addEventListener('click', submitCurrentPrompt);
   }
 
+  triggerSubmitPrompt = submitCurrentPrompt;
+
   function submitCurrentPrompt() {
     if (!textarea) return;
     const val = textarea.value.trim();
-    if (!val && !attachedImage) return;
+    if (!val && !attachedImage && !activeCardContext) return;
 
     handleAssistantPrompt(val);
     textarea.value = '';
     textarea.style.height = 'auto';
     hideCardSuggestions();
+    closeMentionPopover();
     updateAssistantControlsState();
   }
 
@@ -1991,12 +3912,22 @@ export function setupAssistantModule(injectedDeps = {}) {
         textarea.value = '';
         textarea.style.height = 'auto';
         hideCardSuggestions();
+        closeMentionPopover();
         updateAssistantControlsState();
       } else {
-        renderCardSuggestions('');
-        textarea.placeholder = 'Type a goal or pick a card from above...';
+        openMentionPopover('');
+        textarea.placeholder = 'Select a card or type to filter...';
         textarea.focus();
       }
+    });
+  }
+
+  // Chip 4: Mention a card (@ capsule)
+  if (chipMention) {
+    chipMention.addEventListener('click', () => {
+      if (!textarea) return;
+      textarea.focus();
+      openMentionPopover('');
     });
   }
 
@@ -2025,5 +3956,35 @@ export function setupAssistantModule(injectedDeps = {}) {
   window.toggleHistoryPane = toggleHistoryPane;
   window.renderHistoryPaneList = renderHistoryPaneList;
   window.loadChatSession = loadChatSession;
+  window.replaceExpiredProposals = replaceExpiredProposals;
   window.deleteChatSession = deleteChatSession;
+  window.setActiveCardContext = setActiveCardContext;
+  window.clearActiveCardContext = clearActiveCardContext;
+  window.openMentionPopover = openMentionPopover;
+  window.closeMentionPopover = closeMentionPopover;
+  window.selectMentionCard = selectMentionCard;
+  window.getActiveCardContext = () => activeCardContext;
+  window.setAttachment = setAttachment;
+  window.clearAttachment = clearAttachment;
+  window.isAcceptedImageType = isAcceptedImageType;
+  window.processImageForAttachment = processImageForAttachment;
+  window.stripImagesFromThreadHtml = stripImagesFromThreadHtml;
+  window.showUndoToast = showUndoToast;
+  window.renderActionConfirmSheet = renderActionConfirmSheet;
+  window.fetchAndRenderDailyBriefing = fetchAndRenderDailyBriefing;
+  window.getCachedBriefing = getCachedBriefing;
+  window.saveCachedBriefing = saveCachedBriefing;
+  window.computeCardsHash = computeCardsHash;
+  window.getTodayLocalDateStr = getTodayLocalDateStr;
+  window.isBriefingValid = isBriefingValid;
+  window.updateBriefingDisplayMode = updateBriefingDisplayMode;
+  window.setCachedBriefingFromSupabase = setCachedBriefingFromSupabase;
+  window.getHomeBriefingCardElement = getHomeBriefingCardElement;
+  window.isHomeBriefingHidden = isHomeBriefingHidden;
+  window.setHomeBriefingHidden = setHomeBriefingHidden;
+  window.setHomeBriefingHiddenFromRemote = setHomeBriefingHiddenFromRemote;
+  window.isGuestAiCardDismissed = isGuestAiCardDismissed;
+  window.setGuestAiCardDismissed = setGuestAiCardDismissed;
+  window.isUnconfiguredAiCardDismissed = isUnconfiguredAiCardDismissed;
+  window.setUnconfiguredAiCardDismissed = setUnconfiguredAiCardDismissed;
 }

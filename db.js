@@ -1,6 +1,6 @@
 // db.js
-import { supabase, isConfigured } from "./supabase-config.js?v=3.2";
-import { isGuestMode } from "./auth.js?v=3.2";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.3";
+import { isGuestMode } from "./auth.js?v=3.3";
 
 const writeQueues = new Map(); // barId -> latest pending write promise
 

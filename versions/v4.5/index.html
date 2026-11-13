@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co https://lieckszgurlqcujmyrjw.supabase.co wss://lieckszgurlqcujmyrjw.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProgressShelf - Track everything. One bar at a time.</title>
+  <meta name="description" content="ProgressShelf is your personal progress tracking dashboard. Track your habits, courses, readings, or custom goals, one animated progress bar at a time.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="index.css?v=6.34">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0D1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="logo.svg">
+  <script>
+    (function() {
+      const theme = localStorage.getItem('app-theme') || 'system';
+      if (theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark-theme');
+        document.documentElement.classList.remove('light-theme');
+      } else {
+        document.documentElement.classList.add('light-theme');
+        document.documentElement.classList.remove('dark-theme');
+        
+        // Default to blue theme for new users in light mode
+        if (!localStorage.getItem('app-accent-color')) {
+          localStorage.setItem('app-accent-color', '#1A73E8');
+        }
+      }
+
+      // Apply Accent Color instantly (only in light theme; dark theme uses native dark styling)
+      const isDark = document.documentElement.classList.contains('dark-theme');
+      const accent = localStorage.getItem('app-accent-color');
+      if (!isDark && accent) {
+        document.documentElement.style.setProperty('--accent', accent);
+        // Simple glow calculation for early render
+        const r = parseInt(accent.slice(1,3), 16);
+        const g = parseInt(accent.slice(3,5), 16);
+        const b = parseInt(accent.slice(5,7), 16);
+        document.documentElement.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.18)`);
+      }
+
+      // Apply Font Setting instantly
+      const font = localStorage.getItem('app-font-family') || 'outfit';
+      if (font === 'space-mono') {
+        document.documentElement.style.setProperty('--font-family', "'Space Mono', monospace");
+        document.documentElement.classList.add('font-space-mono');
+      } else if (font === 'jetbrains-mono') {
+        document.documentElement.style.setProperty('--font-family', "'JetBrains Mono', monospace");
+        document.documentElement.classList.add('font-jetbrains-mono');
+      } else {
+        document.documentElement.style.setProperty('--font-family', "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+        document.documentElement.classList.add('font-outfit');
+      }
+
+      // Fast redirect for active session / guest user before rendering landing card
+      const cachedUser = localStorage.getItem('ps_cached_user');
+      const isGuest = sessionStorage.getItem('guest_mode') === 'true';
+      const isPending = sessionStorage.getItem('password_setup_pending') === 'true';
+      if ((cachedUser || isGuest) && !isPending) {
+        window.location.replace("dashboard.html");
+      }
+    })();
+  </script>
+</head>
+<body class="auth-checking">
+
+  <!-- Configuration Warning Banner (Dynamic) -->
+  <div id="config-banner" class="config-warning-banner hidden">
+    <span>⚠️ <strong>Supabase Configuration Required:</strong> Update <code>supabase-config.js</code> with your project credentials to get started. Alternatively, you can use the local sandbox.</span>
+  </div>
+
+
+  <main class="landing-container">
+    <div class="landing-card">
+      <a href="index.html" class="logo-container" style="text-decoration: none;">
+        <svg class="logo-svg-large logo-loading" viewBox="0 0 240 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4" />
+            </filter>
+            <linearGradient id="barBlue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38BDF8" />
+              <stop offset="100%" stop-color="#2563EB" />
+            </linearGradient>
+            <linearGradient id="barOrange" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FBBF24" />
+              <stop offset="100%" stop-color="#D97706" />
+            </linearGradient>
+            <linearGradient id="barRed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F87171" />
+              <stop offset="100%" stop-color="#DC2626" />
+            </linearGradient>
+            <linearGradient id="barGreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4ADE80" />
+              <stop offset="100%" stop-color="#16A34A" />
+            </linearGradient>
+            <linearGradient id="shelfGrad" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#1E293B" />
+              <stop offset="50%" stop-color="#475569" />
+              <stop offset="100%" stop-color="#1E293B" />
+            </linearGradient>
+            <linearGradient id="shelfRail" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#334155" />
+              <stop offset="50%" stop-color="#64748B" />
+              <stop offset="100%" stop-color="#334155" />
+            </linearGradient>
+          </defs>
+
+          <!-- Shelf Base -->
+          <rect x="36" y="108" width="168" height="7" rx="3.5" fill="url(#shelfGrad)" filter="url(#logoShadow)" />
+          <rect x="40" y="109" width="160" height="2" rx="1" fill="url(#shelfRail)" />
+
+          <!-- Bars -->
+          <rect class="logo-bar-1" x="60" y="90" width="16" height="16" rx="3" fill="url(#barBlue)" />
+          <rect class="logo-bar-2" x="84" y="70" width="16" height="36" rx="3" fill="url(#barOrange)" />
+          <rect class="logo-bar-3" x="108" y="50" width="16" height="56" rx="3" fill="url(#barRed)" />
+          <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#barGreen)" />
+
+          <!-- Plus -->
+          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round" />
+
+          <!-- Red exclamation warning badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(116, 40)">
+            <g class="logo-badge-red">
+              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5"/>
+              <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+            </g>
+          </g>
+
+          <!-- Green checkmark badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(140, 20)">
+            <g class="logo-badge-green">
+              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5"/>
+              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+          </g>
+        </svg>
+        <h1 class="logo-text">
+          <span class="text-gradient">Progress</span><span class="text-outline">Shelf</span>
+        </h1>
+      </a>
+      <p class="landing-tagline">Track everything. One bar at a time.</p>
+
+      <div class="auth-options">
+        <button id="btn-google-login" class="btn-google">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20" />
+          Sign in with Google
+        </button>
+
+        <div style="position: relative; width: 100%; margin-top: 12px;">
+          <button id="btn-email-login-trigger" class="btn-email-signup" style="width: 100%; opacity: 0.5; filter: grayscale(1); cursor: not-allowed; pointer-events: auto;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            Continue with Email
+          </button>
+          <span title="Backend is ready. Help creator to buy domain to make this live." style="position: absolute; top: -6px; right: 10px; background-color: #475569; color: #FFF; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: auto; cursor: help; display: inline-flex; align-items: center; justify-content: center; gap: 2px; font-family: monospace;">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <rect x="3" y="2" width="6" height="20" rx="1.5"></rect>
+              <rect x="15" y="2" width="6" height="20" rx="1.5"></rect>
+            </svg>
+            Hold
+          </span>
+        </div>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <button id="btn-guest" class="btn-guest">
+          Continue without login
+        </button>
+
+        <p class="auth-hint">
+          <span class="hint-login">Sign in to sync across devices and store on cloud.</span><br/>
+          <span class="hint-guest">Guest mode stays in this browser only.</span>
+        </p>
+      </div>
+      
+      <p id="error-message" style="color: var(--error); margin-top: 16px; font-size: 0.9rem;" class="hidden"></p>
+    </div>
+  </main>
+
+  <!-- Footer Section -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <p class="footer-title">ProgressShelf — Open source &amp; free forever</p>
+      <p class="footer-links">
+        Built by <a href="https://github.com/Anandavnish" target="_blank" rel="noopener noreferrer">Anand Avnish</a> with AI assistance (Antigravity, Claude &amp; Gemini)
+        <span class="footer-bullet">•</span>
+        <a href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">View source on GitHub</a>
+        <span class="footer-bullet">•</span>
+        <a href="about.html">About</a>
+        <span class="footer-bullet">•</span>
+        <span class="footer-version">v4.5</span>
+      </p>
+      <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
+    </div>
+  </footer>
+
+  <!-- Email Sign In Modal -->
+  <div id="signin-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="signin-modal-title" class="modal-title">Sign In with Email</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-signin-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-signin" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+            <label for="input-signin-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+            <input type="email" id="input-signin-email" placeholder="you@example.com" required 
+              style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+          </div>
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+            <label for="input-signin-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Password</label>
+            <input type="password" id="input-signin-password" placeholder="••••••••" required 
+              style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+          </div>
+          
+          <div style="display: flex; justify-content: flex-start; margin-top: -8px;">
+            <a href="#" id="link-forgot-password" style="font-size: 0.85rem; color: var(--accent); text-decoration: none; transition: filter 0.2s;">Forgot password?</a>
+          </div>
+
+          <p id="signin-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+          
+          <button type="submit" id="btn-signin-submit" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+            Log In
+          </button>
+
+          <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 8px; margin-bottom: 0;">
+            Don't have an account? <a href="#" id="link-goto-signup" style="color: var(--accent); text-decoration: none; font-weight: 600;">Create one</a>
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Sign Up Modal -->
+  <div id="signup-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="signup-modal-title" class="modal-title">Create Account</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-signup-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Step 1: Details (Name + Email only) -->
+        <div id="signup-step-details" class="signup-step">
+          <form id="form-signup-details" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-name" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Name</label>
+              <input type="text" id="input-signup-name" placeholder="Your Name" required 
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+              <input type="email" id="input-signup-email" placeholder="you@example.com" required 
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <!-- Email-already-registered notice (hidden by default) -->
+            <div id="signup-email-exists-notice" class="hidden" style="background-color: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5;">
+              An account with this email already exists.<br>
+              <a href="#" id="link-signin-from-exists" style="color: var(--accent); text-decoration: none; font-weight: 600;">Log in →</a>
+              &nbsp;or&nbsp;
+              <a href="#" id="link-forgot-from-exists" style="color: var(--accent); text-decoration: none; font-weight: 600;">Forgot password?</a>
+            </div>
+            <p id="signup-details-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-send-otp" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+              Send Verification Code
+            </button>
+            <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 8px; margin-bottom: 0;">
+              Already have an account? <a href="#" id="link-goto-signin" style="color: var(--accent); text-decoration: none; font-weight: 600;">Log in</a>
+            </p>
+          </form>
+        </div>
+
+        <!-- Step 2: OTP Verification -->
+        <div id="signup-step-otp" class="signup-step hidden">
+          <form id="form-signup-otp" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              We sent a verification code to <strong id="signup-sent-email-label"></strong>. Please enter the code below.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-signup-otp" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Verification Code</label>
+              <input type="text" id="input-signup-otp" placeholder="6-digit code" required autocomplete="one-time-code"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1.1rem; font-weight: 600; letter-spacing: 2px; text-align: center; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="signup-otp-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <div style="display: flex; gap: 12px; margin-top: 8px;">
+              <button type="button" id="btn-back-to-details" style="flex: 1; background-color: transparent; border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                Back
+              </button>
+              <button type="submit" id="btn-verify-otp" style="flex: 2; background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+                Verify Code
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 3: Set Password (collected after OTP, not before) -->
+        <div id="signup-step-password" class="signup-step hidden">
+          <form id="form-signup-password" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Your email is verified! Now, set a secure password to protect your account.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-setup-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Password</label>
+              <input type="password" id="input-setup-password" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-setup-confirm-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Confirm Password</label>
+              <input type="password" id="input-setup-confirm-password" placeholder="Confirm your password" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="signup-password-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-complete-setup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 8px; transition: transform 0.2s, background-color 0.2s;">
+              Save Password &amp; Access Dashboard
+            </button>
+            <p style="text-align: center; margin: 4px 0 0; font-size: 0.875rem;">
+              <a href="#" id="link-signup-skip-password" style="color: var(--text-muted); text-decoration: none;">Skip for now &rarr; Access Dashboard</a>
+            </p>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal (3-step OTP flow) -->
+  <div id="forgot-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 420px;">
+      <div class="modal-header">
+        <h2 id="forgot-modal-title" class="modal-title">Reset Password</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-forgot-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Forgot Step 1: Enter email -->
+        <div id="forgot-step-email" class="signup-step">
+          <form id="form-forgot-email" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Enter your registered email and we'll send a 6-digit verification code.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-forgot-email" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Email Address</label>
+              <input type="email" id="input-forgot-email" placeholder="you@example.com" required
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <!-- Email-not-found notice (hidden by default) -->
+            <div id="forgot-email-not-found-notice" class="hidden" style="background-color: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5;">
+              No account found for this email.<br>
+              <a href="#" id="link-create-from-forgot" style="color: var(--accent); text-decoration: none; font-weight: 600;">Create a new account →</a>
+            </div>
+            <p id="forgot-email-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-send-reset-otp" class="btn-email-signup" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+              Send Verification Code
+            </button>
+            <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 4px; margin-bottom: 0;">
+              <a href="#" id="link-back-to-signin" style="color: var(--accent); text-decoration: none; font-weight: 600;">← Back to Sign In</a>
+            </p>
+          </form>
+        </div>
+
+        <!-- Forgot Step 2: Verify OTP -->
+        <div id="forgot-step-otp" class="signup-step hidden">
+          <form id="form-forgot-otp" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              We sent a code to <strong id="forgot-sent-email-label"></strong>. Enter it below.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-forgot-otp" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Verification Code</label>
+              <input type="text" id="input-forgot-otp" placeholder="6-digit code" required autocomplete="one-time-code"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1.1rem; font-weight: 600; letter-spacing: 2px; text-align: center; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="forgot-otp-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <div style="display: flex; gap: 12px; margin-top: 8px;">
+              <button type="button" id="btn-forgot-back-to-email" style="flex: 1; background-color: transparent; border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                Back
+              </button>
+              <button type="submit" id="btn-verify-reset-otp" style="flex: 2; background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; transition: transform 0.2s, background-color 0.2s;">
+                Verify Code
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Forgot Forgot Step 3: Set new password -->
+        <div id="forgot-step-password" class="signup-step hidden">
+          <form id="form-forgot-new-password" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+              Identity verified! Set a new password for your account.
+            </p>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-reset-new-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">New Password</label>
+              <input type="password" id="input-reset-new-password" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 0;">
+              <label for="input-reset-confirm-password" style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">Confirm Password</label>
+              <input type="password" id="input-reset-confirm-password" placeholder="Confirm your password" required minlength="6" autocomplete="new-password"
+                style="background-color: var(--bg-color); border: 1px solid var(--card-border); color: var(--text-primary); padding: 12px; border-radius: 8px; font-size: 1rem; width: 100%; outline: none; transition: border-color 0.2s;" />
+            </div>
+            <p id="forgot-password-error" style="color: var(--error); font-size: 0.85rem; margin: 0;" class="hidden"></p>
+            <button type="submit" id="btn-set-new-password" style="background-color: var(--accent); color: #FFF; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 4px; transition: transform 0.2s, background-color 0.2s;">
+              Save Password &amp; Access Dashboard
+            </button>
+            <p style="text-align: center; margin: 4px 0 0; font-size: 0.875rem;">
+              <a href="#" id="link-forgot-skip-password" style="color: var(--text-muted); text-decoration: none;">Skip for now &rarr; Access Dashboard</a>
+            </p>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast System -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script type="module" src="login.js?v=4.0"></script>
+</body>
+</html>

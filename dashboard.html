@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=6.45">
+  <link rel="stylesheet" href="index.css?v=7.0">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -149,11 +149,16 @@
             <path d="M3 5h4"/>
             <path d="M17 19h4"/>
           </svg>
+          <span class="assistant-new-tag" aria-label="New feature">
+            <svg class="assistant-new-tag-icon" width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+            </svg>
+            <span>NEW</span>
+          </span>
         </button>
         <!-- Theme Toggle Dropdown -->
         <div class="theme-menu-container">
           <button id="theme-toggle-btn" title="Toggle Theme">
-            <span class="beta-badge" id="theme-beta-badge" style="display:none;">BETA</span>
             <!-- Icon injected by JS -->
           </button>
           <div id="theme-dropdown-menu" class="theme-dropdown">
@@ -234,7 +239,8 @@
         <!-- Version Selector -->
         <div class="version-selector">
           <select class="version-select" onchange="location = this.value;">
-            <option value="" disabled selected>v4.5 (Latest)</option>
+            <option value="" disabled selected>v5.0 (Latest)</option>
+            <option value="versions/v4.5/dashboard.html">v4.5 (Sparkle)</option>
             <option value="versions/v4.0/dashboard.html">v4.0 (Supabase)</option>
             <option value="versions/v3.0/dashboard.html">v3.0 (Firebase)</option>
             <option value="versions/v2.0/dashboard.html">v2.0 (Stable)</option>
@@ -1327,7 +1333,7 @@
           <span class="footer-bullet">•</span>
           <a href="about.html">About</a>
           <span class="footer-bullet">•</span>
-          <span class="footer-version">v4.5</span>
+          <span class="footer-version">v5.0</span>
         </p>
         <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
       </div>
@@ -1360,8 +1366,13 @@
 
   <div id="profile-dropdown" class="profile-dropdown">
     <div class="dropdown-header">
-      <p id="user-name" class="dropdown-user-name">Loading...</p>
-      <p id="user-status" class="dropdown-user-status">Online Mode</p>
+      <div class="dropdown-user-info">
+        <p id="user-name" class="dropdown-user-name">Loading...</p>
+        <p id="user-status" class="dropdown-user-status">Online Mode</p>
+      </div>
+      <div class="dropdown-avatar-wrap">
+        <img id="dropdown-user-avatar" class="dropdown-user-avatar" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="User Avatar" referrerpolicy="no-referrer">
+      </div>
     </div>
     <div class="dropdown-divider"></div>
     <button id="btn-terrace" class="dropdown-item btn-terrace">
@@ -1515,6 +1526,23 @@
     </button>
   </div>
 
+  <!-- Floating Action Buttons -->
+  <button id="btn-fab-ai" class="btn-fab btn-fab-ai" title="AI Assistant (Ctrl+J)" aria-label="AI Assistant">
+    <svg class="assistant-nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+      <path d="M5 3v4"/>
+      <path d="M19 17v4"/>
+      <path d="M3 5h4"/>
+      <path d="M17 19h4"/>
+    </svg>
+    <span class="assistant-new-tag" aria-label="New feature">
+      <svg class="assistant-new-tag-icon" width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+      </svg>
+      <span>NEW</span>
+    </span>
+  </button>
+
   <button id="btn-fab" class="btn-fab" title="Add New Tracker">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
       <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1595,44 +1623,90 @@
           <div class="assistant-connected-badge assistant-skeleton" style="width: 90px; height: 24px; border-radius: 12px;"></div>
           <div class="assistant-skeleton" style="width: 70px; height: 24px; border-radius: 6px;"></div>
         </div>
-        <div id="assistant-today-placeholder" class="assistant-today-placeholder assistant-loading-skeleton-placeholder">
-          <div class="assistant-skeleton assistant-skeleton-icon"></div>
-          <div class="assistant-skeleton assistant-skeleton-header" style="width: 60%; height: 20px;"></div>
-          <div class="assistant-skeleton assistant-skeleton-line" style="width: 80%; height: 14px;"></div>
-          <div class="assistant-skeleton assistant-skeleton-line-sm" style="width: 50%; height: 14px;"></div>
+        <div id="assistant-daily-briefing-wrap" class="assistant-daily-briefing-wrap">
+          <div class="briefing-skeleton-card">
+            <div class="briefing-skeleton-row">
+              <div class="briefing-skeleton-line" style="width: 110px; height: 18px;"></div>
+              <div class="briefing-skeleton-line" style="width: 24px; height: 24px; border-radius: 6px;"></div>
+            </div>
+            <div class="briefing-skeleton-line" style="width: 90%; height: 16px;"></div>
+            <div class="briefing-skeleton-line" style="width: 75%; height: 14px;"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="assistant-footer">
-      <div class="assistant-chips-scroll">
+      <div id="assistant-chips-scroll" class="assistant-chips-scroll">
         <button id="chip-plan-day" class="assistant-chip" disabled type="button">Plan my day</button>
         <button id="chip-cleanup-overdue" class="assistant-chip" disabled type="button">Clean up overdue</button>
         <button id="chip-breakdown-goal" class="assistant-chip" disabled type="button">Break down a goal</button>
-      </div>
-      <div id="assistant-card-suggestions" class="assistant-card-suggestions hidden"></div>
-      <div id="assistant-attachment-preview" class="assistant-attachment-preview hidden">
-        <img id="assistant-attachment-thumb" class="assistant-attachment-thumb" src="" alt="Attachment thumbnail">
-        <span id="assistant-attachment-name" class="assistant-attachment-name"></span>
-        <button id="btn-assistant-remove-attachment" class="assistant-attachment-remove" title="Remove attachment" type="button" aria-label="Remove attachment">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <button id="chip-mention-card" class="assistant-chip assistant-chip-mention" disabled type="button" title="Type @ to mention a card">
+          <span class="chip-at-badge">@</span>
+          <span>Mention card</span>
         </button>
       </div>
-      <div class="assistant-input-box">
-        <input type="file" id="assistant-file-input" accept="image/*" class="hidden" style="display:none;">
+
+      <!-- Mention Popover Dropdown (Matches @-mention card picker) -->
+      <div id="assistant-mention-popover" class="assistant-mention-popover hidden" role="listbox" aria-label="Mention a card">
+        <div class="assistant-mention-header">
+          <span class="assistant-mention-header-title">Cards</span>
+          <span id="assistant-mention-count" class="assistant-mention-count">0 cards</span>
+        </div>
+        <div id="assistant-mention-list" class="assistant-mention-list"></div>
+      </div>
+
+      <div id="assistant-card-suggestions" class="assistant-card-suggestions hidden"></div>
+      <div id="assistant-attachment-error" class="assistant-attachment-error hidden" role="alert"></div>
+      <div id="assistant-attachment-preview" class="assistant-attachment-preview hidden">
+        <div class="assistant-attachment-thumb-wrap">
+          <img id="assistant-attachment-thumb" class="assistant-attachment-thumb" src="" alt="Attachment thumbnail">
+        </div>
+        <div class="assistant-attachment-info">
+          <span id="assistant-attachment-name" class="assistant-attachment-name"></span>
+        </div>
+        <button id="btn-assistant-remove-attachment" class="assistant-attachment-remove" title="Remove attachment" type="button" aria-label="Remove attachment">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="assistant-input-box assistant-input-card">
+        <!-- Active Card Context Pill (Top row, full width) -->
+        <div id="assistant-context-pill-wrap" class="assistant-context-pill-wrap hidden">
+          <div id="assistant-context-pill" class="assistant-context-pill">
+            <span class="context-pill-at">@</span>
+            <span id="assistant-context-pill-title" class="context-pill-title"></span>
+            <button id="btn-remove-context" class="context-pill-remove" type="button" aria-label="Remove card context" title="Remove card context">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Full-width Textarea -->
         <textarea id="assistant-input" class="assistant-input" rows="1" placeholder="Ask Assistant..."></textarea>
-        <div class="assistant-input-actions">
-          <button id="btn-assistant-attach" class="assistant-action-btn" title="Attach image" aria-label="Attach file" disabled type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-            </svg>
-          </button>
-          <button id="btn-assistant-send" class="assistant-action-btn assistant-send-btn" title="Send message" aria-label="Send message" disabled type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
+
+        <!-- Bottom Integrated Toolbar (Matches Antigravity finish) -->
+        <div class="assistant-input-toolbar">
+          <div class="assistant-input-toolbar-left">
+            <span class="assistant-input-model-tag" title="Powered by Gemini">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <span>Gemini</span>
+            </span>
+          </div>
+
+          <div class="assistant-input-toolbar-right">
+            <input type="file" id="assistant-file-input" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" class="hidden" style="display:none;">
+            <button id="btn-assistant-attach" class="assistant-action-btn assistant-toolbar-btn" title="Attach image" aria-label="Attach file" disabled type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+            </button>
+            <button id="btn-assistant-send" class="assistant-action-btn assistant-send-btn assistant-send-circle-btn" title="Send message" aria-label="Send message" disabled type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1654,6 +1728,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=11.12"></script>
+  <script type="module" src="app.js?v=12.0"></script>
 </body>
 </html>

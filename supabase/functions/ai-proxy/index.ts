@@ -94,6 +94,9 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:8000',
   'http://127.0.0.1:8000',
   'https://anandavnish.github.io',
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
 ]);
 
 const envProdUrl = Deno.env.get('PRODUCTION_URL');
@@ -364,6 +367,9 @@ Deno.serve(async (req: Request) => {
             errMsg = errJson.error.message;
           }
         } catch (_) {}
+        if (validationRes.status === 429) {
+          return jsonResponse({ error: errMsg, code: 'GOOGLE_QUOTA' }, 429);
+        }
         return jsonResponse({ error: errMsg }, 400);
       }
     } catch {
@@ -431,7 +437,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Missing "task" parameter' }, 400);
     }
 
-    const SUPPORTED_TASKS = ['ping', 'create_tracker', 'break_down_goal', 'extract_notes', 'chat'];
+    const SUPPORTED_TASKS = ['ping', 'create_tracker', 'break_down_goal', 'extract_notes', 'chat', 'daily_briefing'];
     if (!SUPPORTED_TASKS.includes(task)) {
       return jsonResponse(
         { error: `Task "${task}" is not supported. Supported tasks: ${SUPPORTED_TASKS.join(', ')}` },
@@ -496,6 +502,7 @@ Deno.serve(async (req: Request) => {
 
     // Build task-specific prompts and structured JSON schema
     let parts: Array<Record<string, unknown>> = [];
+    let cardsContext: any[] = [];
     let responseSchema: Record<string, unknown> = {};
 
     const userLocalDate = typeof (payload as any)?.localDate === 'string' ? (payload as any).localDate : '';
@@ -508,6 +515,36 @@ Deno.serve(async (req: Request) => {
         ? payload.currentDate
         : new Date().toISOString();
     const timeRefContext = `Current user local time: ${userLocalDate || currentDateStr} ${userLocalTime || ''} (${userWeekday || 'today'}, Timezone: ${userTimezone || 'local'}, UTC Offset: ${userTzOffset || '+00:00'}). Reference ISO: ${currentDateStr}.`;
+
+    let userFirstName = '';
+    const rawPayloadFirstName = (payload as any)?.firstName || (payload as any)?.userFirstName;
+    if (typeof rawPayloadFirstName === 'string' && rawPayloadFirstName.trim()) {
+      let candidate = rawPayloadFirstName.trim().split(/\s+/)[0];
+      if (candidate.includes('@')) {
+        candidate = candidate.split('@')[0].replace(/[0-9_.-]+$/g, '');
+      }
+      if (candidate && candidate.toLowerCase() !== 'guest' && candidate.toLowerCase() !== 'tracker') {
+        userFirstName = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+      }
+    }
+    if (!userFirstName) {
+      const metaName =
+        user?.user_metadata?.first_name ||
+        user?.user_metadata?.full_name ||
+        user?.user_metadata?.name ||
+        user?.user_metadata?.display_name ||
+        (payload as any)?.userName ||
+        '';
+      if (typeof metaName === 'string' && metaName.trim()) {
+        let first = metaName.trim().split(/\s+/)[0];
+        if (first.includes('@')) {
+          first = first.split('@')[0].replace(/[0-9_.-]+$/g, '');
+        }
+        if (first && first.toLowerCase() !== 'guest' && first.toLowerCase() !== 'tracker') {
+          userFirstName = first.charAt(0).toUpperCase() + first.slice(1);
+        }
+      }
+    }
 
     if (task === 'ping') {
       parts = [{ text: 'Respond with a valid JSON object matching the requested schema for task ping.' }];
@@ -684,11 +721,11 @@ Provide an appropriate title for the task checklist in "title", the checklist it
         return jsonResponse({ error: 'Message text or image is required.' }, 400);
       }
 
-      const cardsContext = Array.isArray(payload?.cards) ? payload.cards : [];
+      cardsContext = Array.isArray(payload?.cards) ? payload.cards : [];
       const historyContext = Array.isArray(payload?.history) ? payload.history : [];
 
       const promptText = `You are an intelligent, friendly, and proactive personal AI companion for ProgressShelf, a personal progress and habit tracking app.
-The user is having a conversation with you.
+The user is having a conversation with you.${userFirstName ? ` The user's first name is "${userFirstName}".` : ''}
 ${timeRefContext}
 
 The user's current cards and trackers:
@@ -703,19 +740,21 @@ ${userMessage}
 """
 
 Guidelines:
-1. Always converse naturally, warmly, and helpfully with the user in "message" using Markdown formatting (bolding, lists, bullet points).
+1. Always converse naturally, warmly, and helpfully with the user in "message" using Markdown formatting (bolding, lists, bullet points).${userFirstName ? `\n   - The user's first name is "${userFirstName}". You KNOW their name. If the user asks "do you know my name?", who they are, or what their name is, ALWAYS confirm warmly that their name is "${userFirstName}". NEVER say you don't have their name stored or don't know who they are.\n   - When greeting or addressing the user (such as responding to "hi", "hello", "good morning", welcoming them back, or beginning a response), ALWAYS greet them warmly by their first name "${userFirstName}" (e.g. "Hi ${userFirstName}!", "Hello ${userFirstName}!", "Good morning ${userFirstName}!"). NEVER use generic "there" (NEVER say "Hi there", "Hello there", "Hey there", or "Good morning there").` : ''}
 2. You have FULL ACCESS to inspect, discuss, recommend, create, update, or delete the user's cards.
 3. If the user asks about their trackers, habits, stats, or general questions:
    - Provide a direct, thorough answer in "message", referencing their actual cards by title.
-   - Set "hasAction": false, "action": null.
-4. If the user wants to take action:
-   - "create": Creating a brand new tracker (goal, checklist, or note). Set action with title, cardType, target/items/noteText, deadline (if any), repeat (if habit).
-   - "breakdown": Breaking down a goal or existing card into 4-7 actionable checklist steps.
-   - "update": Updating/editing an existing card (changing title, editing items, updating note, rescheduling deadline). Provide the cardId of the target card.
-   - "delete": Deleting an existing card. Specify cardId and title.
-   - "plan_day": When user asks to plan their day, organize today's priorities based on active cards and deadlines, explain in "message", and suggest a checklist plan in action.
-   - "clean_overdue": When user asks to clean up overdue tasks, identify overdue trackers, explain what to do in "message", and suggest actions in action.
-   - Deadline rules for action.deadline:
+   - Set "hasAction": false, "actions": [].
+4. Proposing actions ("actions" array, max 10 items):
+   - You can propose up to 10 card modifications in the "actions" array (may be empty []).
+   - Allowed action types: "create" | "update" | "delete".
+   - "create": Creating a brand new tracker (goal, checklist, or note). Set action fields: title, cardType, target/items/noteText, deadline (if any), repeat (if habit).
+   - "update": Updating/editing an existing card (editing title, target, items, noteText, or deadline). You MUST provide "cardId" matching an existing card from the user's cards.
+   - "reschedule": Rescheduling is an "update" action specifying "cardId" and a new "deadline".
+   - "delete": Deleting an existing card. Specify "cardId" and title.
+   - "plan_day" & "clean_overdue": These are NOT action types. Provide detailed planning advice, breakdown, and prioritization in the conversational Markdown "message", and put concrete proposed card creations or updates (e.g. a daily checklist or rescheduled overdue tasks) into the "actions" array.
+   - Batch / Multi-Card Requests: If the user asks to create multiple cards (e.g. from a pasted list or multi-goal prompt), reschedule multiple overdue cards, or batch-update trackers, return EACH individual action in the "actions" array.
+   - Deadline rules for deadline:
      * A day starts at midnight 12:00:00 AM (00:00:00) and ends at midnight 11:59:59 PM (23:59:59).
      * If the user mentions a target date or day without an explicit hour/minute (e.g. "this saturday", "by tomorrow", "by Friday", "by next Monday", "by Nov 20"):
        Calculate that date and set the deadline to the LAST MOMENT of that date: 11:59:59 PM (23:59:59) in the user's local timezone offset: "YYYY-MM-DDT23:59:59${userTzOffset || ''}". Never set it to 00:00:00, 09:00:00, or 12:00:00.
@@ -725,13 +764,13 @@ Guidelines:
        Set the deadline to that exact date and time with offset: "YYYY-MM-DDTHH:MM:00${userTzOffset || ''}".
      * If no deadline is specified, set "deadline" to "".
 5. If the user asks to break down or edit a card but did NOT specify which one and it's ambiguous:
-   - Ask them politely in "message" which of their cards they want to focus on (mentioning their card titles), and set "hasAction": false, "action": null.
+   - Ask them politely in "message" which of their cards they want to focus on (mentioning their card titles), and set "hasAction": false, "actions": [].
 6. For numeric goals/habits ("cardType": "goal"):
    - "preset": Select the best preset type: 'Time' (for habits/trackers measured in minutes or hours), 'Pages', 'Chapters', 'Lectures', 'Videos', 'Problems', 'Tasks', 'Books', or 'Custom'.
    - "unit": MUST BE A SHORT CONCISE WORD (e.g. 'mins', 'hours', 'pages', 'chapters', 'tasks', 'problems', '%'). NEVER put internal reasoning, sentences, or thoughts in "unit".
    - "target": Target goal number (e.g. 30).
    - "currentProgress": Starting progress amount (default 0).
-7. Provide a concise rationale in action.explanation if an action is suggested.`;
+7. Provide a concise rationale in explanation for each action if suggested.`;
 
       parts = [{ text: promptText }];
       if (payload?.image?.data && payload?.image?.mimeType) {
@@ -748,38 +787,89 @@ Guidelines:
         properties: {
           message: { type: 'STRING' },
           hasAction: { type: 'BOOLEAN' },
-          action: {
-            type: 'OBJECT',
-            nullable: true,
-            properties: {
-              type: { type: 'STRING' },
-              cardId: { type: 'STRING' },
-              title: { type: 'STRING' },
-              cardType: { type: 'STRING' },
-              preset: { type: 'STRING' },
-              unit: { type: 'STRING' },
-              target: { type: 'NUMBER' },
-              currentProgress: { type: 'NUMBER' },
-              items: {
-                type: 'ARRAY',
+          actions: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                type: { type: 'STRING' }, // create | update | delete
+                cardId: { type: 'STRING' },
+                title: { type: 'STRING' },
+                cardType: { type: 'STRING' }, // goal | checklist | note
+                preset: { type: 'STRING' },
+                unit: { type: 'STRING' },
+                target: { type: 'NUMBER' },
+                currentProgress: { type: 'NUMBER' },
                 items: {
-                  type: 'OBJECT',
-                  properties: {
-                    text: { type: 'STRING' },
-                    done: { type: 'BOOLEAN' },
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      text: { type: 'STRING' },
+                      done: { type: 'BOOLEAN' },
+                    },
+                    required: ['text'],
                   },
-                  required: ['text'],
                 },
+                noteText: { type: 'STRING' },
+                deadline: { type: 'STRING' },
+                isRecurring: { type: 'BOOLEAN' },
+                resetTime: { type: 'STRING' },
+                explanation: { type: 'STRING' },
               },
-              noteText: { type: 'STRING' },
-              deadline: { type: 'STRING' },
-              isRecurring: { type: 'BOOLEAN' },
-              resetTime: { type: 'STRING' },
-              explanation: { type: 'STRING' },
+              required: ['type'],
             },
           },
         },
-        required: ['message', 'hasAction'],
+        required: ['message', 'hasAction', 'actions'],
+      };
+    } else if (task === 'daily_briefing') {
+      cardsContext = Array.isArray(payload?.cards) ? payload.cards : [];
+
+      const promptText = `You are an intelligent, proactive, and encouraging personal productivity companion for ProgressShelf.
+Analyze the user's active cards, habits, checklist items, and deadlines to generate a clear, motivating "Today's Breakdown / Daily Focus" briefing.${userFirstName ? ` The user's first name is "${userFirstName}".` : ''}
+${timeRefContext}
+
+The user's current cards and trackers:
+${JSON.stringify(cardsContext, null, 2)}
+
+Instructions:
+1. "headline": A friendly, motivating, and personalized 1-2 sentence overview of where the user stands today.
+   - ALWAYS start with a time-appropriate greeting followed by the user's first name "${userFirstName || ''}"${userFirstName ? ` (e.g. "Good morning ${userFirstName}!", "Good afternoon ${userFirstName}!", or "Good evening ${userFirstName}!" based on user local time)` : ' (e.g. "Good morning!", "Good afternoon!", or "Good evening!" based on user local time)'}.
+   - Follow the greeting with a motivating breakdown of active cards and deadlines for today.
+   - Example: "${userFirstName ? `Good morning ${userFirstName}! ` : 'Good morning! '}You have 2 daily habits ready and 1 important deadline approaching this evening."
+   - NEVER use generic "there" (NEVER say "Good morning there", "Hi there", or "Hello there").
+2. "priorities": An array of 2 to 5 specific, high-leverage focus items for today:
+   - "title": Action-oriented short title (e.g. "Complete 30 mins Daily Reading", "Submit College Report").
+   - "badge": A short tag like "Habit", "Overdue", "Due Today", "Urgent", or "Next Up".
+   - "detail": 1 short sentence explaining why or what to do next.
+3. "actionPills": An array of 2 to 4 quick action shortcuts or questions the user might want to tap (e.g. "Plan my day", "Break down my biggest goal", "Clean up overdue tasks").
+4. If the user has no cards, provide a warm welcome with encouraging suggestions on how to set up their first habit or goal.`;
+
+      parts = [{ text: promptText }];
+
+      responseSchema = {
+        type: 'OBJECT',
+        properties: {
+          headline: { type: 'STRING' },
+          priorities: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                title: { type: 'STRING' },
+                badge: { type: 'STRING' },
+                detail: { type: 'STRING' },
+              },
+              required: ['title', 'detail'],
+            },
+          },
+          actionPills: {
+            type: 'ARRAY',
+            items: { type: 'STRING' },
+          },
+        },
+        required: ['headline', 'priorities', 'actionPills'],
       };
     }
 
@@ -822,7 +912,7 @@ Guidelines:
 
       geminiAttempts++;
 
-      const maxOutputTokens = task === 'chat' ? 2048 : 4096;
+      const maxOutputTokens = task === 'daily_briefing' ? 1024 : 4096;
       const generationConfig: Record<string, unknown> = {
         responseMimeType: 'application/json',
         responseSchema,
@@ -938,6 +1028,7 @@ Guidelines:
                 message:
                   "The response was too long to complete and was cut short. Please ask a more specific or concise question.",
                 hasAction: false,
+                actions: [],
                 action: null,
                 code: 'TOO_LONG',
               },
@@ -974,6 +1065,7 @@ Guidelines:
                 message:
                   "I'm sorry, I wasn't able to complete that request due to content safety or policy restrictions. Please try phrasing your request differently.",
                 hasAction: false,
+                actions: [],
                 action: null,
                 code: 'BLOCKED',
               },
@@ -1013,6 +1105,7 @@ Guidelines:
                 message:
                   "I received a response, but couldn't format it properly. Please try again or rephrase your request.",
                 hasAction: false,
+                actions: [],
                 action: null,
                 code: 'BAD_FORMAT',
               },
@@ -1124,7 +1217,181 @@ Guidelines:
         typeof lastStatus === 'number' && lastStatus >= 400 && lastStatus <= 599
           ? lastStatus
           : 502;
-      return jsonResponse({ error: lastError, status: returnStatus }, returnStatus);
+      return jsonResponse(
+        {
+          error: lastError,
+          status: returnStatus,
+          ...(lastStatus === 429 ? { code: 'GOOGLE_QUOTA' } : {}),
+        },
+        returnStatus
+      );
+    }
+
+    // Backend validation and sanitization for chat actions:
+    // 1. Validate that cardId exists in the user cards sent (for update and delete)
+    // 2. Truncate strings (title, noteText, explanation, unit, items)
+    // 3. Ensure numbers are finite
+    // 4. Maximum 10 actions
+    // 5. Populate both 'actions' array and legacy 'action' (for client transition)
+    if (task === 'chat' && parsedResult && typeof parsedResult === 'object') {
+      const validCardIds = new Set(
+        cardsContext.map((c: { id?: string | number }) => String(c?.id))
+      );
+      let rawActions: unknown[] = [];
+
+      const pr = parsedResult as Record<string, unknown>;
+      if (Array.isArray(pr.actions)) {
+        rawActions = pr.actions;
+      } else if (pr.action && typeof pr.action === 'object') {
+        rawActions = [pr.action];
+      }
+
+      // Cap at 10 actions maximum
+      rawActions = rawActions.slice(0, 10);
+
+      const validatedActions: Array<Record<string, unknown>> = [];
+
+      for (const item of rawActions) {
+        if (!item || typeof item !== 'object') continue;
+        const act = item as Record<string, unknown>;
+        const actType = String(act.type || '').toLowerCase().trim();
+        if (!['create', 'update', 'delete'].includes(actType)) continue;
+
+        const cardId = act.cardId ? String(act.cardId).trim() : '';
+
+        // For update and delete: cardId MUST exist in the cards sent
+        if (['update', 'delete'].includes(actType)) {
+          if (!cardId || !validCardIds.has(cardId)) {
+            console.warn(
+              `[ai-proxy] Dropping ${actType} action: cardId "${cardId}" not found in user cards.`
+            );
+            continue;
+          }
+        }
+
+        // For delete: only type, cardId, and title
+        if (actType === 'delete') {
+          validatedActions.push({
+            type: 'delete',
+            cardId,
+            title: typeof act.title === 'string' && act.title.trim() ? act.title.slice(0, 120).trim() : undefined,
+          });
+          continue;
+        }
+
+        // For update: include only fields the model provided, never change cardType
+        if (actType === 'update') {
+          let safeItems: Array<{ text: string; done: boolean }> | undefined = undefined;
+          if (Array.isArray(act.items)) {
+            safeItems = act.items
+              .filter((it) => it && typeof it === 'object')
+              .map((it: { text?: unknown; done?: unknown }) => ({
+                text: typeof it.text === 'string' ? it.text.slice(0, 120).trim() : '',
+                done: Boolean(it.done),
+              }))
+              .filter((it) => it.text.length > 0)
+              .slice(0, 20);
+          }
+
+          validatedActions.push({
+            type: 'update',
+            cardId,
+            title: typeof act.title === 'string' && act.title.trim() ? act.title.slice(0, 120).trim() : undefined,
+            cardType: undefined,
+            preset: typeof act.preset === 'string' && act.preset.trim() ? act.preset.slice(0, 30).trim() : undefined,
+            unit: typeof act.unit === 'string' && act.unit.trim() ? act.unit.slice(0, 20).trim() : undefined,
+            target:
+              typeof act.target === 'number' && Number.isFinite(act.target)
+                ? act.target
+                : undefined,
+            currentProgress:
+              typeof act.currentProgress === 'number' && Number.isFinite(act.currentProgress)
+                ? act.currentProgress
+                : undefined,
+            items: safeItems && safeItems.length > 0 ? safeItems : undefined,
+            noteText:
+              typeof act.noteText === 'string' && act.noteText.trim() ? act.noteText.slice(0, 500).trim() : undefined,
+            deadline:
+              typeof act.deadline === 'string' && act.deadline.trim() ? act.deadline.slice(0, 40).trim() : undefined,
+            isRecurring: typeof act.isRecurring === 'boolean' ? act.isRecurring : undefined,
+            resetTime:
+              typeof act.resetTime === 'string' && act.resetTime.trim() ? act.resetTime.slice(0, 10).trim() : undefined,
+            explanation:
+              typeof act.explanation === 'string' && act.explanation.trim()
+                ? act.explanation.slice(0, 300).trim()
+                : undefined,
+          });
+          continue;
+        }
+
+        // For create: apply defaults (empty title, cardType inference, target 100, currentProgress 0, items [{text:'Step 1'}])
+        const safeTitle =
+          typeof act.title === 'string' ? act.title.slice(0, 120).trim() : '';
+        const safeNoteText =
+          typeof act.noteText === 'string' ? act.noteText.slice(0, 500).trim() : '';
+        const safeExplanation =
+          typeof act.explanation === 'string'
+            ? act.explanation.slice(0, 300).trim()
+            : '';
+        const safeUnit =
+          typeof act.unit === 'string' ? act.unit.slice(0, 20).trim() : '';
+        const rawCardType = String(act.cardType || '').toLowerCase().trim();
+        const safeCardType = ['goal', 'checklist', 'note'].includes(rawCardType)
+          ? rawCardType
+          : (Array.isArray(act.items) ? 'checklist' : (act.noteText ? 'note' : 'goal'));
+
+        // Finite numbers check
+        const safeTarget =
+          typeof act.target === 'number' && Number.isFinite(act.target)
+            ? act.target
+            : (safeCardType === 'goal' ? 100 : undefined);
+        const safeCurrent =
+          typeof act.currentProgress === 'number' && Number.isFinite(act.currentProgress)
+            ? act.currentProgress
+            : (safeCardType === 'goal' ? 0 : undefined);
+
+        // Checklist items
+        let safeItems: Array<{ text: string; done: boolean }> | undefined = undefined;
+        if (Array.isArray(act.items)) {
+          safeItems = act.items
+            .filter((it) => it && typeof it === 'object')
+            .map((it: { text?: unknown; done?: unknown }) => ({
+              text: typeof it.text === 'string' ? it.text.slice(0, 120).trim() : '',
+              done: Boolean(it.done),
+            }))
+            .filter((it) => it.text.length > 0)
+            .slice(0, 20);
+        }
+
+        const validItem: Record<string, unknown> = {
+          type: 'create',
+          cardId: undefined,
+          title: safeTitle,
+          cardType: safeCardType,
+          preset: typeof act.preset === 'string' && act.preset.trim() ? act.preset.slice(0, 30).trim() : undefined,
+          unit: safeUnit,
+          target: safeTarget,
+          currentProgress: safeCurrent,
+          items:
+            safeItems && safeItems.length > 0
+              ? safeItems
+              : (safeCardType === 'checklist' ? [{ text: 'Step 1', done: false }] : undefined),
+          noteText: safeNoteText,
+          deadline:
+            typeof act.deadline === 'string' && act.deadline.trim() ? act.deadline.slice(0, 40).trim() : undefined,
+          isRecurring: Boolean(act.isRecurring),
+          resetTime:
+            typeof act.resetTime === 'string' && act.resetTime.trim() ? act.resetTime.slice(0, 10).trim() : undefined,
+          explanation: safeExplanation,
+        };
+
+        validatedActions.push(validItem);
+      }
+
+      pr.actions = validatedActions;
+      pr.hasAction = validatedActions.length > 0;
+      // Client transition: preserve legacy single action pointing to first item
+      pr.action = validatedActions.length > 0 ? validatedActions[0] : null;
     }
 
     // Count a request against the hourly limit only if the Gemini call succeeded

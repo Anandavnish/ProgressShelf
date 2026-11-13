@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://www.gravatar.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://*.supabase.co wss://*.supabase.co https://lieckszgurlqcujmyrjw.supabase.co wss://lieckszgurlqcujmyrjw.supabase.co; frame-src 'self' https://*.firebaseapp.com https://apis.google.com;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProgressShelf Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="index.css?v=6.37">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0D1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="logo.svg">
+  <script>
+    (function() {
+      const theme = localStorage.getItem('app-theme') || 'system';
+      if (theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark-theme');
+        document.documentElement.classList.remove('light-theme');
+      } else {
+        document.documentElement.classList.add('light-theme');
+        document.documentElement.classList.remove('dark-theme');
+      }
+
+      // Apply Accent Color instantly (only in light theme; dark theme uses native dark styling)
+      const isDark = document.documentElement.classList.contains('dark-theme');
+      const accent = localStorage.getItem('app-accent-color');
+      if (!isDark && accent) {
+        document.documentElement.style.setProperty('--accent', accent);
+        // Simple glow calculation for early render
+        const r = parseInt(accent.slice(1,3), 16) || 0;
+        const g = parseInt(accent.slice(3,5), 16) || 0;
+        const b = parseInt(accent.slice(5,7), 16) || 0;
+        document.documentElement.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.18)`);
+      }
+
+      // Apply Font Setting instantly
+      const font = localStorage.getItem('app-font-family') || 'outfit';
+      if (font === 'space-mono') {
+        document.documentElement.style.setProperty('--font-family', "'Space Mono', monospace");
+        document.documentElement.classList.add('font-space-mono');
+      } else if (font === 'jetbrains-mono') {
+        document.documentElement.style.setProperty('--font-family', "'JetBrains Mono', monospace");
+        document.documentElement.classList.add('font-jetbrains-mono');
+      } else {
+        document.documentElement.style.setProperty('--font-family', "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+        document.documentElement.classList.add('font-outfit');
+      }
+    })();
+  </script>
+</head>
+
+<body>
+
+  <!-- Navbar (Rendered immediately to show natural layout) -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a class="nav-logo" href="dashboard.html">
+        <svg id="nav-logo-svg" class="logo-svg logo-loading" viewBox="30 15 170 110" fill="none"
+          xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4" />
+            </filter>
+            <linearGradient id="barBlue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38BDF8" />
+              <stop offset="100%" stop-color="#2563EB" />
+            </linearGradient>
+            <linearGradient id="barOrange" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FBBF24" />
+              <stop offset="100%" stop-color="#D97706" />
+            </linearGradient>
+            <linearGradient id="barRed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F87171" />
+              <stop offset="100%" stop-color="#DC2626" />
+            </linearGradient>
+            <linearGradient id="barGreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4ADE80" />
+              <stop offset="100%" stop-color="#16A34A" />
+            </linearGradient>
+            <linearGradient id="shelfGrad" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#1E293B" />
+              <stop offset="50%" stop-color="#475569" />
+              <stop offset="100%" stop-color="#1E293B" />
+            </linearGradient>
+            <linearGradient id="shelfRail" x1="0" y1="0" x2="100%" y2="0">
+              <stop offset="0%" stop-color="#334155" />
+              <stop offset="50%" stop-color="#64748B" />
+              <stop offset="100%" stop-color="#334155" />
+            </linearGradient>
+          </defs>
+
+          <!-- Shelf Base -->
+          <rect x="36" y="108" width="168" height="7" rx="3.5" fill="url(#shelfGrad)" filter="url(#logoShadow)" />
+          <rect x="40" y="109" width="160" height="2" rx="1" fill="url(#shelfRail)" />
+
+          <!-- Bars -->
+          <rect class="logo-bar-1" x="60" y="90" width="16" height="16" rx="3" fill="url(#barBlue)" />
+          <rect class="logo-bar-2" x="84" y="70" width="16" height="36" rx="3" fill="url(#barOrange)" />
+          <rect class="logo-bar-3" x="108" y="50" width="16" height="56" rx="3" fill="url(#barRed)" />
+          <rect class="logo-bar-4" x="132" y="30" width="16" height="76" rx="3" fill="url(#barGreen)" />
+
+          <!-- Plus -->
+          <path class="logo-plus" d="M 166 90 v 14 m -7 -7 h 14" stroke="#38BDF8" stroke-width="4.5"
+            stroke-linecap="round" />
+
+          <!-- Red exclamation warning badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(116, 40)">
+            <g class="logo-badge-red">
+              <circle cx="0" cy="0" r="12" fill="url(#barRed)" stroke="#161B22" stroke-width="2.5" />
+              <path d="M 0 -4.5 v 5.5 m 0 3 h .01" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+            </g>
+          </g>
+
+          <!-- Green checkmark badge (Translation on parent, Scale animation on child) -->
+          <g transform="translate(140, 20)">
+            <g class="logo-badge-green">
+              <circle cx="0" cy="0" r="14" fill="url(#barGreen)" stroke="#161B22" stroke-width="2.5" />
+              <path d="M -5 0.5 l 3.5 3.5 l 6.5 -7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </g>
+          </g>
+        </svg>
+        <span class="nav-logo-text">
+          <span class="text-gradient">Progress</span><span class="text-outline">Shelf</span>
+        </span>
+      </a>
+      <!-- Global Search Bar -->
+      <div class="nav-search-container">
+        <input type="search" id="global-search" class="nav-search-input" placeholder="Global Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="btn-clear-search" class="nav-search-clear hidden" title="Clear search">&times;</button>
+        <button id="btn-search" class="nav-search-btn" title="Search">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="nav-toolbar">
+        <!-- Theme Toggle Dropdown -->
+        <div class="theme-menu-container">
+          <button id="theme-toggle-btn" title="Toggle Theme">
+            <span class="beta-badge" id="theme-beta-badge" style="display:none;">BETA</span>
+            <!-- Icon injected by JS -->
+          </button>
+          <div id="theme-dropdown-menu" class="theme-dropdown">
+            <button class="theme-dropdown-item" data-theme="system">
+              <svg class="theme-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              System default
+              <span class="theme-check-mark">✓</span>
+            </button>
+            <button class="theme-dropdown-item" data-theme="light">
+              <svg class="theme-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.77" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+              Light
+              <span class="theme-check-mark">✓</span>
+            </button>
+            <button class="theme-dropdown-item" data-theme="dark">
+              <svg class="theme-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+              Dark
+              <span class="theme-check-mark">✓</span>
+            </button>
+          </div>
+        </div>
+        <!-- Accent Color Picker -->
+        <div class="accent-menu-container">
+          <button id="accent-toggle-btn" class="accent-toggle-btn" title="Theme Color">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M346-140 100-386q-10-10-15-22t-5-25q0-13 5-25t15-22l230-229-106-106 62-65 400 400q10 10 14.5 22t4.5 25q0 13-4.5 25T686-386L440-140q-10 10-22 15t-25 5q-13 0-25-5t-22-15Zm47-506L179-432h428L393-646Zm399 526q-36 0-61-25.5T706-208q0-27 13.5-51t30.5-47l42-54 44 54q16 23 30 47t14 51q0 37-26 62.5T792-120Z"/></svg>
+          </button>
+          <div id="accent-dropdown-menu" class="theme-dropdown accent-dropdown">
+            <div class="accent-palette" id="accent-palette">
+              <!-- Swatches injected by JS -->
+            </div>
+            <div class="custom-color-wrapper">
+              <label for="custom-accent-picker" class="custom-color-btn" title="Pick Custom Color">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </label>
+              <input type="color" id="custom-accent-picker" class="custom-accent-picker">
+            </div>
+          </div>
+        </div>
+        <!-- Download Button -->
+        <button id="btn-download-apk" class="nav-download-btn" title="Download Web APK" style="display: none;">
+          <svg class="download-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+        <!-- Refresh Button -->
+        <button id="btn-refresh" class="nav-refresh-btn" title="Refresh App &amp; Cache">
+          <svg class="refresh-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.72 2.78L21 8"></path>
+            <polyline points="21 3 21 8 16 8"></polyline>
+          </svg>
+        </button>
+        <!-- GitHub Link -->
+        <a id="btn-github" class="nav-github-link" href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer" title="View Source on GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+        <!-- Version Selector -->
+        <div class="version-selector">
+          <select class="version-select" onchange="location = this.value;">
+            <option value="../../dashboard.html">v5.0 (Latest)</option>
+            <option value="" disabled selected>v4.5 (Sparkle)</option>
+            <option value="../v4.0/dashboard.html">v4.0 (Supabase)</option>
+            <option value="../v3.0/dashboard.html">v3.0 (Firebase)</option>
+            <option value="../v2.0/dashboard.html">v2.0 (Stable)</option>
+            <option value="../v1.0/dashboard.html">v1.0 (Basic)</option>
+          </select>
+        </div>
+        <!-- User Profile Dropdown Container -->
+        <div class="profile-menu-container">
+          <button id="btn-profile-badge" class="profile-badge-btn" title="Account Menu">
+            <span id="profile-name" class="profile-name">Guest</span>
+            <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" referrerpolicy="no-referrer">
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main App Wrapper (initially hidden) -->
+  <div id="app-content" class="hidden">
+
+    <!-- Secondary Mobile Subbar (Version select & GitHub link for mobile screen space optimization) -->
+    <div class="mobile-subbar">
+      <div class="mobile-subbar-container">
+      </div>
+    </div>
+
+    <!-- Overall Stats Bar (3D Glossy Buttons) -->
+    <div id="stats-banner" class="stats-banner">
+      <div class="stats-container">
+
+        <!-- All Trackers -->
+        <button class="stats-btn active" data-filter="all" id="btn-stat-all" aria-pressed="true">
+          <div class="stats-icon-wrapper val-blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z" />
+              <path d="M8 10h8" />
+              <path d="M8 14h4" />
+              <circle cx="18" cy="18" r="4" fill="currentColor" opacity="0.2" />
+              <path d="M16 18l1.5 1.5L20 16" />
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-total" class="stats-num stats-skeleton"></span>
+            <span class="stats-label">Trackers</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-deadlines"></div>
+
+        <!-- Active Deadlines -->
+        <button class="stats-btn" data-filter="deadlines" id="btn-stat-deadlines" aria-pressed="false">
+          <div class="stats-icon-wrapper val-orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <circle cx="17" cy="17" r="4" fill="currentColor" opacity="0.2" />
+              <polyline points="17 15 17 17 18.5 18" />
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-deadlines" class="stats-num stats-skeleton"></span>
+            <span class="stats-label">Active Deadlines</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-overdue"></div>
+
+        <!-- Overdue -->
+        <button class="stats-btn" data-filter="overdue" id="btn-stat-overdue" aria-pressed="false">
+          <div class="stats-icon-wrapper val-red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="13" r="8" />
+              <path d="M5 3L2 6" />
+              <path d="M19 3l3 3" />
+              <path d="M12 9v4" />
+              <path d="M12 16h.01" stroke-width="3" />
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-overdue" class="stats-num stats-skeleton"></span>
+            <span class="stats-label">Overdue</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-completed"></div>
+
+        <!-- Completed -->
+        <button class="stats-btn" data-filter="completed" id="btn-stat-completed" aria-pressed="false">
+          <div class="stats-icon-wrapper val-green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 12l3 3 5-5" />
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-completed" class="stats-num stats-skeleton"></span>
+            <span class="stats-label">Completed</span>
+          </div>
+        </button>
+
+        <div class="stats-divider" id="div-stat-flexible"></div>
+
+        <!-- Flexible Goals (Without Deadlines) -->
+        <button class="stats-btn" data-filter="flexible" id="btn-stat-flexible" aria-pressed="false">
+          <div class="stats-icon-wrapper val-purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2" />
+              <path d="M12 2v2m0 16v2m-10-10h2m16 0h2" />
+            </svg>
+          </div>
+          <div class="stats-info">
+            <span id="stat-flexible" class="stats-num stats-skeleton"></span>
+            <span class="stats-label">Flexible Goals</span>
+          </div>
+        </button>
+      </div> <!-- Close stats-container -->
+    </div> <!-- Close stats-banner -->
+
+
+    <div id="guest-banner" class="guest-banner" style="display:none;">
+      <span>
+        You're in guest mode — data stays in this browser only.
+      </span>
+      <button id="btn-banner-login" class="btn-banner-login">
+        Sign in to sync
+      </button>
+    </div>
+
+    <main class="dashboard-main">
+      <!-- Search Helper Notification -->
+      <div id="search-helper" class="search-helper hidden"></div>
+
+      <!-- Controls Row (Sort & APK & Edit) -->
+      <div class="dashboard-controls">
+        <button id="btn-apk-download" class="btn-apk-download" title="Download Android APK">
+          <svg class="apk-icon" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="M40-240q9-107 65.5-197T256-580l-74-128q-6-9-3-19t13-15q8-5 18-2t16 12l74 128q86-36 180-36t180 36l74-128q6-9 16-12t18 2q10 5 13 15t-3 19l-74 128q94 53 150.5 143T920-240H40Zm240-110q21 0 35.5-14.5T330-400q0-21-14.5-35.5T280-450q-21 0-35.5 14.5T230-400q0 21 14.5 35.5T280-350Zm400 0q21 0 35.5-14.5T730-400q0-21-14.5-35.5T680-450q-21 0-35.5 14.5T630-400q0 21 14.5 35.5T680-350Z"/>
+          </svg>
+        </button>
+
+        <div class="controls-right-group">
+          <button id="btn-toggle-edit" class="btn-toggle-edit" title="Edit / Bulk Delete">
+            <svg class="edit-mode-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+
+          <div class="sort-container">
+            <label for="sort-select" class="sort-label">Sort by:</label>
+            <select id="sort-select" class="sort-select">
+              <option value="created-desc">Recently Created</option>
+              <option value="updated-desc">Recently Updated</option>
+            </select>
+          </div>
+          
+          <button id="btn-delete-selected" class="btn-delete-selected hidden" title="Delete Selected Cards">
+            Delete Selected (0)
+          </button>
+        </div>
+      </div>
+      
+      <div id="demo-banner" class="guest-banner demo-banner hidden" style="margin-top: 15px; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer; flex-grow: 1;" id="btn-trigger-demo-banner">
+          <span>👋 Start with a demo</span>
+        </div>
+        <button id="btn-dismiss-demo-banner" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: inline-flex; align-items: center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Grid Container -->
+      <div id="cards-grid" class="cards-grid">
+        <!-- Skeleton Cards (Shown while loading Firestore) -->
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+        <div class="card-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-percent"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-label"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- CREATE BAR MODAL -->
+    <div id="modal-create" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 id="modal-create-title" class="modal-title">Create Progress Bar</h2>
+          <button class="btn-close-modal" data-close="modal-create">&times;</button>
+        </div>
+        <form id="form-create" autocomplete="off">
+          <div class="modal-body">
+
+            <!-- Tracker Type selector -->
+            <div class="form-group">
+              <label class="form-label">Tracker Type</label>
+              <div class="tracker-type-selector">
+                <input type="radio" id="create-type-goal" name="create-tracker-type" value="goal" checked>
+                <label for="create-type-goal" class="type-tab">Progress Goal</label>
+                
+                <input type="radio" id="create-type-checklist" name="create-tracker-type" value="checklist">
+                <label for="create-type-checklist" class="type-tab">Task Checklist</label>
+                
+                <input type="radio" id="create-type-note" name="create-tracker-type" value="note">
+                <label for="create-type-note" class="type-tab">Quick Note</label>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="form-group">
+              <label class="form-label" for="bar-title">Title</label>
+              <textarea class="form-input form-input-single-line" rows="1" id="bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+            </div>
+
+            <!-- GOAL FIELDS -->
+            <div id="create-goal-fields">
+              <!-- Preset -->
+              <div class="form-group">
+                <label class="form-label" for="bar-preset">Preset Unit Type</label>
+                <select class="form-input" id="bar-preset" required>
+                  <option value="">Select a type...</option>
+                  <option value="Lectures">Lectures</option>
+                  <option value="Videos">Videos</option>
+                  <option value="Problems">Problems</option>
+                  <option value="Tasks">Tasks</option>
+                  <option value="Pages">Pages</option>
+                  <option value="Books">Books</option>
+                  <option value="Chapters">Chapters</option>
+                  <option value="Time">Time (hrs / min)</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+
+              <!-- Pre-filled conversions and custom levels -->
+              <div id="create-presets-dynamic">
+                <!-- Dynamically populated fields for Chapters ratio or Custom configuration -->
+              </div>
+
+              <!-- Target & Current values wrapper -->
+              <div class="form-row-group-wrapper" id="create-values-wrapper">
+                <!-- Target values -->
+                <div class="form-group">
+                  <label class="form-label">Target Goal</label>
+                  <div id="create-target-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+
+                <!-- Current progress values -->
+                <div class="form-group">
+                  <label class="form-label">Current Progress</label>
+                  <div id="create-current-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="create-checklist-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label">Checklist Items</label>
+                <div class="checklist-builder-input-group">
+                  <textarea id="create-checklist-item-input" class="form-input form-input-single-line add-item-input" placeholder="Add new item..." rows="1"></textarea>
+                  <button type="button" id="btn-create-add-item" class="btn btn-primary btn-add-item">Add</button>
+                </div>
+                <ul id="create-checklist-items-list" class="checklist-builder-list">
+                  <!-- Dynamically populated checklist item rows -->
+                </ul>
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="create-note-fields" class="hidden">
+              <div class="form-group">
+                <div class="note-label-container" style="display: flex; align-items: center; gap: 6px; position: relative; margin-bottom: 8px;">
+                  <label class="form-label" for="create-note-text" style="margin-bottom: 0;">Note Text</label>
+                  <span class="info-icon-wrapper" style="display: inline-flex; align-items: center; position: relative;">
+                    <svg class="info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer; color: var(--text-muted);">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <div class="formatting-popover hidden">
+                      <button type="button" class="btn-close-popover">&times;</button>
+                      <ul>
+                        <li>**text** / __text__ — bold</li>
+                        <li>*text* / _text_ — italic</li>
+                        <li>~~text~~ — strikethrough</li>
+                        <li>`code` — inline code</li>
+                        <li>``` (on new line) — code block</li>
+                        <li># Title / ## / ### — headers</li>
+                        <li>- list / * list — bullet list</li>
+                        <li>1. list — numbered list</li>
+                        <li>Enter continues list; double Enter exits</li>
+                      </ul>
+                    </div>
+                  </span>
+                </div>
+                <div class="form-input note-editor-contenteditable" id="create-note-text" contenteditable="true" autocorrect="on" autocapitalize="sentences" spellcheck="true" inputmode="text" placeholder="Write your note here..."></div>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="create-note-char-count">0 / 1600</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Created Date & Time (Settings Card) -->
+            <details class="advanced-date-details" id="create-date-details">
+              <summary class="advanced-date-summary">
+                <div class="advanced-date-summary-left">
+                  <span class="advanced-date-icon-wrap">
+                    <svg class="advanced-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </span>
+                  <div class="advanced-date-text">
+                    <span class="advanced-date-title">Custom Creation Date</span>
+                    <span class="advanced-date-desc">Backdate or configure initial timestamp</span>
+                  </div>
+                </div>
+                <div class="advanced-date-summary-right">
+                  <span class="advanced-date-badge">Optional</span>
+                  <svg class="advanced-date-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+              </summary>
+              <div class="advanced-date-content" id="create-created-at-group">
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="create-created-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="create-created-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
+                  Leave empty for current time. If time is omitted, defaults to 12:00 PM.
+                </span>
+              </div>
+            </details>
+
+            <!-- Deadline selection (optional) -->
+            <div class="form-group deadline-box" id="deadline-group">
+              <label class="form-label">
+                Deadline
+                <span class="form-label-optional">(optional)</span>
+              </label>
+
+              <!-- Method 2: Relative duration from now -->
+              <div class="deadline-relative">
+                <span class="deadline-way-label">From now</span>
+                <div class="deadline-relative-inputs">
+                  <textarea class="form-input form-input-single-line deadline-hrs" id="deadline-hrs" placeholder="HH" inputmode="decimal" rows="1"></textarea>
+                  <span class="deadline-sep">hrs</span>
+                  <textarea class="form-input form-input-single-line deadline-min" id="deadline-mins" placeholder="MM" inputmode="decimal" rows="1"></textarea>
+                  <span class="deadline-sep">min</span>
+                </div>
+              </div>
+
+              <!-- Or divider -->
+              <div class="deadline-or-divider">
+                <span>or</span>
+              </div>
+
+              <!-- Method 1: Specific date and time -->
+              <div class="deadline-absolute">
+                <span class="deadline-way-label">Specific date &amp; time</span>
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="deadline-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="deadline-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block;">If time is omitted, defaults to 11:59 PM. If date is omitted, defaults to today.</span>
+              </div>
+
+              <!-- Section divider -->
+              <div class="section-divider" id="create-reset-system-divider">
+                <hr><span>RESET SYSTEM</span><hr>
+              </div>
+
+              <!-- Checklist Reset Settings -->
+              <div class="repeat-section" id="checklist-reset-section">
+                <div class="repeat-header-row" id="checklist-reset-header-row">
+                  <div class="repeat-title-wrapper">
+                    <span class="repeat-title">Checklist reset</span>
+                    <span class="repeat-summary-text" id="checklist-reset-summary-text">Don't reset</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="checklist-reset-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Deadline Reset Settings -->
+              <div class="repeat-section" id="deadline-reset-section">
+                <div class="repeat-header-row" id="deadline-reset-header-row">
+                  <div class="repeat-title-wrapper">
+                    <span class="repeat-title">Deadline reset</span>
+                    <span class="repeat-summary-text" id="deadline-reset-summary-text">Don't reset</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="deadline-reset-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Shared Reset Schedule Content -->
+              <div class="repeat-settings-content collapsed" id="create-reset-settings-content" style="margin-top: 8px;">
+                <div class="repeat-card">
+                  <div class="reset-time-group" id="create-reset-time-group" style="margin-bottom: 12px;">
+                    <label for="create-reset-time" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">Daily Reset Time</label>
+                    <input type="time" class="form-input form-input-time" id="create-reset-time" style="max-width: 150px;">
+                  </div>
+                  <div class="setting-item" style="padding: 4px 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">Times total (optional)</label>
+                    <input type="number" id="create-reset-count" class="form-input" placeholder="Indefinitely" min="1" max="9999" style="width: 110px; display: inline-block;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section divider -->
+              <div class="section-divider">
+                <hr><span>NOTIFICATION</span><hr>
+              </div>
+
+              <!-- Notification Settings -->
+              <div class="notification-section" id="notification-section">
+                <!-- Header row with Toggle -->
+                <div class="notify-header-row">
+                  <span class="notify-title">Deadline Notifications</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="notify-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                
+                <!-- Collapse container -->
+                <div class="notify-settings-content collapsed" id="notify-settings-content">
+                  <!-- End Alert Checkbox (at the top) -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="end-alert-toggle-create"> 
+                      Notify at exact deadline
+                    </label>
+                  </div>
+
+                  <hr class="notify-divider">
+
+                  <div class="notify-mode-a" id="notify-mode-a-container">
+                    <span class="notify-sub-label">Fixed time</span>
+                    <div class="notify-inputs-wrapper">
+                      <div class="notify-mode-a-inputs" id="notify-mode-a-inputs-container">
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-hrs" placeholder="0" inputmode="decimal" rows="1"></textarea>
+                        <span class="notify-sep">hr</span>
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-mins" placeholder="0" inputmode="decimal" rows="1"></textarea>
+                        <span class="notify-sep">min</span>
+                        <span class="notify-suffix">before deadline</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="or-divider">
+                    <hr><span>or</span><hr>
+                  </div>
+
+                  <div class="notify-mode-b" id="notify-mode-b-container">
+                    <span class="notify-sub-label">Remind at</span>
+                    <div class="notify-inputs-wrapper">
+                      <div class="notify-mode-b-inputs" id="notify-mode-b-inputs-container">
+                        <textarea class="form-input form-input-single-line notify-input" id="notify-percent" placeholder="0" inputmode="numeric" rows="1"></textarea>
+                        <span class="notify-suffix">% of time remaining</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="notify-preview" id="notify-preview-create"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-create">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Bar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- EDIT BAR DETAILS MODAL -->
+    <div id="modal-edit" class="modal-overlay">
+
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 id="modal-edit-title" class="modal-title">Edit Tracker</h2>
+          <button class="btn-close-modal" data-close="modal-edit">&times;</button>
+        </div>
+        <form id="form-edit" autocomplete="off">
+          <div class="modal-body">
+
+            <!-- Title -->
+            <div class="form-group">
+              <label class="form-label" for="edit-bar-title">Title</label>
+              <textarea class="form-input form-input-single-line" rows="1" id="edit-bar-title" placeholder="e.g. Read 'Clean Code' or Learn Guitar" required maxlength="50" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+            </div>
+
+            <!-- GOAL FIELDS -->
+            <div id="edit-goal-fields">
+              <!-- Preset -->
+              <div class="form-group">
+                <label class="form-label" for="edit-bar-preset">Preset Unit Type</label>
+                <select class="form-input" id="edit-bar-preset" disabled required>
+                  <option value="">Select a type...</option>
+                  <option value="Lectures">Lectures</option>
+                  <option value="Videos">Videos</option>
+                  <option value="Problems">Problems</option>
+                  <option value="Tasks">Tasks</option>
+                  <option value="Pages">Pages</option>
+                  <option value="Books">Books</option>
+                  <option value="Chapters">Chapters</option>
+                  <option value="Time">Time (hrs / min)</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+
+              <!-- Target & Current values wrapper -->
+              <div class="form-row-group-wrapper" id="edit-values-wrapper">
+                <!-- Target values -->
+                <div class="form-group">
+                  <label class="form-label">Target Goal</label>
+                  <div id="edit-target-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+
+                <!-- Current progress values -->
+                <div class="form-group">
+                  <label class="form-label">Current Progress</label>
+                  <div id="edit-current-dynamic" class="form-row">
+                    <!-- Dynamically populated inputs per level -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="edit-checklist-fields" class="hidden">
+              <div class="form-group">
+                <label class="form-label">Checklist Items</label>
+                <div class="checklist-builder-input-group">
+                  <textarea id="edit-checklist-item-input" class="form-input form-input-single-line add-item-input" placeholder="Add new item..." rows="1"></textarea>
+                  <button type="button" id="btn-edit-add-item" class="btn btn-primary btn-add-item">Add</button>
+                </div>
+                <ul id="edit-checklist-items-list" class="checklist-builder-list">
+                  <!-- Dynamically populated checklist items -->
+                </ul>
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="edit-note-fields" class="hidden">
+              <div class="form-group">
+                <div class="note-label-container" style="display: flex; align-items: center; gap: 6px; position: relative; margin-bottom: 8px;">
+                  <label class="form-label" for="edit-note-text" style="margin-bottom: 0;">Note Text</label>
+                  <span class="info-icon-wrapper" style="display: inline-flex; align-items: center; position: relative;">
+                    <svg class="info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer; color: var(--text-muted);">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <div class="formatting-popover hidden">
+                      <button type="button" class="btn-close-popover">&times;</button>
+                      <ul>
+                        <li>**text** / __text__ — bold</li>
+                        <li>*text* / _text_ — italic</li>
+                        <li>~~text~~ — strikethrough</li>
+                        <li>`code` — inline code</li>
+                        <li>``` (on new line) — code block</li>
+                        <li># Title / ## / ### — headers</li>
+                        <li>- list / * list — bullet list</li>
+                        <li>1. list — numbered list</li>
+                        <li>Enter continues list; double Enter exits</li>
+                      </ul>
+                    </div>
+                  </span>
+                </div>
+                <div class="form-input note-editor-contenteditable" id="edit-note-text" contenteditable="true" autocorrect="on" autocapitalize="sentences" spellcheck="true" inputmode="text" placeholder="Write your note here..."></div>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="edit-note-char-count">0 / 1600</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Created Date & Time (Settings Card) -->
+            <details class="advanced-date-details" id="edit-date-details">
+              <summary class="advanced-date-summary">
+                <div class="advanced-date-summary-left">
+                  <span class="advanced-date-icon-wrap">
+                    <svg class="advanced-date-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </span>
+                  <div class="advanced-date-text">
+                    <span class="advanced-date-title">Custom Creation Date</span>
+                    <span class="advanced-date-desc">Adjust or backdate creation timestamp</span>
+                  </div>
+                </div>
+                <div class="advanced-date-summary-right">
+                  <span class="advanced-date-badge">Optional</span>
+                  <svg class="advanced-date-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+              </summary>
+              <div class="advanced-date-content" id="edit-created-at-group">
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="edit-created-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="edit-created-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: block;">
+                  Defaults to initial creation time. If time is omitted, defaults to 12:00 PM.
+                </span>
+              </div>
+            </details>
+
+            <!-- Deadline selection (optional) -->
+            <div class="form-group deadline-box" id="edit-deadline-group">
+              <label class="form-label">
+                Deadline
+                <span class="form-label-optional">(optional)</span>
+              </label>
+
+              <!-- Method 2: Relative duration from now -->
+              <div class="deadline-relative">
+                <span class="deadline-way-label">From now</span>
+                <div class="deadline-relative-inputs">
+                  <textarea class="form-input form-input-single-line deadline-hrs" id="edit-deadline-hrs" placeholder="HH" inputmode="decimal" rows="1"></textarea>
+                  <span class="deadline-sep">hrs</span>
+                  <textarea class="form-input form-input-single-line deadline-min" id="edit-deadline-mins" placeholder="MM" inputmode="decimal" rows="1"></textarea>
+                  <span class="deadline-sep">min</span>
+                </div>
+              </div>
+
+              <!-- Or divider -->
+              <div class="deadline-or-divider">
+                <span>or</span>
+              </div>
+
+              <!-- Method 1: Specific date and time -->
+              <div class="deadline-absolute">
+                <span class="deadline-way-label">Specific date &amp; time</span>
+                <div class="deadline-absolute-inputs">
+                  <input type="date" class="form-input form-input-date" id="edit-deadline-date" placeholder="Select date" autocomplete="one-time-code">
+                  <input type="time" class="form-input form-input-time" id="edit-deadline-time" placeholder="Select time" autocomplete="one-time-code">
+                </div>
+                <span class="form-help-text" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: block;">If time is omitted, defaults to 11:59 PM. If date is omitted, defaults to today.</span>
+              </div>
+
+              <!-- Section divider -->
+              <div class="section-divider" id="edit-reset-system-divider">
+                <hr><span>RESET SYSTEM</span><hr>
+              </div>
+
+              <!-- Checklist Reset Settings (Edit Modal) -->
+              <div class="repeat-section" id="edit-checklist-reset-section">
+                <div class="repeat-header-row" id="edit-checklist-reset-header-row">
+                  <div class="repeat-title-wrapper">
+                    <span class="repeat-title">Checklist reset</span>
+                    <span class="repeat-summary-text" id="edit-checklist-reset-summary-text">Don't reset</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="edit-checklist-reset-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Deadline Reset Settings (Edit Modal) -->
+              <div class="repeat-section" id="edit-deadline-reset-section">
+                <div class="repeat-header-row" id="edit-deadline-reset-header-row">
+                  <div class="repeat-title-wrapper">
+                    <span class="repeat-title">Deadline reset</span>
+                    <span class="repeat-summary-text" id="edit-deadline-reset-summary-text">Don't reset</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="edit-deadline-reset-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Shared Reset Schedule Content (Edit Modal) -->
+              <div class="repeat-settings-content collapsed" id="edit-reset-settings-content" style="margin-top: 8px;">
+                <div class="repeat-card">
+                  <div class="reset-time-group" id="edit-reset-time-group" style="margin-bottom: 12px;">
+                    <label for="edit-reset-time" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">Daily Reset Time</label>
+                    <input type="time" class="form-input form-input-time" id="edit-reset-time" style="max-width: 150px;">
+                  </div>
+                  <div class="setting-item" style="padding: 4px 0;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">Times total (optional)</label>
+                    <input type="number" id="edit-reset-count" class="form-input" placeholder="Indefinitely" min="1" max="9999" style="width: 110px; display: inline-block;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section divider -->
+              <div class="section-divider">
+                <hr><span>NOTIFICATION</span><hr>
+              </div>
+
+              <!-- Notification Settings -->
+              <div class="notification-section" id="edit-notification-section">
+                <!-- Header row with Toggle -->
+                <div class="notify-header-row">
+                  <span class="notify-title">Deadline Notifications</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="edit-notify-toggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                                <!-- Collapse container -->
+                <div class="notify-settings-content collapsed" id="edit-notify-settings-content">
+                  <!-- End Alert Checkbox (at the top) -->
+                  <div class="end-alert-row">
+                    <label class="end-alert-label">
+                      <input type="checkbox" id="edit-notify-toggle-deadline"> 
+                      Notify at exact deadline
+                    </label>
+                  </div>
+
+                  <hr class="notify-divider">
+
+                  <div class="notify-mode-a" id="edit-notify-mode-a-container">
+                    <span class="notify-sub-label">Fixed time</span>
+                    <div class="notify-inputs-wrapper">
+                      <div class="notify-mode-a-inputs" id="edit-notify-mode-a-inputs-container">
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-hrs" placeholder="0" inputmode="decimal" rows="1"></textarea>
+                        <span class="notify-sep">hr</span>
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-mins" placeholder="0" inputmode="decimal" rows="1"></textarea>
+                        <span class="notify-sep">min</span>
+                        <span class="notify-suffix">before deadline</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="or-divider">
+                    <hr><span>or</span><hr>
+                  </div>
+
+                  <div class="notify-mode-b" id="edit-notify-mode-b-container">
+                    <span class="notify-sub-label">Remind at</span>
+                    <div class="notify-inputs-wrapper">
+                      <div class="notify-mode-b-inputs" id="edit-notify-mode-b-inputs-container">
+                        <textarea class="form-input form-input-single-line notify-input" id="edit-notify-percent" placeholder="0" inputmode="numeric" rows="1"></textarea>
+                        <span class="notify-suffix">% of time remaining</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="notify-preview" id="notify-preview-edit"></div>
+                </div>
+              </div>
+
+              <!-- Remove deadline checkbox -->
+              <div class="deadline-clear-row"
+                style="margin-top: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="edit-deadline-clear" style="cursor: pointer;">
+                <label for="edit-deadline-clear" style="cursor: pointer; color: var(--text-muted);">Remove existing
+                  deadline</label>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-edit">Cancel</button>
+            <button type="submit" class="btn btn-primary">Update Bar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+    <!-- UPDATE PROGRESS MODAL -->
+    <div id="modal-update" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 id="update-modal-title" class="modal-title">Update Progress</h2>
+          <button class="btn-close-modal" data-close="modal-update">&times;</button>
+        </div>
+        <form id="form-update" autocomplete="off">
+          <input type="hidden" id="update-bar-id">
+          <div class="modal-body">
+
+            <!-- GOAL FIELDS -->
+            <div id="update-goal-fields">
+              <p class="section-label">Current Progress Value</p>
+              <div id="update-current-dynamic">
+                <!-- Dynamically populated inputs per level (Single-level or Multi-level) -->
+              </div>
+            </div>
+
+            <!-- CHECKLIST FIELDS -->
+            <div id="update-checklist-fields" class="hidden">
+              <p class="section-label">Checklist Items</p>
+              <div id="update-checklist-items-container" class="update-checklist-list">
+                <!-- Dynamically rendered checkbox rows -->
+              </div>
+            </div>
+
+            <!-- NOTE FIELDS -->
+            <div id="update-note-fields" class="hidden">
+              <div class="note-label-container" style="display: flex; align-items: center; gap: 6px; position: relative; margin-bottom: 8px;">
+                <p class="section-label" style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Note Text</p>
+                <span class="info-icon-wrapper" style="display: inline-flex; align-items: center; position: relative;">
+                  <svg class="info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer; color: var(--text-muted);">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  <div class="formatting-popover hidden">
+                    <button type="button" class="btn-close-popover">&times;</button>
+                    <ul>
+                      <li>**text** / __text__ — bold</li>
+                      <li>*text* / _text_ — italic</li>
+                      <li>~~text~~ — strikethrough</li>
+                      <li>`code` — inline code</li>
+                      <li>``` (on new line) — code block</li>
+                      <li># Title / ## / ### — headers</li>
+                      <li>- list / * list — bullet list</li>
+                      <li>1. list — numbered list</li>
+                      <li>Enter continues list; double Enter exits</li>
+                    </ul>
+                  </div>
+                </span>
+              </div>
+              <div class="form-group">
+                <div class="form-input note-editor-contenteditable" id="update-note-text" contenteditable="true" autocorrect="on" autocapitalize="sentences" spellcheck="true" inputmode="text" placeholder="Write your note here..."></div>
+                <div class="textarea-footer">
+                  <span class="char-counter" id="update-note-char-count">0 / 1600</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Shared Mark as Complete Checkbox -->
+            <div class="form-group" id="update-mark-complete-group" style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="update-mark-complete" style="cursor: pointer; width: 18px; height: 18px;">
+              <label id="update-mark-complete-label" for="update-mark-complete" style="cursor: pointer; user-select: none; font-size: 0.95rem; font-weight: 500; color: var(--text-primary);">Mark Goal as Complete</label>
+            </div>
+
+            <!-- Safety Delete Confirmation Pane (collapsible / dynamic) -->
+            <div id="delete-safety-pane" class="delete-safety-panel hidden">
+              <span class="delete-safety-text">⚠️ Are you sure you want to delete this progress bar? This action is
+                permanent.</span>
+              <div class="delete-safety-actions">
+                <button type="button" id="btn-delete-confirm-no" class="btn btn-secondary">No, Keep It</button>
+                <button type="button" id="btn-delete-confirm-yes" class="btn btn-danger-confirm">Yes, Delete</button>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <!-- Normal action footer -->
+            <div id="update-actions-standard" style="display: flex; justify-content: space-between; width: 100%;">
+              <button type="button" id="btn-delete-trigger" class="btn btn-danger btn-delete">Delete</button>
+              <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn btn-secondary btn-cancel" data-close="modal-update">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-save">Save Progress</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+    <!-- Footer Section -->
+    <footer class="app-footer">
+      <div class="footer-content">
+        <p class="footer-title">ProgressShelf — Open source &amp; free forever</p>
+        <p class="footer-links">
+          Built by <a href="https://github.com/Anandavnish" target="_blank" rel="noopener noreferrer">Anand Avnish</a> with AI assistance (Antigravity, Claude &amp; Gemini)
+          <span class="footer-bullet">•</span>
+          <a href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">View source on GitHub</a>
+          <span class="footer-bullet">•</span>
+          <a href="about.html">About</a>
+          <span class="footer-bullet">•</span>
+          <span class="footer-version">v4.5</span>
+        </p>
+        <p class="footer-privacy">No ads. No tracking. Your data stays yours.</p>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Terrace Updates Overlay Page -->
+  <div id="terrace-overlay" class="terrace-overlay">
+    <div class="terrace-header">
+      <button id="btn-close-terrace" class="terrace-back-btn" title="Back / Close">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div class="terrace-title-group">
+        <svg class="terrace-title-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+          <path d="M12 7v5l4 2"></path>
+        </svg>
+        <span class="terrace-title-text">Terrace Updates</span>
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+    
+    <div id="terrace-content" class="terrace-content"></div>
+  </div>
+
+  <div id="profile-dropdown" class="profile-dropdown">
+    <div class="dropdown-header">
+      <p id="user-name" class="dropdown-user-name">Loading...</p>
+      <p id="user-status" class="dropdown-user-status">Online Mode</p>
+    </div>
+    <div class="dropdown-divider"></div>
+    <button id="btn-terrace" class="dropdown-item btn-terrace">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+        <path d="M3 3v5h5"></path>
+        <path d="M12 7v5l4 2"></path>
+      </svg>
+      What's New (Terrace)
+    </button>
+    <div class="dropdown-divider"></div>
+
+    <!-- App Font Setting -->
+    <div class="dropdown-section-title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="4 7 4 4 20 4 20 7"></polyline>
+        <line x1="9" y1="20" x2="15" y2="20"></line>
+        <line x1="12" y1="4" x2="12" y2="20"></line>
+      </svg>
+      <span>App Font</span>
+    </div>
+    <div class="font-picker-menu" id="font-picker-menu">
+      <button class="font-picker-item active" data-font="outfit" title="Default Sans (Outfit)">
+        <span class="font-preview-tag font-tag-outfit">Aa</span>
+        <div class="font-item-details">
+          <span class="font-item-name">Default (Outfit)</span>
+          <span class="font-item-sub">Clean modern sans</span>
+        </div>
+        <span class="font-check-mark">✓</span>
+      </button>
+      <button class="font-picker-item" data-font="space-mono" title="Space Mono (Smash.am Style)">
+        <span class="font-preview-tag font-tag-space-mono">Aa</span>
+        <div class="font-item-details">
+          <span class="font-item-name">Space Mono</span>
+          <span class="font-item-sub">Smash.am goal style</span>
+        </div>
+        <span class="font-check-mark">✓</span>
+      </button>
+      <button class="font-picker-item" data-font="jetbrains-mono" title="JetBrains Mono (Code Style)">
+        <span class="font-preview-tag font-tag-jetbrains-mono">Aa</span>
+        <div class="font-item-details">
+          <span class="font-item-name">JetBrains Mono</span>
+          <span class="font-item-sub">Developer monospace</span>
+        </div>
+        <span class="font-check-mark">✓</span>
+      </button>
+    </div>
+    <div class="dropdown-divider"></div>
+    <button id="btn-profile-try-demo" class="dropdown-item btn-try-demo hidden">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+      </svg>
+      Try the demo
+    </button>
+    <div id="profile-try-demo-divider" class="dropdown-divider hidden"></div>
+    <button id="btn-logout" class="dropdown-item btn-logout">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      Sign Out
+    </button>
+    <div class="dropdown-divider"></div>
+    <button id="btn-delete-account" class="dropdown-item btn-delete-account">
+      <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+      </svg>
+      Delete Account
+    </button>
+  </div>
+
+  <button id="btn-fab" class="btn-fab" title="Add New Tracker">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+  </button>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Menu Backdrop (Click Shield) -->
+  <div id="menu-backdrop" class="menu-backdrop hidden"></div>
+
+  <!-- Application Logic -->
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js?v=11.4"></script>
+</body>
+</html>

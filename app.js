@@ -1,7 +1,7 @@
-import { isConfigured } from "./supabase-config.js?v=3.2";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.2";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, subscribeToUserSettings } from "./db.js?v=3.2";
-import { setupAssistantModule, openAssistantPanel, closeAssistantPanel, toggleAssistantPanel, isAssistantPanelOpen } from "./assistant.js?v=3.2";
+import { isConfigured } from "./supabase-config.js?v=3.3";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.3";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, updateUserSettings, subscribeToUserSettings } from "./db.js?v=3.3";
+import { setupAssistantModule, openAssistantPanel, closeAssistantPanel, toggleAssistantPanel, isAssistantPanelOpen, setCachedBriefingFromSupabase, getHomeBriefingCardElement, isHomeBriefingHidden, setHomeBriefingHidden, setHomeBriefingHiddenFromRemote } from "./assistant.js?v=4.0";
 // Initialize Firebase FCM if configured (lazy, non-blocking on web, disabled on native)
 const firebaseConfig = window.firebaseConfig || {};
 
@@ -129,6 +129,7 @@ const cardsGrid = document.getElementById("cards-grid");
 const btnLogout = document.getElementById("btn-logout");
 const btnDeleteAccount = document.getElementById("btn-delete-account");
 const userAvatar = document.getElementById("user-avatar");
+const dropdownUserAvatar = document.getElementById("dropdown-user-avatar");
 const userName = document.getElementById("user-name");
 const btnProfileBadge = document.getElementById("btn-profile-badge");
 const profileDropdown = document.getElementById("profile-dropdown");
@@ -1119,6 +1120,7 @@ let cachedBellHealth = null;
 // Tracks bar IDs with an in-flight local write, so our own realtime echo
 // doesn't trigger a redundant full checklist rebuild mid-interaction.
 const pendingLocalWrites = new Map();
+let isInitialBarsLoaded = false;
 
 function startSubscription(uid, onUpdate, onError) {
   // Unsubscribe any existing listener before starting a new one
@@ -2695,7 +2697,14 @@ function sortBars(bars) {
 
 function renderDashboard(bars) {
   try {
-    currentBars = bars;
+    if (Array.isArray(bars)) {
+      currentBars = bars;
+    } else if (typeof currentBars !== 'undefined' && Array.isArray(currentBars)) {
+      bars = currentBars;
+    } else {
+      bars = [];
+      currentBars = [];
+    }
 
     // Hide Edit and Sort controls if 1 or fewer cards exist
     const rightGroup = document.querySelector(".controls-right-group");
@@ -2779,7 +2788,23 @@ function renderDashboard(bars) {
     }
 
     // Compile list of expected elements in order
-    const expectedElements = [addCard];
+    const expectedElements = [];
+
+    // Insert Home Today's Focus Card first if not hidden
+    let homeBriefingCard = null;
+    if (typeof getHomeBriefingCardElement === 'function' && !query) {
+      homeBriefingCard = getHomeBriefingCardElement();
+    }
+
+    if (homeBriefingCard) {
+      expectedElements.push(homeBriefingCard);
+      cardsGrid.classList.add("has-briefing");
+    } else {
+      cardsGrid.classList.remove("has-briefing");
+    }
+
+    // Add New Tracker Card follows Today's Focus (or is first if Today's Focus is absent)
+    expectedElements.push(addCard);
 
     // Render / reconcile card elements
     filtered.reverse().forEach((bar) => {
@@ -3227,10 +3252,7 @@ function syncFabVisibility() {
     } else {
       fab.classList.remove("visible");
     }
-    return;
-  }
-
-  if (addCard) {
+  } else if (addCard) {
     const rect = addCard.getBoundingClientRect();
     const navbarHeight = document.querySelector(".navbar")?.offsetHeight || 57;
     // Show FAB when the bottom of "Add New Tracker" has scrolled above the navbar
@@ -3239,25 +3261,34 @@ function syncFabVisibility() {
     } else {
       fab.classList.remove("visible");
     }
+  }
 
-    // Restrict FAB from overlapping footer areas when scrolling down
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      const footerRect = footer.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const normalBottom = window.innerWidth <= 493 ? 28 : 32;
-      
-      if (footerRect.top < windowHeight) {
-        const visibleFooterHeight = windowHeight - footerRect.top;
-        fab.style.bottom = (normalBottom + visibleFooterHeight) + "px";
-      } else {
-        fab.style.bottom = "";
-      }
+  // Sync AI FAB position based on plus FAB visibility
+  const fabAi = document.getElementById("btn-fab-ai");
+  if (fabAi) {
+    if (fab.classList.contains("visible")) {
+      fabAi.classList.add("has-fab-below");
+    } else {
+      fabAi.classList.remove("has-fab-below");
+    }
+  }
+
+  // Restrict FABs from overlapping footer areas when scrolling down
+  const footer = document.querySelector(".app-footer");
+  if (footer) {
+    const footerRect = footer.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    
+    if (footerRect.top < windowHeight) {
+      const visibleFooterHeight = Math.max(0, windowHeight - footerRect.top);
+      document.documentElement.style.setProperty("--fab-footer-offset", visibleFooterHeight + "px");
+    } else {
+      document.documentElement.style.removeProperty("--fab-footer-offset");
     }
   }
 }
 
-// Bind FAB click event
+// Bind FAB click events
 document.getElementById("btn-fab")?.addEventListener("click", () => openCreateModal());
 
 // Close expanded checklist cards on scroll only if scroll originated outside the card
@@ -5910,6 +5941,14 @@ initAuthProtection(async (user) => {
             window.applyFontFamily(settings.font_family);
           }
         }
+
+        if (settings.daily_briefing && typeof setCachedBriefingFromSupabase === 'function') {
+          setCachedBriefingFromSupabase(settings.daily_briefing);
+        }
+
+        if (settings.hide_home_briefing !== undefined && typeof setHomeBriefingHiddenFromRemote === 'function') {
+          setHomeBriefingHiddenFromRemote(settings.hide_home_briefing);
+        }
       }
     }).catch(err => console.warn("Background user settings fetch notice:", err));
 
@@ -5938,6 +5977,14 @@ initAuthProtection(async (user) => {
         if (typeof window.applyFontFamily === 'function') {
           window.applyFontFamily(newSettings.font_family);
         }
+      }
+
+      if (newSettings.daily_briefing && typeof setCachedBriefingFromSupabase === 'function') {
+        setCachedBriefingFromSupabase(newSettings.daily_briefing);
+      }
+
+      if (newSettings.hide_home_briefing !== undefined && typeof setHomeBriefingHiddenFromRemote === 'function') {
+        setHomeBriefingHiddenFromRemote(newSettings.hide_home_briefing);
       }
     });
   }
@@ -6091,12 +6138,27 @@ initAuthProtection(async (user) => {
   // Render profile info
   const profileName = document.getElementById("profile-name");
   let firstName = "Guest";
+  const defaultAvatar = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+  const fallbackSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+
+  const updateAvatarSrc = (imgEl, src) => {
+    if (!imgEl) return;
+    imgEl.onerror = () => {
+      imgEl.onerror = null;
+      imgEl.src = fallbackSvg;
+    };
+    imgEl.src = src || defaultAvatar;
+  };
+
   if (isGuestMode()) {
-    userAvatar.src = "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+    updateAvatarSrc(userAvatar, defaultAvatar);
+    updateAvatarSrc(dropdownUserAvatar, defaultAvatar);
     userName.textContent = "Guest User";
     if (userStatus) userStatus.textContent = "Guest Sandbox Mode";
   } else {
-    userAvatar.src = user.photoURL || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+    const avatarUrl = user.photoURL || defaultAvatar;
+    updateAvatarSrc(userAvatar, avatarUrl);
+    updateAvatarSrc(dropdownUserAvatar, avatarUrl);
     userName.textContent = user.displayName || "Tracker User";
     if (user.displayName) {
       firstName = user.displayName.trim().split(/\s+/)[0];
@@ -6123,6 +6185,7 @@ initAuthProtection(async (user) => {
   startSubscription(
     isGuestMode() ? null : user.uid,
     (bars) => {
+      isInitialBarsLoaded = true;
       renderDashboard(bars);
       evaluateAutoResets(bars);
       
@@ -7992,8 +8055,8 @@ function setupAPKButton() {
     showToast("Downloading latest ProgressShelf.apk...", "success", 4000);
 
     const downloadLink = document.createElement("a");
-    // Direct link to the repository APK
-    downloadLink.href = "https://github.com/Anandavnish/ProgressShelf/raw/main/ProgressShelf.apk";
+    // Direct link to the latest GitHub release APK
+    downloadLink.href = "https://github.com/Anandavnish/ProgressShelf/releases/latest/download/ProgressShelf.apk";
     downloadLink.download = "ProgressShelf.apk";
     downloadLink.target = "_blank";
     downloadLink.rel = "noopener noreferrer";
@@ -8424,9 +8487,24 @@ let isTerraceOpen = false;
 
 const terraceUpdates = [
   {
-    version: "v4.5 (Latest)",
-    date: "September 23, 2026",
+    version: "v5.0 (Latest)",
+    date: "November 13, 2026",
     isLatest: true,
+    title: "AI Assistant, Multi-Action Proposals, Daily Focus & Batch Undo",
+    content: `
+### Key Features & Updates
+* **Conversational AI Assistant**: Chat naturally to create, breakdown, reschedule, or organize your trackers with live card awareness and instant visual actions.
+* **Multi-Card Action Proposals**: Review and apply multi-card changes simultaneously with selective checkboxes, live diff summaries, and clear explanation banners.
+* **One-Click Batch Undo**: Revert multi-card AI operations with a single unified undo toast.
+* **Daily Focus & Briefing Card**: Enjoy an AI-generated morning focus briefing highlight directly at the top of your dashboard for upcoming deadlines and priority tasks.
+* **Zero-Leak Data Safety**: Partial updates preserve all existing checklist items, targets, notes, and cycle states.
+* **Native Android Support**: Full cross-origin compatibility and key management on mobile.
+`
+  },
+  {
+    version: "v4.5",
+    date: "September 23, 2026",
+    isLatest: false,
     title: "Perimeter Bar Crumbling & Breaking Animation (Sparkle Effect)",
     content: `
 ### Key Features & Updates
@@ -9028,9 +9106,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       `;
     } else {
       btn.innerHTML = `
-        <span class="beta-badge" id="theme-beta-badge">BETA</span>
-        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" 
-stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>
           <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -10493,8 +10569,8 @@ setupOrbitGesturesAndControls();
    ========================================================================== */
 
 async function handleCreateBarFromAi(cardData) {
-  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
-  if (!targetUid) {
+  const targetUid = isGuestMode() ? null : (currentUser ? (currentUser.id || currentUser.uid) : null);
+  if (!isGuestMode() && !targetUid) {
     throw new Error("Please sign in to create trackers.");
   }
   const newBarId = await createBar(targetUid, cardData);
@@ -10505,29 +10581,50 @@ async function handleCreateBarFromAi(cardData) {
 }
 
 async function handleEditBarFromAi(barId, updates) {
-  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
-  if (!targetUid) {
+  const targetUid = isGuestMode() ? null : (currentUser ? (currentUser.id || currentUser.uid) : null);
+  if (!isGuestMode() && !targetUid) {
     throw new Error("Please sign in to edit trackers.");
   }
-  await editBar(targetUid, barId, updates);
+  let safeUpdates = { ...updates };
+  const liveBars = getLiveBars();
+  const existing = liveBars.find(b => String(b.id) === String(barId));
+  if (existing) {
+    safeUpdates = {
+      ...updates,
+      title: updates.title !== undefined ? updates.title : existing.title,
+      type: updates.type !== undefined ? updates.type : existing.type,
+      preset: updates.preset !== undefined ? updates.preset : existing.preset,
+      levels: updates.levels !== undefined ? updates.levels : existing.levels,
+      targetSmallest: updates.targetSmallest !== undefined ? updates.targetSmallest : existing.targetSmallest,
+      currentSmallest: updates.currentSmallest !== undefined ? updates.currentSmallest : existing.currentSmallest,
+      items: updates.items !== undefined ? updates.items : existing.items,
+      text: updates.text !== undefined ? updates.text : existing.text,
+      completed: updates.completed !== undefined ? updates.completed : existing.completed,
+      repeat: updates.repeat !== undefined ? updates.repeat : existing.repeat
+    };
+  }
+  await editBar(targetUid, barId, safeUpdates);
   if (typeof highlightAndScrollToCard === 'function') {
     highlightAndScrollToCard(barId);
   }
 }
 
 async function handleDeleteBarFromAi(barId) {
-  const targetUid = currentUser ? (currentUser.id || currentUser.uid) : null;
-  if (!targetUid) {
+  const targetUid = isGuestMode() ? null : (currentUser ? (currentUser.id || currentUser.uid) : null);
+  if (!isGuestMode() && !targetUid) {
     throw new Error("Please sign in to delete trackers.");
   }
   await deleteBar(targetUid, barId);
 }
 
 function getLiveBars() {
-  if (typeof currentBars !== 'undefined' && Array.isArray(currentBars)) {
+  if (typeof currentBars !== 'undefined' && Array.isArray(currentBars) && currentBars.length > 0) {
     return currentBars;
   }
-  return getLocalBars() || [];
+  if (isGuestMode() && typeof getLocalBars === 'function') {
+    return getLocalBars() || [];
+  }
+  return (typeof currentBars !== 'undefined' && Array.isArray(currentBars)) ? currentBars : [];
 }
 
 setupAssistantModule({
@@ -10538,7 +10635,47 @@ setupAssistantModule({
   handleCreateBarFromAi,
   handleEditBarFromAi,
   handleDeleteBarFromAi,
-  getLiveBars
+  getLiveBars,
+  hasInitialBarsLoaded: () => isInitialBarsLoaded,
+  getUserId: () => (currentUser ? (currentUser.id || currentUser.uid) : null),
+  getUserFirstName: () => {
+    function cleanName(raw) {
+      if (typeof raw !== 'string') return '';
+      let s = raw.trim().split(/\s+/)[0] || '';
+      if (s.includes('@')) {
+        s = s.split('@')[0].replace(/[0-9_.-]+$/g, '');
+      }
+      if (s && s.toLowerCase() !== 'guest' && s.toLowerCase() !== 'tracker' && s.toLowerCase() !== 'tracker user') {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+      return '';
+    }
+    if (currentUser) {
+      const candidate =
+        cleanName(currentUser.displayName) ||
+        cleanName(currentUser.user_metadata?.full_name) ||
+        cleanName(currentUser.user_metadata?.name) ||
+        cleanName(currentUser.user_metadata?.first_name) ||
+        cleanName(currentUser.email);
+      if (candidate) return candidate;
+    }
+    const profileEl = document.getElementById('profile-name');
+    if (profileEl && profileEl.textContent) {
+      const fromEl = cleanName(profileEl.textContent);
+      if (fromEl) return fromEl;
+    }
+    return '';
+  },
+  updateUserSettings: (uid, settings) => updateUserSettings(uid, settings),
+  getUserSettings: (uid) => getUserSettings(uid),
+  onHomeBriefingVisibilityChanged: () => {
+    if (typeof renderDashboard === 'function') {
+      const barsToRender = (typeof currentBars !== 'undefined' && Array.isArray(currentBars))
+        ? currentBars
+        : (isGuestMode() ? (typeof getLocalBars === 'function' ? getLocalBars() : []) : []);
+      renderDashboard(barsToRender);
+    }
+  }
 });
 
 

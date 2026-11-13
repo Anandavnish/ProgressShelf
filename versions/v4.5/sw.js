@@ -1,0 +1,218 @@
+const CACHE_NAME = 'progressshelf-cache-v198';
+const ASSETS_TO_CACHE = [
+  './',
+  'index.html',
+  'dashboard.html',
+  'reset-password.html',
+  'index.css',
+  'app.js',
+  'auth.js',
+  'db.js',
+  'login.js',
+  'reset-password.js',
+  'supabase-config.js',
+  'favicon.svg',
+  'logo.svg',
+  'badge.png',
+  'icon-192.png',
+  'icon-512.png',
+  'manifest.json'
+];
+
+// Install Event - Caching basic app shell
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[Service Worker] Pre-caching offline assets');
+      return cache.addAll(ASSETS_TO_CACHE);
+    }).then(() => self.skipWaiting())
+  );
+});
+
+// Activate Event - Cleaning up old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('[Service Worker] Clearing old cache:', cache);
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch Event - Serve cached assets immediately, fetch updates in background (Stale-While-Revalidate)
+self.addEventListener('fetch', (event) => {
+  const url = event.request.url;
+  
+  // Do not intercept or cache Firebase, Firestore, Supabase, Google Auth, or other external APIs
+  if (
+    url.includes('firebase') || 
+    url.includes('firestore') || 
+    url.includes('supabase.co') ||
+    url.includes('googleapis') || 
+    url.includes('googleusercontent') ||
+    url.includes('gstatic.com')
+  ) {
+    return;
+  }
+
+  // Only handle GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) => {
+      const isNavigate = event.request.mode === 'navigate';
+      return cache.match(event.request, { ignoreSearch: isNavigate }).then((cachedResponse) => {
+        // Fetch new version from network in parallel
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch((err) => {
+          // If offline and navigate request fails, return cached page (prioritizing dashboard.html if target)
+          if (event.request.mode === 'navigate') {
+            const reqUrl = event.request.url || "";
+            if (reqUrl.includes("dashboard.html")) {
+              return caches.match("dashboard.html", { ignoreSearch: true }).then(r => r || caches.match("./", { ignoreSearch: true }));
+            }
+            return caches.match(event.request, { ignoreSearch: true })
+              .then(r => r || caches.match("dashboard.html", { ignoreSearch: true }))
+              .then(r => r || caches.match("./", { ignoreSearch: true }));
+          }
+          console.warn('[Service Worker] Fetch failed, using cache:', err);
+        });
+
+        // Serve cached version immediately if available, otherwise wait for network
+        return cachedResponse || fetchPromise;
+      });
+    })
+  );
+});
+
+// --- FCM Push Notification Integration ---
+try {
+  importScripts('firebase-config.js');
+} catch (e) {
+  console.warn('[sw.js] Could not load firebase-config.js, FCM will be disabled.');
+}
+
+importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
+
+let messaging = null;
+if (self.firebaseConfig && self.firebaseConfig.apiKey) {
+  try {
+    firebase.initializeApp(self.firebaseConfig);
+    messaging = firebase.messaging();
+  } catch (err) {
+    console.error('[sw.js] Firebase initialization failed:', err);
+  }
+}
+
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[sw.js] Received background message ', payload);
+  });
+}
+
+self.addEventListener('push', event => {
+  let data = { title: 'ProgressShelf', body: 'You have a deadline alert.' };
+  try {
+    if (event.data) {
+      const json = event.data.json();
+      // Extract title and body from nested notification or data properties
+      if (json.notification) {
+        data.title = json.notification.title || data.title;
+        data.body = json.notification.body || data.body;
+        data.icon = json.notification.icon || data.icon;
+      }
+      if (json.data) {
+        if (json.data.title) data.title = json.data.title;
+        if (json.data.body) data.body = json.data.body;
+        if (json.data.icon) data.icon = json.data.icon;
+        if (json.data.tracker_id) data.trackerId = json.data.tracker_id;
+        if (json.data.url) data.url = json.data.url;
+      }
+      if (json.title) {
+        data.title = json.title || data.title;
+        data.body = json.body || data.body;
+        data.icon = json.icon || data.icon;
+      }
+      
+      const tagVal = (json.data && json.data.tag) || json.tag;
+      if (tagVal) data.tag = tagVal;
+    }
+  } catch (e) {}
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || 'icon-192.png',
+      badge: 'badge.png',
+      tag: data.tag || 'progressshelf-alert',
+      actions: [
+        {
+          action: 'view',
+          title: 'View Tracker'
+        }
+      ],
+      renotify: true,
+      requireInteraction: false,
+      data: { 
+        url: data.url || 'dashboard.html',
+        trackerId: data.trackerId
+      }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  
+  let trackerId = null;
+  let targetUrl = 'dashboard.html';
+  if (event.notification.data) {
+    if (event.notification.data.trackerId) {
+      trackerId = event.notification.data.trackerId;
+      targetUrl = `dashboard.html?id=${trackerId}`;
+    } else if (event.notification.data.url) {
+      targetUrl = event.notification.data.url;
+    }
+  }
+
+  // Resolve relative URLs to absolute URLs relative to the Service Worker's scope
+  const absoluteTargetUrl = new URL(targetUrl, self.location.origin + self.registration.scope).toString();
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes('ProgressShelf') && 'focus' in client) {
+          if (trackerId) {
+            client.postMessage({ type: 'highlight-tracker', id: trackerId });
+          } else if ('navigate' in client) {
+            client.navigate(absoluteTargetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(absoluteTargetUrl);
+      }
+    })
+  );
+});
+
+// Message Event - Skip Waiting on command
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});

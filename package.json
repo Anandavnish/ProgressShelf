@@ -1,0 +1,32 @@
+{
+  "name": "progressshelf",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">\r   <img src=\"logo.svg\" alt=\"ProgressShelf — Track everything. One bar at a time.\" width=\"520\" />\r </p>",
+  "main": "app.js",
+  "scripts": {
+    "build:www": "node scripts/build-www.js",
+    "android:sync": "npm run build:www && npx cap sync android"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anandavnish/ProgressShelf.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Anandavnish/ProgressShelf/issues"
+  },
+  "homepage": "https://github.com/Anandavnish/ProgressShelf#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "@supabase/supabase-js": "^2.117.2"
+  }
+}

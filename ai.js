@@ -2,8 +2,8 @@
 // Handles secure Gemini key status, validation, deletion, and structured JSON generation.
 // SECURITY GUARANTEE: The API key is NEVER stored in localStorage, sessionStorage, or cached client-side.
 
-import { supabase, isConfigured } from "./supabase-config.js?v=3.2";
-import { isGuestMode } from "./auth.js?v=3.2";
+import { supabase, isConfigured } from "./supabase-config.js?v=3.3";
+import { isGuestMode } from "./auth.js?v=3.3";
 
 /**
  * Extracts a readable error message from a Supabase FunctionsHttpError.
