@@ -525,6 +525,15 @@ html.light-theme .btn-card-delete:hover {
   color: #B91C1C;
 }
 
+html.light-theme .btn-card-sync-status {
+  color: #D97706;
+}
+
+html.light-theme .btn-card-sync-status:hover {
+  background: rgba(217, 119, 6, 0.12);
+  color: #B45309;
+}
+
 html.light-theme .card-add {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
@@ -607,6 +616,12 @@ html.light-theme .footer-links a:hover {
 html.light-theme .guest-banner {
   border-bottom-color: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--text-primary);
+}
+
+html.light-theme .offline-banner {
+  background: #FEF3C7 !important;
+  border-bottom: 1px solid #F59E0B !important;
+  color: #92400E !important;
 }
 
 html.light-theme .btn-banner-login {
@@ -729,6 +744,13 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 body {
   background-color: var(--bg-color);
   color: var(--text-primary);
@@ -737,6 +759,9 @@ body {
   min-height: -webkit-fill-available;
   line-height: 1.5;
   overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
@@ -1338,8 +1363,63 @@ body {
   border-color: var(--ui-accent);
 }
 
-/* Mobile responsive styling for the profile badge */
-@media (max-width: 600px) {
+/* Navigation Drawer Toggle Button (Hamburger / Avatar for Mobile) */
+.nav-drawer-toggle-btn {
+  display: none;
+}
+
+/* Close Drawer Button inside Drawer Header */
+.btn-close-drawer {
+  display: none;
+}
+
+/* Mobile responsive styling for navbar, profile badge & left drawer (Phone screens only) */
+@media (max-width: 599.98px) {
+  .nav-drawer-toggle-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-right: 8px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .nav-drawer-toggle-btn:hover,
+  .nav-drawer-toggle-btn:active {
+    background-color: var(--bg-hover);
+    border-color: var(--accent);
+  }
+
+  .btn-close-drawer {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.2s ease, background-color 0.2s ease;
+  }
+
+  .btn-close-drawer:hover,
+  .btn-close-drawer:active {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+  }
+
   .profile-badge-btn {
     background: transparent !important;
     border: none !important;
@@ -1355,13 +1435,78 @@ body {
     height: 32px !important;
     border: 2px solid var(--card-border) !important;
   }
+
+  /* Left Side Drawer on Mobile */
   .profile-dropdown {
-    width: min(280px, calc(100vw - 24px)) !important;
-    max-height: calc(100dvh - 75px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 14px;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    right: auto !important;
+    width: min(320px, 86vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 16px 16px 0 !important;
+    border: none !important;
+    border-right: 1px solid var(--card-border) !important;
+    background: var(--card-bg) !important;
+    padding: max(18px, env(safe-area-inset-top, 0px)) 16px max(24px, env(safe-area-inset-bottom, 0px)) 16px !important;
+    box-shadow: 12px 0 35px rgba(0, 0, 0, 0.5) !important;
+    transform: translate3d(-100%, 0, 0) !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease !important;
+    z-index: 2500 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    opacity: 0;
+    pointer-events: none;
   }
+
+  .profile-dropdown.active {
+    transform: translate3d(0, 0, 0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* Drawer App & Links Section */
+.drawer-nav-section {
+  display: block;
+}
+
+@media (min-width: 769px) {
+  body:not(.is-mobile-layout) .drawer-nav-section {
+    display: none !important;
+  }
+}
+
+.drawer-version-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.drawer-item-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.drawer-version-wrapper .version-select {
+  flex: 1;
+  max-width: 160px;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+}
+
+html.is-native-app #btn-drawer-download-apk {
+  display: none !important;
 }
 
 .profile-dropdown {
@@ -1783,6 +1928,15 @@ html.light-theme .theme-mode-btn.active {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), inset 0 1px 0px rgba(255, 255, 255, 0.05);
 }
 
+/* Ensure stats buttons with 0 count are strictly hidden across all viewports */
+.stats-banner.hidden,
+#stats-banner.hidden,
+.stats-container .stats-btn.hidden,
+.stats-btn.hidden,
+.stats-divider.hidden {
+  display: none !important;
+}
+
 .stats-btn::after {
   content: '';
   position: absolute;
@@ -2031,13 +2185,16 @@ html.light-theme .theme-mode-btn.active {
   background-color: var(--navbar-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  padding: 16px calc(50vw - 50%) !important;
-  margin: -2px calc(50% - 50vw) 12px calc(50% - 50vw) !important;
+  padding: 10px 0 !important;
+  margin: 0 0 12px 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
   will-change: transform;
 }
 
@@ -2053,6 +2210,13 @@ html.light-theme .theme-mode-btn.active {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   height: 38px;
   transition: all 0.2s ease;
+}
+
+.sort-container .sort-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .sort-container.danger-active {
@@ -3170,6 +3334,53 @@ html.light-theme .theme-mode-btn.active {
   color: #E74C3C;
 }
 
+.btn-card-sync-status {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #F59E0B;
+  transition: background 0.15s, color 0.15s, opacity 0.25s, transform 0.25s;
+  min-width: 30px;
+  min-height: 30px;
+}
+
+.btn-card-sync-status.hidden {
+  display: none !important;
+}
+
+.btn-card-sync-status:hover {
+  background: rgba(245, 158, 11, 0.15);
+  color: #D97706;
+}
+
+.btn-card-sync-status.syncing .sync-icon {
+  animation: spinSync 1s linear infinite;
+  color: #38BDF8;
+}
+
+.btn-card-sync-status.synced {
+  color: #10B981;
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+@keyframes spinSync {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.offline-banner {
+  background: #1C2128 !important;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #FCD34D !important;
+}
+
 /* --- Inline Card Delete Confirmation Overlay --- */
 .card-delete-confirm {
   position: absolute;
@@ -4031,23 +4242,48 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   display: flex;
 }
 
-/* --- Mobile Responsive Collapsible Navbar Layout --- */
-@media (max-width: 493px) {
+/* ========================================================
+   RESPONSIVE DESIGN & PROGRESSIVE NAVBAR-TO-DROPDOWN COLLAPSE
+   ======================================================== */
+
+/* Mobile break utility for stats labels */
+.mobile-break {
+  display: none;
+}
+
+/* --------------------------------------------------------
+   1. SMALL SCREEN / PHONE (< 600px) & NATIVE APK (html.is-native-app)
+      - Move ALL buttons except search bar (and logo) into menu
+      - Transform profile menu into LEFT SLIDER
+      - All stats buttons fit across screen without horizontal scroll
+   -------------------------------------------------------- */
+@media (max-width: 599.98px) {
+  /* Allow line breaks on active deadline & flexible goal labels */
+  .mobile-break {
+    display: inline;
+  }
+
+  /* Single sticky header on phone */
   .navbar {
-    padding: max(14px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) 12px max(18px, env(safe-area-inset-left, 0px));
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 110 !important;
+    padding: max(10px, env(safe-area-inset-top, 0px)) 12px 10px 12px !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
   }
 
   .nav-container {
     display: flex !important;
     justify-content: space-between !important;
-    align-items: center;
-    width: 100%;
-    position: relative;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 8px !important;
   }
 
   .logo-svg {
-    width: 28px !important;
-    height: 24px !important;
+    width: 26px !important;
+    height: 22px !important;
   }
 
   .nav-logo-text {
@@ -4055,98 +4291,420 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     font-size: 1.05rem !important;
   }
 
-  .nav-toolbar {
-    gap: 8px !important;
+  /* Left Side Slider Toggle (Hamburger) on phone */
+  .nav-drawer-toggle-btn {
+    display: inline-flex !important;
   }
 
-  /* Mobile view rules for Theme Settings and Search Pill */
-@media (max-width: 768px) {
-  .profile-theme-section {
-    display: block;
+  .btn-close-drawer {
+    display: inline-flex !important;
   }
+
+  /* In navbar on phone: ALL buttons moved except search bar (and logo) */
+  .navbar .nav-github-link,
+  .navbar .version-selector,
   .navbar .theme-menu-container,
   .navbar .accent-menu-container,
-  .mobile-subbar .theme-menu-container,
-  .mobile-subbar .accent-menu-container {
+  .navbar .nav-refresh-btn,
+  .navbar .nav-download-btn,
+  .navbar .profile-menu-container,
+  .navbar #btn-assistant,
+  .mobile-subbar {
     display: none !important;
   }
+
+  /* Search bar occupies full available middle space */
   .nav-search-container.search-pill-mode {
-    margin: 0 8px !important;
+    margin: 0 4px !important;
     flex: 1 1 auto !important;
     min-width: 0 !important;
+    height: 34px !important;
     padding: 3px 4px 3px 12px !important;
     gap: 4px !important;
   }
+
   .nav-search-container.search-pill-mode .nav-search-input {
     flex: 1 1 auto !important;
     min-width: 0 !important;
     padding: 2px 0 !important;
     font-size: 0.84rem !important;
   }
-}
 
-body.is-mobile-layout .profile-theme-section {
-  display: block;
-}
+  /* STATS CONTAINER: ALL active buttons accessible WITHOUT scroll */
+  #stats-banner,
+  .stats-banner {
+    position: relative !important;
+    top: auto !important;
+    z-index: 10 !important;
+    transform: none !important;
+    will-change: auto !important;
+    padding: 6px 10px !important;
+    border-bottom: 1px solid var(--card-border) !important;
+  }
 
-body.is-mobile-layout .navbar .theme-menu-container,
-body.is-mobile-layout .navbar .accent-menu-container,
-body.is-mobile-layout .mobile-subbar .theme-menu-container,
-body.is-mobile-layout .mobile-subbar .accent-menu-container {
-  display: none !important;
-}
+  .stats-container {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: visible !important; /* All buttons fit across screen without horizontal scroll! */
+    gap: 6px !important;
+    padding: 2px 0 !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+  }
 
-body.is-mobile-layout .nav-search-container.search-pill-mode {
-  margin: 0 8px !important;
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  padding: 3px 4px 3px 12px !important;
-  gap: 4px !important;
-}
-
-body.is-mobile-layout .nav-search-container.search-pill-mode .nav-search-input {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  padding: 2px 0 !important;
-  font-size: 0.84rem !important;
-}
-
-/* Hide original Version selector, GitHub icon, and theme toggle from the main navbar on mobile */
-  .navbar .nav-github-link,
-  .navbar .version-selector,
-  .navbar .theme-menu-container,
-  .navbar .accent-menu-container {
+  .stats-container::-webkit-scrollbar {
     display: none !important;
   }
 
-  /* Force search pill mode to occupy all middle space on mobile */
-  .nav-search-container.search-pill-mode {
-    margin: 0 8px !important;
-    flex-grow: 1;
-    max-width: 341px !important;
+  .stats-btn {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    padding: 4px 6px !important;
+    border-radius: 12px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    white-space: normal !important;
+    min-height: 36px !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+  }
+
+  .stats-btn.hidden,
+  .stats-divider.hidden,
+  #stats-banner.hidden {
+    display: none !important;
+  }
+
+  .stats-icon-wrapper {
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  .stats-icon-wrapper svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .stats-info {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+
+  .stats-num {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .stats-label {
+    font-size: 0.68rem !important;
+    line-height: 1.15 !important;
+    display: inline-block !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  .stats-divider {
+    display: none !important;
+  }
+
+  /* Controls row: view mode moved to Left Slider, compact edit & sort */
+  .dashboard-controls {
+    position: relative !important;
+    top: auto !important;
+    z-index: 9 !important;
+    padding: 6px 0 !important;
+    margin: 0 0 8px 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .controls-left-group #view-mode-toggle,
+  #view-mode-toggle {
+    display: none !important;
+  }
+
+  .controls-right-group {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+  }
+
+  .btn-toggle-edit {
+    width: 32px !important;
     height: 32px !important;
+    min-width: 32px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
-  /* Secondary mobile subbar layout */
-  .mobile-subbar {
-    position: sticky !important;
-    top: var(--navbar-height, 51px) !important;
-    z-index: 100;
-    will-change: transform;
+  .btn-toggle-edit svg {
+    width: 14px !important;
+    height: 14px !important;
   }
 
-  .mobile-subbar .version-select {
-    font-size: 0.6rem !important;
-    padding: 4px 15px 4px 6px !important;
-    background-position: right 4px center !important;
+  .sort-container {
+    height: 32px !important;
+    padding: 4px 10px !important;
+    gap: 6px !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
   }
 
-  .mobile-subbar .nav-github-link svg,
-  .mobile-subbar .nav-refresh-btn svg,
-  .mobile-subbar .nav-download-btn svg,
-  .mobile-subbar #theme-toggle-btn svg {
-    width: 18px !important;
-    height: 18px !important;
+  .sort-container .sort-icon {
+    width: 13px !important;
+    height: 13px !important;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .sort-container .sort-label {
+    display: none !important;
+  }
+
+  .sort-container .sort-select {
+    font-size: 0.78rem !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* TRANSFORM PROFILE DROPDOWN INTO LEFT SLIDER ON PHONE */
+  .profile-dropdown {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    right: auto !important;
+    width: min(320px, 86vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 16px 16px 0 !important;
+    border: none !important;
+    border-right: 1px solid var(--card-border) !important;
+    background: var(--card-bg) !important;
+    padding: max(18px, env(safe-area-inset-top, 0px)) 16px max(24px, env(safe-area-inset-bottom, 0px)) 16px !important;
+    box-shadow: 12px 0 35px rgba(0, 0, 0, 0.5) !important;
+    transform: translate3d(-100%, 0, 0) !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease !important;
+    z-index: 2500 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .profile-dropdown.active {
+    transform: translate3d(0, 0, 0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .drawer-view-mode-section,
+  .profile-theme-section,
+  .drawer-nav-section {
+    display: block !important;
+  }
+}
+
+/* --------------------------------------------------------
+   2. DESKTOP & TABLET BASE (>= 600px)
+      - Profile menu ALWAYS shows via PROFILE ICON in navbar
+      - Anchored floating dropdown under avatar
+      - No left hamburger slider on desktop/tablet!
+   -------------------------------------------------------- */
+@media (min-width: 600px) {
+  /* Hamburger is strictly hidden on desktop & tablet */
+  html:not(.is-native-app) .nav-drawer-toggle-btn {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .btn-close-drawer {
+    display: none !important;
+  }
+
+  /* Profile icon is ALWAYS visible in navbar on desktop & tablet */
+  html:not(.is-native-app) .navbar .profile-menu-container {
+    display: inline-flex !important;
+  }
+
+  /* View Mode toggle stays in controls bar on desktop & tablet */
+  html:not(.is-native-app) .controls-left-group,
+  html:not(.is-native-app) #view-mode-toggle {
+    display: inline-flex !important;
+  }
+
+  html:not(.is-native-app) .drawer-view-mode-section {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .sort-container .sort-label {
+    display: inline-block !important;
+  }
+
+  /* Profile Dropdown: Floating menu anchored under profile icon on desktop & tablet */
+  html:not(.is-native-app) .profile-dropdown {
+    position: fixed !important;
+    width: 250px !important;
+    height: auto !important;
+    max-height: calc(100vh - 80px) !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--card-border) !important;
+    background: var(--dropdown-bg) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+    transform: translateY(-8px) scale(0.96) !important;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease !important;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2200 !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  html:not(.is-native-app) .profile-dropdown.active {
+    opacity: 1 !important;
+    transform: translateY(0) scale(1) !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* --------------------------------------------------------
+   3. PROGRESSIVE STEP 1: COMPACT TABLET (600px to 799.98px)
+      - Move Theme & Accent into profile-dropdown
+      - Keep: Search, AI Sparkle, and Profile Icon in navbar
+   -------------------------------------------------------- */
+@media (min-width: 600px) and (max-width: 799.98px) {
+  html:not(.is-native-app) .navbar .theme-menu-container,
+  html:not(.is-native-app) .navbar .accent-menu-container,
+  html:not(.is-native-app) .navbar .nav-refresh-btn,
+  html:not(.is-native-app) .navbar .version-selector,
+  html:not(.is-native-app) .navbar .nav-github-link,
+  html:not(.is-native-app) .navbar .nav-download-btn {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .navbar #btn-assistant {
+    display: inline-flex !important;
+  }
+
+  /* Show Theme and App & Links inside profile-dropdown */
+  html:not(.is-native-app) .profile-theme-section {
+    display: block !important;
+  }
+
+  html:not(.is-native-app) .drawer-nav-section {
+    display: block !important;
+  }
+}
+
+/* --------------------------------------------------------
+   4. PROGRESSIVE STEP 2: STANDARD TABLET (800px to 991.98px)
+      - Move Version & Refresh into profile-dropdown
+      - Keep: Search, AI Sparkle, Theme, Accent, and Profile Icon in navbar
+   -------------------------------------------------------- */
+@media (min-width: 800px) and (max-width: 991.98px) {
+  html:not(.is-native-app) .navbar .nav-refresh-btn,
+  html:not(.is-native-app) .navbar .version-selector,
+  html:not(.is-native-app) .navbar .nav-github-link,
+  html:not(.is-native-app) .navbar .nav-download-btn {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .navbar #btn-assistant,
+  html:not(.is-native-app) .navbar .theme-menu-container,
+  html:not(.is-native-app) .navbar .accent-menu-container {
+    display: inline-flex !important;
+  }
+
+  /* Theme stays in navbar; App & Links (Version/Refresh/GitHub/APK) in dropdown */
+  html:not(.is-native-app) .profile-theme-section {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .drawer-nav-section {
+    display: block !important;
+  }
+}
+
+/* --------------------------------------------------------
+   5. PROGRESSIVE STEP 3: MODERATE DESKTOP / LAPTOP (992px to 1149.98px)
+      - Move GitHub & APK Download into profile-dropdown
+      - Keep: Search, AI Sparkle, Theme, Accent, Refresh, Version, and Profile Icon in navbar
+   -------------------------------------------------------- */
+@media (min-width: 992px) and (max-width: 1149.98px) {
+  html:not(.is-native-app) .navbar .nav-github-link,
+  html:not(.is-native-app) .navbar .nav-download-btn {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) .navbar #btn-assistant,
+  html:not(.is-native-app) .navbar .theme-menu-container,
+  html:not(.is-native-app) .navbar .accent-menu-container,
+  html:not(.is-native-app) .navbar .nav-refresh-btn,
+  html:not(.is-native-app) .navbar .version-selector {
+    display: inline-flex !important;
+  }
+
+  html:not(.is-native-app) .profile-theme-section {
+    display: none !important;
+  }
+
+  /* Show only GitHub & Download inside dropdown; hide Version & Refresh (already in navbar) */
+  html:not(.is-native-app) .drawer-nav-section {
+    display: block !important;
+  }
+
+  html:not(.is-native-app) .drawer-version-wrapper,
+  html:not(.is-native-app) #btn-drawer-refresh {
+    display: none !important;
+  }
+
+  html:not(.is-native-app) #btn-drawer-github,
+  html:not(.is-native-app) #btn-drawer-download-apk {
+    display: flex !important;
+  }
+}
+
+/* --------------------------------------------------------
+   6. PROGRESSIVE STEP 4: WIDE DESKTOP (>= 1150px)
+      - ALL buttons visible in navbar
+      - Profile Dropdown is clean (no duplicate sections)
+   -------------------------------------------------------- */
+@media (min-width: 1150px) {
+  html:not(.is-native-app) .navbar .nav-github-link,
+  html:not(.is-native-app) .navbar .version-selector,
+  html:not(.is-native-app) .navbar .theme-menu-container,
+  html:not(.is-native-app) .navbar .accent-menu-container,
+  html:not(.is-native-app) .navbar .nav-refresh-btn,
+  html:not(.is-native-app) .navbar .nav-download-btn,
+  html:not(.is-native-app) .navbar #btn-assistant {
+    display: inline-flex !important;
+  }
+
+  html:not(.is-native-app) .profile-theme-section,
+  html:not(.is-native-app) .drawer-nav-section {
+    display: none !important;
   }
 }
 
@@ -6511,12 +7069,85 @@ html.is-native-app .nav-toolbar {
   gap: 6px !important;
 }
 
+html.is-native-app .theme-menu-container,
+html.is-native-app .accent-menu-container,
 html.is-native-app #theme-toggle-btn,
-html.is-native-app #accent-toggle-btn {
+html.is-native-app #accent-toggle-btn,
+html.is-native-app .profile-menu-container,
+html.is-native-app .navbar #btn-assistant {
+  display: none !important;
+}
+
+html.is-native-app .dashboard-controls {
+  position: relative !important;
+  top: auto !important;
+  z-index: 9 !important;
+  transform: none !important;
+  will-change: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 6px 0 !important;
+  margin: 0 0 8px 0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+html.is-native-app .controls-left-group,
+html.is-native-app #view-mode-toggle {
+  display: none !important;
+}
+
+html.is-native-app .controls-right-group {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  margin-left: auto !important;
+}
+
+html.is-native-app .btn-toggle-edit {
   width: 32px !important;
   height: 32px !important;
-  padding: 6px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
   display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+html.is-native-app .btn-toggle-edit svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+html.is-native-app .sort-container {
+  height: 32px !important;
+  padding: 4px 10px !important;
+  gap: 6px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+html.is-native-app .sort-container .sort-icon {
+  width: 13px !important;
+  height: 13px !important;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+html.is-native-app .sort-container .sort-label {
+  display: none !important;
+}
+
+html.is-native-app .sort-container .sort-select {
+  font-size: 0.78rem !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 html.is-native-app .user-avatar {
@@ -6543,16 +7174,80 @@ body.is-native-app {
   overscroll-behavior-y: contain;
 }
 
-html.is-native-app .navbar,
-html.is-native-app #stats-banner,
-html.is-native-app .dashboard-controls {
-  will-change: transform;
-  transform: translateZ(0);
-  -webkit-backdrop-filter: blur(14px) !important;
-  backdrop-filter: blur(14px) !important;
+html.is-native-app .navbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 110 !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  backdrop-filter: blur(12px) !important;
 }
 
-/* 3. Compact Native Stats Filter Chips: all visible together, wrapping text cleanly */
+html.is-native-app #stats-banner,
+html.is-native-app .dashboard-controls {
+  position: relative !important;
+  top: auto !important;
+  z-index: 10 !important;
+  transform: none !important;
+  will-change: auto !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.is-native-app .navbar .theme-menu-container,
+html.is-native-app .navbar .accent-menu-container,
+html.is-native-app .navbar .nav-refresh-btn,
+html.is-native-app .navbar .nav-github-link,
+html.is-native-app .navbar .version-selector,
+html.is-native-app .navbar .nav-download-btn,
+html.is-native-app .navbar .profile-menu-container {
+  display: none !important;
+}
+
+html.is-native-app .nav-drawer-toggle-btn {
+  display: inline-flex !important;
+}
+
+html.is-native-app .btn-close-drawer {
+  display: inline-flex !important;
+}
+
+html.is-native-app .drawer-nav-section {
+  display: block !important;
+}
+
+/* Native App: Profile Menu transforms into Left Side Drawer */
+html.is-native-app .profile-dropdown {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  right: auto !important;
+  width: min(320px, 86vw) !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  border-radius: 0 16px 16px 0 !important;
+  border: none !important;
+  border-right: 1px solid var(--card-border) !important;
+  background: var(--card-bg) !important;
+  padding: max(18px, env(safe-area-inset-top, 0px)) 16px max(24px, env(safe-area-inset-bottom, 0px)) 16px !important;
+  box-shadow: 12px 0 35px rgba(0, 0, 0, 0.5) !important;
+  transform: translate3d(-100%, 0, 0) !important;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease !important;
+  z-index: 2500 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.is-native-app .profile-dropdown.active {
+  transform: translate3d(0, 0, 0) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* 3. Compact Native Stats Filter Chips: horizontal fluid scroll without wrap jitter */
 html.is-native-app #stats-banner {
   padding: 6px 10px !important;
   border-bottom: 1px solid var(--card-border) !important;
@@ -6560,11 +7255,13 @@ html.is-native-app #stats-banner {
 
 html.is-native-app .stats-container {
   display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 6px !important;
-  justify-content: stretch !important;
-  overflow: visible !important;
-  padding: 2px 0 !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  gap: 8px !important;
+  padding: 4px 6px !important;
+  justify-content: flex-start !important;
 }
 
 html.is-native-app .stats-container::-webkit-scrollbar {
@@ -6576,18 +7273,18 @@ html.is-native-app .stats-divider {
 }
 
 html.is-native-app .stats-btn {
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
-  display: flex !important;
+  flex: 0 0 auto !important;
+  min-width: auto !important;
+  display: inline-flex !important;
   flex-direction: row !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 5px !important;
-  padding: 5px 6px !important;
-  border-radius: 12px !important;
-  min-height: 40px !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  border-radius: 18px !important;
+  min-height: 34px !important;
   box-shadow: none !important;
-  white-space: normal !important;
+  white-space: nowrap !important;
   text-align: left !important;
   box-sizing: border-box !important;
 }
@@ -6664,38 +7361,40 @@ html.is-native-app .btn-toggle-edit {
   border-radius: 6px !important;
 }
 
-/* 5. Compact Quick-Add Bar & Prominent Native FAB */
-html.is-native-app .cards-grid:has(.card-progress) .card-add,
-html.is-native-app .card-add.has-cards {
-  min-height: unset !important;
-  height: 42px !important;
-  padding: 0 16px !important;
-  flex-direction: row !important;
-  gap: 8px !important;
-  border-radius: 12px !important;
-  margin-bottom: 2px !important;
-  border-width: 1.5px !important;
-}
+/* 5. Compact Quick-Add Bar & Prominent Native FAB (Mobile only: < 768px) */
+@media (max-width: 768px) {
+  html.is-native-app .cards-grid:has(.card-progress) .card-add,
+  html.is-native-app .card-add.has-cards {
+    min-height: unset !important;
+    height: 42px !important;
+    padding: 0 16px !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    border-radius: 12px !important;
+    margin-bottom: 2px !important;
+    border-width: 1.5px !important;
+  }
 
-html.is-native-app .cards-grid:has(.card-progress) .card-add .add-icon,
-html.is-native-app .card-add.has-cards .add-icon {
-  font-size: 1.1rem !important;
-  width: 22px !important;
-  height: 22px !important;
-  line-height: 22px !important;
-}
+  html.is-native-app .cards-grid:has(.card-progress) .card-add .add-icon,
+  html.is-native-app .card-add.has-cards .add-icon {
+    font-size: 1.1rem !important;
+    width: 22px !important;
+    height: 22px !important;
+    line-height: 22px !important;
+  }
 
-html.is-native-app .cards-grid:has(.card-progress) .card-add .add-text,
-html.is-native-app .card-add.has-cards .add-text {
-  font-size: 0.85rem !important;
-  font-weight: 600 !important;
-}
+  html.is-native-app .cards-grid:has(.card-progress) .card-add .add-text,
+  html.is-native-app .card-add.has-cards .add-text {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+  }
 
-html.is-native-app #btn-fab {
-  display: flex !important;
-  opacity: 1 !important;
-  transform: scale(1) !important;
-  pointer-events: auto !important;
+  html.is-native-app #btn-fab {
+    display: flex !important;
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    pointer-events: auto !important;
+  }
 }
 
 /* ==========================================================================
@@ -7404,6 +8103,26 @@ html.light-theme .nav-assistant-btn.active {
   }
 }
 
+/* Block background scrolling when assistant panel is open */
+html.assistant-open,
+body.assistant-open {
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+  height: 100% !important;
+}
+
+.assistant-open #assistant-panel {
+  touch-action: auto !important;
+}
+
+.assistant-open #assistant-thread,
+.assistant-open #assistant-history-list,
+.assistant-open .assistant-card-suggestions {
+  touch-action: pan-y !important;
+  overscroll-behavior: contain !important;
+}
+
 /* Assistant Backdrop */
 .assistant-backdrop {
   position: fixed;
@@ -7455,8 +8174,41 @@ html.light-theme .nav-assistant-btn.active {
   display: none !important;
 }
 
+/* Assistant Pill Handle & Mobile Sheet Expansion */
+.assistant-pill-bar {
+  display: none;
+}
+
 /* Mobile Bottom Sheet (< 768px) */
 @media (max-width: 767px) {
+  .assistant-pill-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0 6px 0;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    background: transparent;
+    flex-shrink: 0;
+  }
+
+  .assistant-pill-handle {
+    width: 42px;
+    height: 5px;
+    background-color: var(--text-muted);
+    opacity: 0.45;
+    border-radius: 999px;
+    transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+  }
+
+  .assistant-pill-bar:hover .assistant-pill-handle,
+  .assistant-pill-bar:active .assistant-pill-handle {
+    opacity: 0.95;
+    transform: scaleY(1.25);
+    background-color: var(--ui-accent);
+  }
+
   .assistant-panel {
     top: auto;
     left: 0;
@@ -7470,6 +8222,15 @@ html.light-theme .nav-assistant-btn.active {
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -8px 30px var(--shadow-xlarge);
     animation: slideSheetUp 0.22s var(--transition-ease);
+    transition: height 0.28s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), border-radius 0.25s ease !important;
+  }
+
+  .assistant-panel.fullscreen {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    top: 0 !important;
+    border-radius: 0 !important;
+    padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
   }
 
   @keyframes slideSheetUp {
@@ -9055,6 +9816,56 @@ input[type="time"].confirm-input {
   outline: none;
 }
 
+.btn-proposal-remove-item {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.btn-proposal-remove-item:hover {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.proposal-tracker-type-selector {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.proposal-tracker-type-selector label.type-tab {
+  flex: 1;
+  text-align: center;
+  padding: 6px 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  border-radius: 6px;
+}
+
+.proposal-tracker-type-selector input[type="radio"]:checked + label.type-tab {
+  background: var(--ui-accent);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px var(--ui-accent-glow);
+}
+
 .confirm-meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -10083,5 +10894,323 @@ html.light-theme .card-home-briefing.card-home-briefing-active:hover {
     padding: 16px;
     gap: 8px;
   }
+}
+
+/* ==========================================================================
+   ZERO-SETUP AI FREE TRIAL & REMAINING QUOTA METERS
+   ========================================================================== */
+
+/* Link to connect custom key */
+.btn-home-link-connect-key {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-decoration: underline;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.btn-home-link-connect-key:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Today's Focus Card Trial Meter */
+.home-briefing-trial-meter,
+.briefing-trial-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 4px;
+}
+
+.home-briefing-trial-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.home-briefing-trial-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+.briefing-trial-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.home-briefing-trial-track {
+  width: 100%;
+  height: 5px;
+  background: var(--input-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.briefing-trial-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ui-accent), #a855f7);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.briefing-trial-exhausted-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #ef4444;
+  margin-top: 3px;
+}
+
+.btn-trial-upgrade-link {
+  background: transparent;
+  border: none;
+  color: var(--ui-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Assistant Drawer Free Trial Badge */
+.assistant-trial-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--ui-accent);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  letter-spacing: 0.02em;
+}
+
+.assistant-trial-sparkle {
+  color: var(--ui-accent);
+  font-size: 0.8rem;
+}
+
+/* Assistant Drawer Chat Quota Meter Card */
+.assistant-chat-trial-meter-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assistant-chat-trial-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.assistant-chat-trial-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+
+.assistant-chat-trial-val {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.assistant-chat-trial-track {
+  width: 100%;
+  height: 6px;
+  background: var(--input-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.assistant-chat-trial-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.assistant-chat-trial-exhausted-box {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assistant-chat-trial-exhausted-box p {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #ef4444;
+  line-height: 1.35;
+}
+
+/* Assistant Drawer Connect Card Promo Banner */
+.assistant-trial-cta-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 12px;
+  padding: 18px 16px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.assistant-trial-cta-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ui-accent);
+}
+
+.assistant-connect-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 16px 0 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+/* AI Settings Modal Trial Elements */
+.ai-settings-trial-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.06) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.trial-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--ui-accent);
+}
+
+.trial-banner-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 6px 0 14px;
+}
+
+.trial-meters-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trial-meter-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trial-meter-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.trial-meter-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trial-meter-numbers {
+  font-weight: 600;
+  color: var(--ui-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.trial-meter-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--input-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.trial-meter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.ai-settings-divider-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin: 16px 0 8px;
+}
+
+.ai-settings-trial-promo {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.06) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.trial-promo-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--ui-accent);
+  margin-bottom: 4px;
+}
+
+.trial-promo-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.trial-promo-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 4px 0 12px;
 }
 

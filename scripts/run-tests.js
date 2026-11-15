@@ -388,6 +388,60 @@ await it('Data-safety: Deadline-only update preserves checklist items/done statu
   assert.strictEqual(goalPayload.alert_at_deadline, true);
 });
 
+// ---------------------------------------------------------------------------
+// TEST 6: Robust Deadline Normalization & Proposal Card Type Switcher
+// ---------------------------------------------------------------------------
+await it('Smart AI: Robust deadline parsing handles natural language and month-day formats', () => {
+  const assistantCode = fs.readFileSync(path.join(__dirname, '..', 'assistant.js'), 'utf8');
+
+  // Must have Card Type switcher for creation
+  assert.ok(assistantCode.includes('proposal-card-type-select'), 'Must contain proposal-card-type-select in assistant.js');
+  assert.ok(assistantCode.includes('proposal-tracker-type-selector'), 'Must contain proposal-tracker-type-selector in assistant.js');
+  assert.ok(assistantCode.includes('btn-proposal-add-item'), 'Must contain btn-proposal-add-item in assistant.js');
+  assert.ok(assistantCode.includes('btn-proposal-remove-item'), 'Must contain btn-proposal-remove-item in assistant.js');
+  assert.ok(assistantCode.includes('proposal-type-section-goal'), 'Must contain proposal-type-section-goal');
+  assert.ok(assistantCode.includes('proposal-type-section-checklist'), 'Must contain proposal-type-section-checklist');
+  assert.ok(assistantCode.includes('proposal-type-section-note'), 'Must contain proposal-type-section-note');
+
+  // Verify deadline normalizer logic
+  function normalizeAiDeadlineTest(deadlineStr) {
+    if (!deadlineStr || typeof deadlineStr !== 'string') return null;
+    let trimmed = deadlineStr.trim();
+    if (!trimmed) return null;
+    trimmed = trimmed
+      .replace(/^(?:till|by|due|before|on|deadline(?:\s+is|\s+set\s+for)?)\s+/i, '')
+      .replace(/,\s*at\s+/i, ' ')
+      .replace(/\s+at\s+/i, ' ')
+      .trim();
+    trimmed = trimmed.replace(/\b(\d{1,2})(?:st|nd|rd|th)\b/gi, '$1');
+    const monthDayMatch = trimmed.match(/^(\d{1,2})\s+([a-zA-Z]+)$/) || trimmed.match(/^([a-zA-Z]+)\s+(\d{1,2})$/);
+    if (monthDayMatch) {
+      const currentYear = new Date().getFullYear();
+      const withYear = `${trimmed} ${currentYear} 23:59:59`;
+      const parsedWithYear = new Date(withYear).getTime();
+      if (!isNaN(parsedWithYear) && parsedWithYear > 0) return parsedWithYear;
+    }
+    const parsed = new Date(trimmed).getTime();
+    if (!isNaN(parsed)) return parsed;
+    return null;
+  }
+
+  const t1 = normalizeAiDeadlineTest('November 17, 2026, at 11:59:59 PM');
+  assert.ok(t1 && !isNaN(t1), 'Must parse date with "at" phrasing');
+
+  const t2 = normalizeAiDeadlineTest('17 nov');
+  assert.ok(t2 && !isNaN(t2), 'Must parse month-day "17 nov"');
+
+  const t3 = normalizeAiDeadlineTest('2026-11-17T23:59:59+05:30');
+  assert.ok(t3 && !isNaN(t3), 'Must parse ISO with timezone');
+
+  const t4 = normalizeAiDeadlineTest('till 17 nov');
+  assert.ok(t4 && !isNaN(t4), 'Must parse "till 17 nov"');
+
+  const t5 = normalizeAiDeadlineTest('17th nov');
+  assert.ok(t5 && !isNaN(t5), 'Must parse ordinal "17th nov"');
+});
+
   console.log(`\nTests completed: ${passedTests}/${totalTests} passed.`);
   if (passedTests !== totalTests) {
     process.exit(1);

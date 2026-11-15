@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ProgressShelf Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=7.0">
+  <link rel="stylesheet" href="index.css?v=12.0">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -16,8 +16,17 @@
   <link rel="apple-touch-icon" href="logo.svg">
   <script>
     (function() {
-      if (typeof window !== 'undefined' && ((window.location.hostname === 'localhost' && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) || window.location.protocol === 'capacitor:' || !!window.Capacitor)) {
+      // Only enable is-native-app in genuine native Capacitor APK environment, NEVER in desktop browsers
+      const isNative = typeof window !== 'undefined' && (
+        !!window.IS_NATIVE_APP ||
+        window.location.protocol === 'capacitor:' ||
+        (!!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+        (!!window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() !== 'web')
+      );
+      if (isNative) {
         document.documentElement.classList.add('is-native-app');
+      } else {
+        document.documentElement.classList.remove('is-native-app');
       }
 
       const theme = localStorage.getItem('app-theme') || 'system';
@@ -62,6 +71,14 @@
   <!-- Navbar (Rendered immediately to show natural layout) -->
   <header class="navbar">
     <div class="nav-container">
+      <!-- Mobile Drawer Toggle Button -->
+      <button id="btn-nav-drawer-toggle" class="nav-drawer-toggle-btn" title="Open Menu" aria-label="Open Navigation Drawer">
+        <svg class="drawer-hamburger-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
       <a class="nav-logo" href="dashboard.html">
         <svg id="nav-logo-svg" class="logo-svg logo-loading" viewBox="30 15 170 110" fill="none"
           xmlns="http://www.w3.org/2000/svg">
@@ -311,7 +328,7 @@
           </div>
           <div class="stats-info">
             <span id="stat-deadlines" class="stats-num stats-skeleton"></span>
-            <span class="stats-label">Active Deadlines</span>
+            <span class="stats-label">Active<br class="mobile-break"> Deadlines</span>
           </div>
         </button>
 
@@ -366,7 +383,7 @@
           </div>
           <div class="stats-info">
             <span id="stat-flexible" class="stats-num stats-skeleton"></span>
-            <span class="stats-label">Flexible Goals</span>
+            <span class="stats-label">Flexible<br class="mobile-break"> Goals</span>
           </div>
         </button>
       </div> <!-- Close stats-container -->
@@ -379,6 +396,24 @@
       </span>
       <button id="btn-banner-login" class="btn-banner-login">
         Sign in to sync
+      </button>
+    </div>
+
+    <div id="offline-banner" class="guest-banner offline-banner" style="display:none;">
+      <span style="display: flex; align-items: center; gap: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+        <span id="offline-banner-text">⚡ Offline Mode — Changes are saved locally and will sync when reconnected.</span>
+      </span>
+      <button id="btn-offline-retry-sync" class="btn-banner-login" style="display:none;">
+        Sync Now
       </button>
     </div>
 
@@ -429,6 +464,12 @@
           </button>
 
           <div class="sort-container">
+            <svg class="sort-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m3 16 4 4 4-4"></path>
+              <path d="M7 20V4"></path>
+              <path d="m21 8-4-4-4 4"></path>
+              <path d="M17 4v16"></path>
+            </svg>
             <label for="sort-select" class="sort-label">Sort by:</label>
             <select id="sort-select" class="sort-select">
               <option value="created-desc">Recently Created</option>
@@ -1370,13 +1411,14 @@
 
   <div id="profile-dropdown" class="profile-dropdown">
     <div class="dropdown-header">
+      <div class="dropdown-avatar-wrap">
+        <img id="dropdown-user-avatar" class="dropdown-user-avatar" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="User Avatar" referrerpolicy="no-referrer">
+      </div>
       <div class="dropdown-user-info">
         <p id="user-name" class="dropdown-user-name">Loading...</p>
         <p id="user-status" class="dropdown-user-status">Online Mode</p>
       </div>
-      <div class="dropdown-avatar-wrap">
-        <img id="dropdown-user-avatar" class="dropdown-user-avatar" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="User Avatar" referrerpolicy="no-referrer">
-      </div>
+      <button id="btn-close-drawer" class="btn-close-drawer" aria-label="Close menu">&times;</button>
     </div>
     <div class="dropdown-divider"></div>
     <button id="btn-terrace" class="dropdown-item btn-terrace">
@@ -1388,6 +1430,38 @@
       What's New (Terrace)
     </button>
     <div class="dropdown-divider"></div>
+
+    <!-- View Mode Setting (Grid / Orbit for Mobile / APK Left Drawer) -->
+    <div class="drawer-view-mode-section" id="drawer-view-mode-section">
+      <div class="dropdown-section-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span>View Mode</span>
+      </div>
+      <div class="theme-mode-segmented drawer-view-mode-segmented" role="group" aria-label="View Mode">
+        <button type="button" id="btn-drawer-view-grid" class="theme-mode-btn active" title="Grid View">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Grid</span>
+        </button>
+        <button type="button" id="btn-drawer-view-orbit" class="theme-mode-btn" title="Circular Orbit View">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <circle cx="12" cy="12" r="8" stroke-dasharray="3.5 2.5"></circle>
+          </svg>
+          <span>Orbit</span>
+        </button>
+      </div>
+      <div class="dropdown-divider"></div>
+    </div>
 
     <!-- Theme Settings (Mobile View) -->
     <div class="profile-theme-section" id="profile-theme-section">
@@ -1510,6 +1584,51 @@
       </svg>
       AI Settings
     </button>
+
+    <!-- Drawer Navigation & Quick Links (Mobile / Side Drawer) -->
+    <div class="drawer-nav-section" id="drawer-nav-section">
+      <div class="dropdown-divider"></div>
+      <div class="dropdown-section-title drawer-nav-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>App &amp; Links</span>
+      </div>
+      <div class="drawer-version-wrapper">
+        <label for="drawer-version-select" class="drawer-item-label">Version</label>
+        <select id="drawer-version-select" class="version-select">
+          <option value="dashboard.html" selected>v5.0 (AI Agent)</option>
+          <option value="versions/v4.5/dashboard.html">v4.5 (Archive)</option>
+          <option value="versions/v4.0/dashboard.html">v4.0 (Orbit 3D)</option>
+          <option value="versions/v3.0/dashboard.html">v3.0 (Smart Shelf)</option>
+          <option value="versions/v2.0/dashboard.html">v2.0 (Checklist &amp; Notes)</option>
+          <option value="versions/v1.0/dashboard.html">v1.0 (Basic)</option>
+        </select>
+      </div>
+      <button id="btn-drawer-refresh" class="dropdown-item">
+        <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.72 2.78L21 8"></path>
+          <polyline points="21 3 21 8 16 8"></polyline>
+        </svg>
+        Refresh App &amp; Cache
+      </button>
+      <a id="btn-drawer-github" class="dropdown-item" href="https://github.com/Anandavnish/ProgressShelf" target="_blank" rel="noopener noreferrer">
+        <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372"/>
+        </svg>
+        GitHub Repository
+      </a>
+      <button id="btn-drawer-download-apk" class="dropdown-item">
+        <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Download Android APK
+      </button>
+    </div>
     <div class="dropdown-divider"></div>
     <button id="btn-logout" class="dropdown-item btn-logout">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1565,6 +1684,11 @@
 
   <!-- Assistant Drawer / Bottom Sheet Panel -->
   <aside id="assistant-panel" class="assistant-panel hidden" aria-label="AI Assistant" role="dialog" aria-modal="true">
+    <!-- Top Pill Drag Bar for Full-Screen Expansion on Mobile -->
+    <div class="assistant-pill-bar" id="assistant-pill-bar" role="button" tabindex="0" aria-label="Expand or collapse AI panel">
+      <span class="assistant-pill-handle"></span>
+    </div>
+
     <div class="assistant-header">
       <div class="assistant-title-group">
         <svg class="assistant-title-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1732,6 +1856,6 @@
 
   <!-- Application Logic -->
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=12.0"></script>
+  <script type="module" src="app.js?v=17.0"></script>
 </body>
 </html>

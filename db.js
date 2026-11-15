@@ -90,6 +90,220 @@ let activeUid = null;
 let activeBarsState = [];
 let activeBarsListeners = new Set();
 
+// ==========================================
+// Offline Mutation Outbox & Sync Queue
+// ==========================================
+export function getSyncQueue(uid) {
+  if (!uid) return [];
+  try {
+    const raw = localStorage.getItem(`ps_sync_queue_${uid}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn("Failed to read sync queue:", e);
+    return [];
+  }
+}
+
+export function setSyncQueue(uid, queue) {
+  if (!uid) return;
+  try {
+    if (!queue || queue.length === 0) {
+      localStorage.removeItem(`ps_sync_queue_${uid}`);
+    } else {
+      localStorage.setItem(`ps_sync_queue_${uid}`, JSON.stringify(queue));
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ps-sync-queue-changed', {
+        detail: { uid, count: (queue && queue.length) || 0 }
+      }));
+    }
+  } catch (e) {
+    console.warn("Failed to write sync queue:", e);
+  }
+}
+
+export function isBarPendingSync(barId) {
+  if (!barId) return false;
+  const uid = activeUid;
+  if (!uid) return false;
+  const queue = getSyncQueue(uid);
+  return queue.some(m => m.barId === barId);
+}
+
+export function enqueueMutation(uid, mutation) {
+  if (!uid) return;
+  const queue = getSyncQueue(uid);
+
+  // Coalesce: If mutation is DELETE on a bar that was created locally and not yet synced
+  if (mutation.type === 'DELETE') {
+    const insertIdx = queue.findIndex(m => m.barId === mutation.barId && m.type === 'INSERT');
+    if (insertIdx !== -1) {
+      // Never existed on server! Erase all queued ops for this bar
+      const filtered = queue.filter(m => m.barId !== mutation.barId);
+      setSyncQueue(uid, filtered);
+      return;
+    }
+  }
+
+  // Coalesce: If mutation is UPDATE on a bar that has a pending INSERT
+  if (mutation.type === 'UPDATE' || mutation.type === 'UPDATE_PROGRESS') {
+    const insertOp = queue.find(m => m.barId === mutation.barId && m.type === 'INSERT');
+    if (insertOp) {
+      insertOp.payload = {
+        ...insertOp.payload,
+        ...mutation.payload,
+        lastUpdated: Date.now()
+      };
+      setSyncQueue(uid, queue);
+      return;
+    }
+
+    // Coalesce: Consecutive updates on the same bar
+    const existingUpdate = queue.find(m => m.barId === mutation.barId && (m.type === 'UPDATE' || m.type === 'UPDATE_PROGRESS'));
+    if (existingUpdate) {
+      existingUpdate.payload = {
+        ...existingUpdate.payload,
+        ...mutation.payload,
+        lastUpdated: Date.now()
+      };
+      existingUpdate.timestamp = Date.now();
+      setSyncQueue(uid, queue);
+      return;
+    }
+  }
+
+  queue.push(mutation);
+  setSyncQueue(uid, queue);
+}
+
+let isSyncInProgress = false;
+
+export async function processSyncQueue(uid) {
+  if (!uid || isSyncInProgress) return;
+  if (!isConfigured || isGuestMode()) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+  const queue = getSyncQueue(uid);
+  if (queue.length === 0) return;
+
+  isSyncInProgress = true;
+  console.log(`[Sync Engine] Starting processing of ${queue.length} offline mutations for: ${uid}`);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ps-sync-started', { detail: { count: queue.length } }));
+  }
+
+  const remaining = [];
+  let syncedCount = 0;
+
+  for (const mutation of queue) {
+    try {
+      if (mutation.type === 'INSERT') {
+        const bar = mutation.payload;
+        const effectiveCreatedAt = bar.createdAt || Date.now();
+        const effectiveDeadlineSetAt = bar.deadlineAt ? (bar.deadlineSetAt || effectiveCreatedAt) : null;
+        const { error } = await supabase.from('trackers').upsert({
+          id: mutation.barId,
+          user_id: uid,
+          title: bar.title,
+          type: bar.type || "goal",
+          preset: bar.preset || null,
+          levels: bar.levels || null,
+          target_smallest: bar.targetSmallest !== undefined && bar.targetSmallest !== null ? Number(bar.targetSmallest) : 1,
+          current_smallest: bar.currentSmallest !== undefined && bar.currentSmallest !== null ? Number(bar.currentSmallest) : 0,
+          items: bar.items || null,
+          text: bar.text || null,
+          completed: bar.completed || false,
+          created_at: new Date(effectiveCreatedAt).toISOString(),
+          deadline_at: bar.deadlineAt ? new Date(bar.deadlineAt).toISOString() : null,
+          deadline_set_at: effectiveDeadlineSetAt ? new Date(effectiveDeadlineSetAt).toISOString() : null,
+          notify_at: bar.notifyAt ? new Date(bar.notifyAt).toISOString() : null,
+          notified: bar.notified || false,
+          notify_percent: bar.notifyPercent !== undefined && bar.notifyPercent !== null ? Number(bar.notifyPercent) : null,
+          alert_at_deadline: bar.alertAtDeadline || false,
+          deadline_notified: bar.deadlineNotified || false,
+          repeat: bar.repeat || null,
+          last_updated: new Date(bar.lastUpdated || Date.now()).toISOString()
+        });
+        if (error) throw error;
+      } else if (mutation.type === 'UPDATE_PROGRESS') {
+        const p = mutation.payload;
+        const updates = {
+          current_smallest: Number(p.currentSmallest),
+          completed: p.completed,
+          last_updated: new Date(p.lastUpdated || Date.now()).toISOString()
+        };
+        if (p.completed) {
+          updates.notify_at = null;
+        }
+        const { error } = await supabase
+          .from('trackers')
+          .update(updates)
+          .eq('id', mutation.barId)
+          .eq('user_id', uid);
+        if (error) throw error;
+      } else if (mutation.type === 'UPDATE') {
+        const p = mutation.payload;
+        const updates = {
+          last_updated: new Date(p.lastUpdated || Date.now()).toISOString()
+        };
+        if (p.title !== undefined) updates.title = p.title;
+        if (p.levels !== undefined) updates.levels = p.levels;
+        if (p.targetSmallest !== undefined && p.targetSmallest !== null) updates.target_smallest = Number(p.targetSmallest);
+        if (p.currentSmallest !== undefined && p.currentSmallest !== null) updates.current_smallest = Number(p.currentSmallest);
+        if (p.items !== undefined) updates.items = p.items;
+        if (p.text !== undefined) updates.text = p.text;
+        if (p.completed !== undefined) updates.completed = p.completed;
+        if (p.deadlineAt !== undefined) updates.deadline_at = p.deadlineAt ? new Date(p.deadlineAt).toISOString() : null;
+        if (p.deadlineSetAt !== undefined) updates.deadline_set_at = p.deadlineSetAt ? new Date(p.deadlineSetAt).toISOString() : null;
+        if (p.notifyAt !== undefined) updates.notify_at = p.notifyAt ? new Date(p.notifyAt).toISOString() : null;
+        if (p.notified !== undefined) updates.notified = p.notified;
+        if (p.notifyPercent !== undefined) updates.notify_percent = p.notifyPercent !== null ? Number(p.notifyPercent) : null;
+        if (p.alertAtDeadline !== undefined) updates.alert_at_deadline = p.alertAtDeadline;
+        if (p.deadlineNotified !== undefined) updates.deadline_notified = p.deadlineNotified;
+        if (p.position !== undefined) updates.position = p.position;
+        if (p.repeat !== undefined) updates.repeat = p.repeat;
+
+        const { error } = await supabase
+          .from('trackers')
+          .update(updates)
+          .eq('id', mutation.barId)
+          .eq('user_id', uid);
+        if (error) throw error;
+      } else if (mutation.type === 'DELETE') {
+        const { error } = await supabase
+          .from('trackers')
+          .delete()
+          .eq('id', mutation.barId)
+          .eq('user_id', uid);
+        if (error) throw error;
+      }
+
+      syncedCount++;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ps-bar-synced', { detail: { barId: mutation.barId } }));
+      }
+    } catch (err) {
+      console.warn(`[Sync Engine] Error syncing mutation ${mutation.barId}:`, err);
+      mutation.retries = (mutation.retries || 0) + 1;
+      remaining.push(mutation);
+    }
+  }
+
+  setSyncQueue(uid, remaining);
+  isSyncInProgress = false;
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ps-sync-finished', {
+      detail: { syncedCount, remainingCount: remaining.length }
+    }));
+  }
+
+  notifyActiveListeners();
+}
+
 function notifyActiveListeners() {
   const snapshot = [...activeBarsState];
   activeBarsListeners.forEach(listener => {
@@ -294,6 +508,9 @@ export function subscribeToBars(uid, onUpdate, onError) {
 
   // Perform initial fetch in background
   fetchInitial();
+  if (typeof navigator !== 'undefined' && navigator.onLine && activeUid) {
+    processSyncQueue(activeUid);
+  }
 
   // 3. Subscribe to real-time changes
   const channel = supabase
@@ -357,11 +574,19 @@ export function subscribeToBars(uid, onUpdate, onError) {
   // Re-sync on tab visibility change or when device returns online
   const onVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
-      fetchInitial();
+      if (activeUid && typeof navigator !== 'undefined' && navigator.onLine) {
+        processSyncQueue(activeUid).finally(() => fetchInitial());
+      } else {
+        fetchInitial();
+      }
     }
   };
   const onOnline = () => {
-    fetchInitial();
+    if (activeUid) {
+      processSyncQueue(activeUid).finally(() => fetchInitial());
+    } else {
+      fetchInitial();
+    }
   };
 
   if (typeof document !== 'undefined') {
@@ -509,6 +734,18 @@ export async function createBar(uid, {
   persistActiveBars();
   notifyActiveListeners();
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (isOffline) {
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId: id,
+      type: 'INSERT',
+      payload: { ...newBar },
+      timestamp: Date.now()
+    });
+    return id;
+  }
+
   try {
     const { error } = await supabase.from('trackers').insert({
       id,
@@ -536,11 +773,16 @@ export async function createBar(uid, {
     if (error) throw error;
     return id;
   } catch (error) {
-    console.error("Error creating progress bar in cloud, rolling back:", error);
-    activeBarsState = activeBarsState.filter(b => b.id !== id);
-    persistActiveBars();
+    console.warn("Error creating progress bar in cloud (offline/network), enqueuing for sync:", error);
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId: id,
+      type: 'INSERT',
+      payload: { ...newBar },
+      timestamp: Date.now()
+    });
     notifyActiveListeners();
-    throw error;
+    return id;
   }
 }
 
@@ -586,6 +828,18 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
     notifyActiveListeners();
   }
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (isOffline) {
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'UPDATE_PROGRESS',
+      payload: { currentSmallest: Number(currentSmallest), completed, lastUpdated: now },
+      timestamp: now
+    });
+    return;
+  }
+
   try {
     const updates = {
       current_smallest: Number(currentSmallest),
@@ -602,13 +856,15 @@ export async function updateBarProgress(uid, barId, currentSmallest, completed) 
       .eq('user_id', uid);
     if (error) throw error;
   } catch (error) {
-    console.error("Error updating progress bar:", error);
-    if (idx !== -1 && prevBar) {
-      activeBarsState[idx] = prevBar;
-      persistActiveBars();
-      notifyActiveListeners();
-    }
-    throw error;
+    console.warn("Error updating progress bar in cloud (offline/network), enqueuing for sync:", error);
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'UPDATE_PROGRESS',
+      payload: { currentSmallest: Number(currentSmallest), completed, lastUpdated: now },
+      timestamp: now
+    });
+    notifyActiveListeners();
   }
 }
 
@@ -632,6 +888,17 @@ export async function deleteBar(uid, barId) {
   persistActiveBars();
   notifyActiveListeners();
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (isOffline) {
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'DELETE',
+      timestamp: Date.now()
+    });
+    return;
+  }
+
   try {
     const { error } = await supabase
       .from('trackers')
@@ -640,11 +907,13 @@ export async function deleteBar(uid, barId) {
       .eq('user_id', uid);
     if (error) throw error;
   } catch (error) {
-    console.error("Error deleting progress bar:", error);
-    activeBarsState = originalBars;
-    persistActiveBars();
-    notifyActiveListeners();
-    throw error;
+    console.warn("Error deleting progress bar in cloud (offline/network), enqueuing for sync:", error);
+    enqueueMutation(uid, {
+      id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'DELETE',
+      timestamp: Date.now()
+    });
   }
 }
 
@@ -817,48 +1086,68 @@ async function _editBarInternal(uid, barId, {
     notifyActiveListeners();
   }
 
+  const nowMs = Date.now();
+  const nowStr = new Date(nowMs).toISOString();
+  const updates = {
+    title,
+    last_updated: nowStr
+  };
+
+  if (createdAt !== undefined && createdAt !== null) updates.created_at = new Date(createdAt).toISOString();
+  if (levels !== undefined) updates.levels = levels;
+  if (targetSmallest !== null && targetSmallest !== undefined) updates.target_smallest = Number(targetSmallest);
+  if (currentSmallest !== null && currentSmallest !== undefined) updates.current_smallest = Number(currentSmallest);
+  if (items !== undefined) updates.items = items;
+  if (text !== undefined) updates.text = text;
+  if (completed !== undefined) updates.completed = completed;
+  if (notifyAt !== undefined) updates.notify_at = notifyAt ? new Date(notifyAt).toISOString() : null;
+  if (notified !== undefined) updates.notified = notified;
+  if (notifyPercent !== undefined) updates.notify_percent = notifyPercent !== null ? Number(notifyPercent) : null;
+  if (alertAtDeadline !== undefined) updates.alert_at_deadline = alertAtDeadline;
+  if (deadlineNotified !== undefined) updates.deadline_notified = deadlineNotified;
+  if (position !== undefined) updates.position = position;
+  
+  if (finalRepeat !== undefined) {
+    updates.repeat = finalRepeat;
+  }
+
+  if (deadlineSetAt !== undefined) {
+    updates.deadline_set_at = deadlineSetAt ? new Date(deadlineSetAt).toISOString() : null;
+    if (updateDeadline) {
+      updates.deadline_at = deadlineAt ? new Date(deadlineAt).toISOString() : null;
+    }
+  } else if (updateDeadline) {
+    if (deadlineAt) {
+      updates.deadline_at = new Date(deadlineAt).toISOString();
+      updates.deadline_set_at = (createdAt !== undefined && createdAt !== null) ? new Date(createdAt).toISOString() : nowStr;
+    } else {
+      updates.deadline_at = null;
+      updates.deadline_set_at = null;
+    }
+  } else if (createdAt !== undefined && createdAt !== null) {
+    updates.deadline_set_at = new Date(createdAt).toISOString();
+  }
+
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (isOffline) {
+    enqueueMutation(uid, {
+      id: "mut_" + nowMs + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'UPDATE',
+      payload: {
+        title, levels, targetSmallest, currentSmallest, items, text, completed,
+        deadlineAt: updates.deadline_at ? new Date(updates.deadline_at).getTime() : null,
+        deadlineSetAt: updates.deadline_set_at ? new Date(updates.deadline_set_at).getTime() : null,
+        notifyAt: updates.notify_at ? new Date(updates.notify_at).getTime() : null,
+        notified, notifyPercent, alertAtDeadline, deadlineNotified, position,
+        repeat: finalRepeat, lastUpdated: nowMs
+      },
+      timestamp: nowMs
+    });
+    return;
+  }
+
   try {
-    const now = new Date().toISOString();
-    const updates = {
-      title,
-      last_updated: now
-    };
-
-    if (createdAt !== undefined && createdAt !== null) updates.created_at = new Date(createdAt).toISOString();
-    if (levels !== undefined) updates.levels = levels;
-    if (targetSmallest !== null && targetSmallest !== undefined) updates.target_smallest = Number(targetSmallest);
-    if (currentSmallest !== null && currentSmallest !== undefined) updates.current_smallest = Number(currentSmallest);
-    if (items !== undefined) updates.items = items;
-    if (text !== undefined) updates.text = text;
-    if (completed !== undefined) updates.completed = completed;
-    if (notifyAt !== undefined) updates.notify_at = notifyAt ? new Date(notifyAt).toISOString() : null;
-    if (notified !== undefined) updates.notified = notified;
-    if (notifyPercent !== undefined) updates.notify_percent = notifyPercent !== null ? Number(notifyPercent) : null;
-    if (alertAtDeadline !== undefined) updates.alert_at_deadline = alertAtDeadline;
-    if (deadlineNotified !== undefined) updates.deadline_notified = deadlineNotified;
-    if (position !== undefined) updates.position = position;
-    
-    if (finalRepeat !== undefined) {
-      updates.repeat = finalRepeat;
-    }
-
-    if (deadlineSetAt !== undefined) {
-      updates.deadline_set_at = deadlineSetAt ? new Date(deadlineSetAt).toISOString() : null;
-      if (updateDeadline) {
-        updates.deadline_at = deadlineAt ? new Date(deadlineAt).toISOString() : null;
-      }
-    } else if (updateDeadline) {
-      if (deadlineAt) {
-        updates.deadline_at = new Date(deadlineAt).toISOString();
-        updates.deadline_set_at = (createdAt !== undefined && createdAt !== null) ? new Date(createdAt).toISOString() : now;
-      } else {
-        updates.deadline_at = null;
-        updates.deadline_set_at = null;
-      }
-    } else if (createdAt !== undefined && createdAt !== null) {
-      updates.deadline_set_at = new Date(createdAt).toISOString();
-    }
-
     const { error } = await supabase
       .from('trackers')
       .update(updates)
@@ -866,13 +1155,22 @@ async function _editBarInternal(uid, barId, {
       .eq('user_id', uid);
     if (error) throw error;
   } catch (error) {
-    console.error("Error editing bar:", error);
-    if (idx !== -1 && originalBar) {
-      activeBarsState[idx] = originalBar;
-      persistActiveBars();
-      notifyActiveListeners();
-    }
-    throw error;
+    console.warn("Error editing bar in cloud (offline/network), enqueuing for sync:", error);
+    enqueueMutation(uid, {
+      id: "mut_" + nowMs + "_" + Math.random().toString(36).substr(2, 6),
+      barId,
+      type: 'UPDATE',
+      payload: {
+        title, levels, targetSmallest, currentSmallest, items, text, completed,
+        deadlineAt: updates.deadline_at ? new Date(updates.deadline_at).getTime() : null,
+        deadlineSetAt: updates.deadline_set_at ? new Date(updates.deadline_set_at).getTime() : null,
+        notifyAt: updates.notify_at ? new Date(updates.notify_at).getTime() : null,
+        notified, notifyPercent, alertAtDeadline, deadlineNotified, position,
+        repeat: finalRepeat, lastUpdated: nowMs
+      },
+      timestamp: nowMs
+    });
+    notifyActiveListeners();
   }
 }
 
@@ -995,6 +1293,19 @@ export async function deleteMultipleBars(uid, barIds) {
   persistActiveBars();
   notifyActiveListeners();
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (isOffline) {
+    barIds.forEach(id => {
+      enqueueMutation(uid, {
+        id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+        barId: id,
+        type: 'DELETE',
+        timestamp: Date.now()
+      });
+    });
+    return;
+  }
+
   try {
     const { error } = await supabase
       .from('trackers')
@@ -1003,11 +1314,15 @@ export async function deleteMultipleBars(uid, barIds) {
       .eq('user_id', uid);
     if (error) throw error;
   } catch (error) {
-    console.error("Error deleting multiple progress bars:", error);
-    activeBarsState = originalBars;
-    persistActiveBars();
-    notifyActiveListeners();
-    throw error;
+    console.warn("Error deleting multiple progress bars in cloud (offline/network), enqueuing for sync:", error);
+    barIds.forEach(id => {
+      enqueueMutation(uid, {
+        id: "mut_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+        barId: id,
+        type: 'DELETE',
+        timestamp: Date.now()
+      });
+    });
   }
 }
 

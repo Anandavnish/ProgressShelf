@@ -6,6 +6,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const RATE_LIMIT_GENERATE_PER_HOUR = 30;
 const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB max request payload
 const TOTAL_REQUEST_DEADLINE_MS = 45000; // ~45s total request deadline
+const MAX_TRIAL_CHAT_REQUESTS = 25;
+const MAX_TRIAL_BRIEFING_REQUESTS = 50;
 
 // Module-level model cache (reused across requests in the same isolate)
 let cachedModel: string | null = null;
@@ -190,6 +192,360 @@ function getHourlyWindowStart(date: Date = new Date()): string {
 }
 
 // ---------------------------------------------------------------------------
+// Date Parsing & ISO Normalization Helper
+// Converts natural dates ("till 17 nov", "17th nov", "November 17") into strict ISO
+// ---------------------------------------------------------------------------
+function parseDatePatternToIso(
+  text: string,
+  referenceDateStr: string = '',
+  tzOffset: string = ''
+): string | null {
+  if (!text || typeof text !== 'string') return null;
+  let clean = text.trim();
+  if (!clean) return null;
+
+  // Clean conversational phrasing and preambles
+  clean = clean
+    .replace(/^(?:till|by|due|before|on|deadline(?:\s+is|\s+set\s+for)?)\s+/i, '')
+    .replace(/,\s*at\s+/i, ' ')
+    .replace(/\s+at\s+/i, ' ')
+    .trim();
+
+  // If already standard ISO with date & time
+  const fullIsoMatch = clean.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i
+  );
+  if (fullIsoMatch) {
+    return clean;
+  }
+
+  const monthMap: Record<string, number> = {
+    jan: 1, january: 1,
+    feb: 2, february: 2,
+    mar: 3, march: 3,
+    apr: 4, april: 4,
+    may: 5,
+    jun: 6, june: 6,
+    jul: 7, july: 7,
+    aug: 8, august: 8,
+    sep: 9, september: 9,
+    oct: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12,
+  };
+
+  const refDate = referenceDateStr ? new Date(referenceDateStr) : new Date();
+  const refYear = !isNaN(refDate.getTime()) ? refDate.getFullYear() : new Date().getFullYear();
+
+  // "tomorrow"
+  if (/\b(?:by\s+)?tomorrow\b/i.test(clean)) {
+    const d = new Date(refDate.getTime() + 86400000);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T23:59:59${tzOffset || 'Z'}`;
+  }
+
+  // "today"
+  if (/\b(?:by\s+)?today\b/i.test(clean)) {
+    const yyyy = refDate.getFullYear();
+    const mm = String(refDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(refDate.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T23:59:59${tzOffset || 'Z'}`;
+  }
+
+  // Format YYYY-MM-DD
+  const ymdMatch = clean.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}T23:59:59${tzOffset || 'Z'}`;
+  }
+
+  // Format DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = clean.match(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b/);
+  if (dmyMatch) {
+    const dd = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const mm = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+    const yyyy = dmyMatch[3];
+    return `${yyyy}-${mm}-${dd}T23:59:59${tzOffset || 'Z'}`;
+  }
+
+  // Pattern: "17 nov", "17th november", "17 November 2026"
+  const dayMonthMatch = clean.match(
+    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s*,?\s*(\d{4}))?\b/i
+  );
+  if (dayMonthMatch) {
+    const day = parseInt(dayMonthMatch[1], 10);
+    const monthName = dayMonthMatch[2].toLowerCase();
+    const month = monthMap[monthName];
+    const year = dayMonthMatch[3] ? parseInt(dayMonthMatch[3], 10) : refYear;
+    if (month && day >= 1 && day <= 31) {
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${year}-${mm}-${dd}T23:59:59${tzOffset || 'Z'}`;
+    }
+  }
+
+  // Pattern: "nov 17", "november 17th", "November 17, 2026"
+  const monthDayMatch = clean.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?\b/i
+  );
+  if (monthDayMatch) {
+    const monthName = monthDayMatch[1].toLowerCase();
+    const day = parseInt(monthDayMatch[2], 10);
+    const month = monthMap[monthName];
+    const year = monthDayMatch[3] ? parseInt(monthDayMatch[3], 10) : refYear;
+    if (month && day >= 1 && day <= 31) {
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${year}-${mm}-${dd}T23:59:59${tzOffset || 'Z'}`;
+    }
+  }
+
+  // Fallback: standard Date.parse if it contains a recognizable date
+  const parsedMs = Date.parse(clean);
+  if (!isNaN(parsedMs) && parsedMs > 0) {
+    return new Date(parsedMs).toISOString();
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Academic Title & Deliverables Formatting Helpers
+// Ensures consistent, high-quality, professional titling and decomposition
+// ---------------------------------------------------------------------------
+function formatAcademicSubject(subject: string): string {
+  if (!subject || typeof subject !== 'string') return '';
+  const acronyms: Record<string, string> = {
+    mos: 'MOS',
+    bee: 'BEE',
+    dsa: 'DSA',
+    cad: 'CAD',
+    cam: 'CAM',
+    ai: 'AI',
+    ml: 'ML',
+    os: 'OS',
+    cn: 'CN',
+    dbms: 'DBMS',
+    toc: 'TOC',
+    se: 'SE',
+    maths: 'Maths',
+    math: 'Math',
+  };
+  return subject
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      const lower = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (acronyms[lower]) {
+        return word.replace(new RegExp(lower, 'i'), acronyms[lower]);
+      }
+      if (word.length <= 1) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function formatAcademicTitle(rawTitle: string, userPrompt: string = ''): string {
+  if (!rawTitle || typeof rawTitle !== 'string') return 'Task Checklist';
+  const cleanTitle = rawTitle.trim();
+  if (!cleanTitle) return 'Task Checklist';
+
+  // If already formatted in standard completion pattern
+  if (/^.+Completion:\s+.+$/i.test(cleanTitle)) {
+    return cleanTitle;
+  }
+
+  const combinedText = `${cleanTitle} ${userPrompt}`;
+
+  // Detect task type
+  let taskType = '';
+  if (/\blab\s*files?\b/i.test(combinedText)) {
+    taskType = 'Lab File';
+  } else if (/\bassignments?\b/i.test(combinedText)) {
+    taskType = 'Assignment';
+  } else if (/\breports?\b/i.test(combinedText)) {
+    taskType = 'Report';
+  } else if (/\bprojects?\b/i.test(combinedText)) {
+    taskType = 'Project';
+  } else if (/\bhomework\b/i.test(combinedText)) {
+    taskType = 'Homework';
+  } else if (/\bpractical(?:s)?\b/i.test(combinedText)) {
+    taskType = 'Practical';
+  }
+
+  // Extract subjects
+  let subjects: string[] = [];
+
+  const ofMatch = userPrompt.match(
+    /\b(?:of|for)\s+([^,]+?)\s+(?:and|&)\s+([^,]+?)(?:\s+(?:create|till|by|deadline|card|in|$|\.))/i
+  );
+  if (ofMatch) {
+    const s1 = ofMatch[1].replace(/\b(?:lab\s*files?|files?)\b/gi, '').trim();
+    const s2 = ofMatch[2].replace(/\b(?:lab\s*files?|files?)\b/gi, '').trim();
+    if (s1 && s2) {
+      subjects = [s1, s2];
+    }
+  }
+
+  if (subjects.length === 0) {
+    const andMatch = userPrompt.match(
+      /\b([^,]+?)\s+(?:and|&)\s+([^,]+?)\s+(?:lab\s*files?|assignments?|reports?|tasks?|projects?)\b/i
+    );
+    if (andMatch) {
+      const s1 = andMatch[1].replace(/\b(?:of|for|till|by)\b/gi, '').trim();
+      const s2 = andMatch[2].trim();
+      if (s1 && s2) {
+        subjects = [s1, s2];
+      }
+    }
+  }
+
+  if (subjects.length === 0) {
+    const titleClean = cleanTitle
+      .replace(/^.+Completion:\s*/i, '')
+      .replace(/\s*(?:lab\s*files?|files?|assignments?|reports?|projects?|homework|practicals?|checklist|card)\b/gi, '')
+      .trim();
+
+    if (/\b(?:and|&)\b/i.test(titleClean)) {
+      const parts = titleClean.split(/\s+(?:and|&)\s+/i).map((p) => p.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        subjects = parts;
+      }
+    } else if (titleClean) {
+      subjects = [titleClean];
+    }
+  }
+
+  if (taskType && subjects.length > 0) {
+    const formatted = subjects.map((s) => formatAcademicSubject(s));
+    if (formatted.length > 1) {
+      return `${taskType} Completion: ${formatted.join(' & ')}`;
+    } else {
+      return `${taskType} Completion: ${formatted[0]}`;
+    }
+  }
+
+  if (/\b(?:checklist|todo|tasks?)\b/i.test(combinedText) && subjects.length > 0) {
+    const formatted = subjects.map((s) => formatAcademicSubject(s));
+    return `Task Checklist: ${formatted.join(' & ')}`;
+  }
+
+  return cleanTitle
+    .split(/\s+/)
+    .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
+    .join(' ');
+}
+
+function extractDeliverableItems(
+  existingItems: Array<{ text: string; done: boolean }> | undefined,
+  title: string,
+  userPrompt: string
+): Array<{ text: string; done: boolean }> {
+  const isDummyStep = (text: string) =>
+    !text ||
+    /^(?:step|task|item|milestone)\s*\d*$/i.test(text.trim()) ||
+    text.trim().toLowerCase() === 'step' ||
+    text.trim().toLowerCase() === 'task';
+
+  const validExisting = (existingItems || []).filter(
+    (it) => it && typeof it.text === 'string' && it.text.trim() && !isDummyStep(it.text)
+  );
+
+  // If existingItems already has multiple distinct valid items (e.g. 16 chapters or user-specified list), keep them!
+  if (validExisting.length > 1) {
+    return validExisting.map((it) => ({
+      text: it.text.trim().slice(0, 120),
+      done: Boolean(it.done),
+    }));
+  }
+
+  // Detect deliverable item type suffix
+  const combinedText = `${title || ''} ${userPrompt || ''}`.trim();
+  let itemSuffix = 'Task';
+  if (/\blab\s*files?\b/i.test(combinedText)) {
+    itemSuffix = 'Lab File';
+  } else if (/\bassignments?\b/i.test(combinedText)) {
+    itemSuffix = 'Assignment';
+  } else if (/\breports?\b/i.test(combinedText)) {
+    itemSuffix = 'Report';
+  } else if (/\bprojects?\b/i.test(combinedText)) {
+    itemSuffix = 'Project';
+  } else if (/\bhomework\b/i.test(combinedText)) {
+    itemSuffix = 'Homework';
+  } else if (/\bpractical(?:s)?\b/i.test(combinedText)) {
+    itemSuffix = 'Practical';
+  }
+
+  // Extract subjects from userPrompt or title
+  let subjects: string[] = [];
+
+  const ofMatch = userPrompt.match(
+    /\b(?:of|for)\s+([^,]+?)\s+(?:and|&)\s+([^,]+?)(?:\s+(?:create|till|by|deadline|card|in|$|\.))/i
+  );
+  if (ofMatch) {
+    const s1 = ofMatch[1].replace(/\b(?:lab\s*files?|files?)\b/gi, '').trim();
+    const s2 = ofMatch[2].replace(/\b(?:lab\s*files?|files?)\b/gi, '').trim();
+    if (s1 && s2) {
+      subjects = [s1, s2];
+    }
+  }
+
+  if (subjects.length === 0) {
+    const andMatch = userPrompt.match(
+      /\b([^,]+?)\s+(?:and|&)\s+([^,]+?)\s+(?:lab\s*files?|assignments?|reports?|tasks?|projects?)\b/i
+    );
+    if (andMatch) {
+      const s1 = andMatch[1].replace(/\b(?:of|for|till|by)\b/gi, '').trim();
+      const s2 = andMatch[2].trim();
+      if (s1 && s2) {
+        subjects = [s1, s2];
+      }
+    }
+  }
+
+  if (subjects.length === 0) {
+    const titleClean = (title || '')
+      .replace(/^.+Completion:\s*/i, '')
+      .replace(/\s+(?:lab\s*files?|files?|assignments?|reports?|checklist|card)\b/gi, '')
+      .trim();
+
+    if (/\b(?:and|&)\b/i.test(titleClean)) {
+      const parts = titleClean.split(/\s+(?:and|&)\s+/i).map((p) => p.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        subjects = parts;
+      }
+    } else if (titleClean) {
+      subjects = [titleClean];
+    }
+  }
+
+  if (subjects.length > 1) {
+    return subjects.map((s) => ({
+      text: `${formatAcademicSubject(s)} ${itemSuffix}`,
+      done: false,
+    }));
+  }
+
+  // If we already have 1 valid non-dummy item, keep it
+  if (validExisting.length === 1) {
+    return validExisting.map((it) => ({
+      text: it.text.trim().slice(0, 120),
+      done: Boolean(it.done),
+    }));
+  }
+
+  // Single subject deliverable
+  if (subjects.length === 1 && subjects[0]) {
+    const s = formatAcademicSubject(subjects[0]);
+    return [{ text: `${s} ${itemSuffix} Submission`, done: false }];
+  }
+
+  // Default fallback milestone
+  return [{ text: `Complete ${title || 'Task'}`, done: false }];
+}
+
+// ---------------------------------------------------------------------------
 // Main Edge Function Handler
 // ---------------------------------------------------------------------------
 Deno.serve(async (req: Request) => {
@@ -312,7 +668,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // -------------------------------------------------------------------------
-  // ACTION: status -> { connected, last4 }
+  // ACTION: status -> { connected, last4, isTrial, trial }
   // -------------------------------------------------------------------------
   if (action === 'status') {
     const { data, error } = await supabaseAdmin
@@ -326,11 +682,127 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Failed to retrieve key status' }, 500);
     }
 
-    if (!data) {
-      return jsonResponse({ connected: false, last4: null });
+    if (data && data.last4) {
+      return jsonResponse({
+        connected: true,
+        last4: data.last4,
+        isTrial: false,
+        trial: null,
+      });
     }
 
-    return jsonResponse({ connected: true, last4: data.last4 });
+    // Check user_ai_trials for active trial
+    const { data: trialData, error: trialError } = await supabaseAdmin
+      .from('user_ai_trials')
+      .select('trial_active, chat_requests_used, briefing_requests_used')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (trialError) {
+      console.warn('[ai-proxy] Error checking trial status:', trialError);
+    }
+
+    if (trialData && trialData.trial_active) {
+      const chatUsed = trialData.chat_requests_used || 0;
+      const briefingUsed = trialData.briefing_requests_used || 0;
+      const chatRemaining = Math.max(0, MAX_TRIAL_CHAT_REQUESTS - chatUsed);
+      const briefingRemaining = Math.max(0, MAX_TRIAL_BRIEFING_REQUESTS - briefingUsed);
+
+      return jsonResponse({
+        connected: true,
+        last4: null,
+        isTrial: true,
+        trial: {
+          active: true,
+          chatRemaining,
+          chatTotal: MAX_TRIAL_CHAT_REQUESTS,
+          briefingRemaining,
+          briefingTotal: MAX_TRIAL_BRIEFING_REQUESTS,
+          chatUsed,
+          briefingUsed,
+        },
+      });
+    }
+
+    return jsonResponse({ connected: false, last4: null, isTrial: false, trial: null });
+  }
+
+  // -------------------------------------------------------------------------
+  // ACTION: activate_trial -> initialize user_ai_trials
+  // -------------------------------------------------------------------------
+  if (action === 'activate_trial') {
+    // Check if user already has an active personal key
+    const { data: keyRecord } = await supabaseAdmin
+      .from('user_ai_keys')
+      .select('last4')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (keyRecord) {
+      return jsonResponse({
+        connected: true,
+        last4: keyRecord.last4,
+        isTrial: false,
+        trial: null,
+        message: 'Personal key already active',
+      });
+    }
+
+    // Check existing trial
+    const { data: existingTrial } = await supabaseAdmin
+      .from('user_ai_trials')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    let chatUsed = 0;
+    let briefingUsed = 0;
+
+    if (existingTrial) {
+      chatUsed = existingTrial.chat_requests_used || 0;
+      briefingUsed = existingTrial.briefing_requests_used || 0;
+      const { error: updateErr } = await supabaseAdmin
+        .from('user_ai_trials')
+        .update({ trial_active: true, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+      if (updateErr) {
+        console.error('[ai-proxy] Error updating trial status:', updateErr);
+        return jsonResponse({ error: 'Failed to activate trial' }, 500);
+      }
+    } else {
+      const { error: insertErr } = await supabaseAdmin
+        .from('user_ai_trials')
+        .insert({
+          user_id: user.id,
+          trial_active: true,
+          chat_requests_used: 0,
+          briefing_requests_used: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      if (insertErr) {
+        console.error('[ai-proxy] Error inserting trial record:', insertErr);
+        return jsonResponse({ error: 'Failed to activate trial' }, 500);
+      }
+    }
+
+    const chatRemaining = Math.max(0, MAX_TRIAL_CHAT_REQUESTS - chatUsed);
+    const briefingRemaining = Math.max(0, MAX_TRIAL_BRIEFING_REQUESTS - briefingUsed);
+
+    return jsonResponse({
+      connected: true,
+      last4: null,
+      isTrial: true,
+      trial: {
+        active: true,
+        chatRemaining,
+        chatTotal: MAX_TRIAL_CHAT_REQUESTS,
+        briefingRemaining,
+        briefingTotal: MAX_TRIAL_BRIEFING_REQUESTS,
+        chatUsed,
+        briefingUsed,
+      },
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -478,32 +950,87 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Fetch user's encrypted key
+    // Key resolution: Personal key vs. Free Trial key
+    let apiKey: string = '';
+    let isTrialRequest = false;
+    let trialRecord: { chat_requests_used: number; briefing_requests_used: number } | null = null;
+
     const { data: keyRecord, error: keyQueryError } = await supabaseAdmin
       .from('user_ai_keys')
       .select('key_encrypted')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (keyQueryError || !keyRecord?.key_encrypted) {
-      return jsonResponse({ error: 'No Gemini API key configured. Please configure an API key first.' }, 400);
-    }
+    if (keyRecord?.key_encrypted) {
+      // User has configured personal Gemini key
+      const tDecryptStart = Date.now();
+      try {
+        apiKey = await decryptApiKey(keyRecord.key_encrypted, AI_KEY_SECRET);
+      } catch {
+        console.error('[ai-proxy] Decryption error for user:', user.id);
+        return jsonResponse({ error: 'Failed to decrypt API key. Please re-save your key.' }, 500);
+      }
+      tDecrypt = Date.now() - tDecryptStart;
+    } else {
+      // Check trial status
+      const { data: trialData, error: trialQueryError } = await supabaseAdmin
+        .from('user_ai_trials')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-    // Decrypt key server-side
-    let apiKey: string;
-    const tDecryptStart = Date.now();
-    try {
-      apiKey = await decryptApiKey(keyRecord.key_encrypted, AI_KEY_SECRET);
-    } catch {
-      console.error('[ai-proxy] Decryption error for user:', user.id);
-      return jsonResponse({ error: 'Failed to decrypt API key. Please re-save your key.' }, 500);
+      if (trialQueryError) {
+        console.error('[ai-proxy] Error checking trial record:', trialQueryError);
+      }
+
+      if (!trialData || !trialData.trial_active) {
+        return jsonResponse({
+          error: 'No Gemini API key configured. Please activate your free trial or connect an API key.',
+          code: 'NO_KEY_OR_TRIAL',
+        }, 400);
+      }
+
+      const chatUsed = trialData.chat_requests_used || 0;
+      const briefingUsed = trialData.briefing_requests_used || 0;
+
+      if (task === 'daily_briefing') {
+        if (briefingUsed >= MAX_TRIAL_BRIEFING_REQUESTS) {
+          return jsonResponse({
+            error: `Trial limit reached: You have used all ${MAX_TRIAL_BRIEFING_REQUESTS} free Today's Focus updates. Connect your free personal Gemini key from Google AI Studio to continue.`,
+            code: 'TRIAL_EXHAUSTED_BRIEFING',
+          }, 403);
+        }
+      } else {
+        if (chatUsed >= MAX_TRIAL_CHAT_REQUESTS) {
+          return jsonResponse({
+            error: `Trial limit reached: You have used all ${MAX_TRIAL_CHAT_REQUESTS} free AI Chat requests. Connect your free personal Gemini key from Google AI Studio to continue.`,
+            code: 'TRIAL_EXHAUSTED_CHAT',
+          }, 403);
+        }
+      }
+
+      const trialSecretKey = Deno.env.get('TRIAL_GEMINI_API_KEY') || '';
+      if (!trialSecretKey) {
+        console.error('[ai-proxy] Server error: TRIAL_GEMINI_API_KEY environment variable is not configured.');
+        return jsonResponse({
+          error: 'Free trial key is currently being updated on the server. Please try again shortly or connect your personal Gemini key.',
+          code: 'TRIAL_KEY_NOT_CONFIGURED',
+        }, 503);
+      }
+
+      apiKey = trialSecretKey;
+      isTrialRequest = true;
+      trialRecord = {
+        chat_requests_used: chatUsed,
+        briefing_requests_used: briefingUsed,
+      };
     }
-    tDecrypt = Date.now() - tDecryptStart;
 
     // Build task-specific prompts and structured JSON schema
     let parts: Array<Record<string, unknown>> = [];
     let cardsContext: any[] = [];
     let responseSchema: Record<string, unknown> = {};
+    let userMessage = String((payload as any)?.message || (payload as any)?.text || (payload as any)?.input || '').trim();
 
     const userLocalDate = typeof (payload as any)?.localDate === 'string' ? (payload as any).localDate : '';
     const userLocalTime = typeof (payload as any)?.localTime === 'string' ? (payload as any).localTime : '';
@@ -716,7 +1243,7 @@ Provide an appropriate title for the task checklist in "title", the checklist it
         required: ['title', 'type', 'items', 'summary'],
       };
     } else if (task === 'chat') {
-      const userMessage = String(payload?.message || payload?.text || payload?.input || '').trim();
+      userMessage = String(payload?.message || payload?.text || payload?.input || '').trim();
       if (!userMessage && !payload?.image?.data) {
         return jsonResponse({ error: 'Message text or image is required.' }, 400);
       }
@@ -741,36 +1268,64 @@ ${userMessage}
 
 Guidelines:
 1. Always converse naturally, warmly, and helpfully with the user in "message" using Markdown formatting (bolding, lists, bullet points).${userFirstName ? `\n   - The user's first name is "${userFirstName}". You KNOW their name. If the user asks "do you know my name?", who they are, or what their name is, ALWAYS confirm warmly that their name is "${userFirstName}". NEVER say you don't have their name stored or don't know who they are.\n   - When greeting or addressing the user (such as responding to "hi", "hello", "good morning", welcoming them back, or beginning a response), ALWAYS greet them warmly by their first name "${userFirstName}" (e.g. "Hi ${userFirstName}!", "Hello ${userFirstName}!", "Good morning ${userFirstName}!"). NEVER use generic "there" (NEVER say "Hi there", "Hello there", "Hey there", or "Good morning there").` : ''}
+   - When proposing actions ("hasAction": true), keep "message" concise and friendly (1-2 sentences) confirming what was planned using the polished card title (e.g. "I've created your checklist for **Lab File Completion: Fluid & Surveying** with the deadline set for November 17, Anand!"). Do NOT duplicate or re-list all checklist items in "message", because the confirmation sheet already presents every item to the user.
 2. You have FULL ACCESS to inspect, discuss, recommend, create, update, or delete the user's cards.
 3. If the user asks about their trackers, habits, stats, or general questions:
    - Provide a direct, thorough answer in "message", referencing their actual cards by title.
    - Set "hasAction": false, "actions": [].
-4. Proposing actions ("actions" array, max 10 items):
-   - You can propose up to 10 card modifications in the "actions" array (may be empty []).
+4. Semantic Understanding of Card Types:
+   Every tracker card in ProgressShelf belongs to one of three distinct semantic categories:
+   a) "checklist": For discrete items, syllabus chapters, tasks, steps, packing items, or milestones to check off individually.
+      - "cardType": "checklist"
+      - "items": Array of actionable items with text field: [{ "text": "Item / Chapter text", "done": false }].
+      - You MUST extract EVERY individual item, chapter, or subtask into "items". Do NOT truncate to a single item and do NOT put items in noteText.
+      - Title Quality & Natural Academic Formatting:
+        Make titles action-oriented, professional, and academically complete. NEVER output plain, robotic, or raw concatenations like "Fluid and Surveying Lab Files" or "Soil and MOS Lab File".
+        * Multi-subject tasks: Format as "{Task Type} Completion: {Subject 1} & {Subject 2}" (e.g., "Lab File Completion: Fluid & Surveying", "Lab File Completion: Soil & MOS").
+        * Single-subject tasks: Format as "{Task Type} Completion: {Subject}" (e.g., "Lab File Completion: Fluid").
+        * Always preserve and capitalize subject acronyms and abbreviations properly (e.g., MOS, BEE, DSA, CAD, Fluid, Surveying, Soil).
+      - Checklist Items Formatting & Decomposition:
+        * Multi-subject or combined requests: Decompose each subject into its own direct deliverable item in "items":
+          e.g., [{ "text": "Fluid Lab File", "done": false }, { "text": "Surveying Lab File", "done": false }]
+          e.g., [{ "text": "Soil Lab File", "done": false }, { "text": "MOS Lab File", "done": false }]
+        * Single-subject requests: [{ "text": "Fluid Lab File Submission", "done": false }]
+      - If the user asks for a checklist for a general project or task without specific items, decompose it into 2 to 4 logical milestones or subtasks. NEVER leave "items" empty for a checklist, and NEVER output generic placeholders like "Step 1"!
+      - For checklists: NEVER set "unit", "target", or "preset". Leave "unit" as "" or omit it entirely. NEVER write "n/a", "%n/a", or explanations inside "unit"!
+   b) "goal": For quantifiable numeric progress along a scale towards a target number (e.g. pages, hours, kilometers, problems, chapters).
+      - "cardType": "goal"
+      - "target": Target goal number. You MUST calculate or extract the real number from context (e.g. 22 chapters -> target: 22; 150 pages -> target: 150). NEVER leave target blank or set arbitrary numbers.
+      - "unit": Short concise unit name (e.g. 'chapters', 'pages', 'hours', 'problems', 'tasks', 'km', '%').
+      - "preset": 'Time' | 'Pages' | 'Chapters' | 'Lectures' | 'Videos' | 'Problems' | 'Tasks' | 'Books' | 'Custom'.
+      - "currentProgress": Starting number (default 0).
+   c) "note": For informational memos, references, study notes, or reflections without discrete checkboxes or numeric progress.
+      - "cardType": "note"
+      - "noteText": Formatted markdown text.
+5. The Confidence & Ambiguity Protocol (Ask when guessing score is low):
+   - High Confidence: The user explicitly specified the tracker format (e.g. requested a "checklist", "goal", or "note") OR the content clearly maps directly to one format.
+     -> Propose the action with "cardType" set to "checklist", "goal", or "note", and all required fields fully populated.
+   - Low Confidence / Ambiguity: The input could reasonably be tracked in multiple ways (e.g. a list of chapters that could be a checklist of tasks OR a numeric counter 0/22; a recipe that could be a grocery checklist OR a reference note).
+     -> DO NOT GUESS BLINDLY or force an arbitrary card type.
+     -> Set "hasAction": false, "actions": [].
+     -> In "message", ask a warm, natural clarifying question presenting the best options (e.g. "I found 22 math chapters. Would you prefer to track this as a **Checklist** (checking off each chapter individually) or as a **Numeric Goal** (0 of 22 chapters complete)?").
+6. Proposing actions ("actions" array, max 10 items):
    - Allowed action types: "create" | "update" | "delete".
-   - "create": Creating a brand new tracker (goal, checklist, or note). Set action fields: title, cardType, target/items/noteText, deadline (if any), repeat (if habit).
-   - "update": Updating/editing an existing card (editing title, target, items, noteText, or deadline). You MUST provide "cardId" matching an existing card from the user's cards.
+   - "create": Creating a brand new tracker. MUST specify "title", "cardType" ('checklist' | 'goal' | 'note'), and its type-specific fields ("items" for checklist, "target"/"unit" for goal, "noteText" for note).
+   - "update": Updating/editing an existing card. MUST specify "cardId" matching an existing card from the user's cards.
    - "reschedule": Rescheduling is an "update" action specifying "cardId" and a new "deadline".
    - "delete": Deleting an existing card. Specify "cardId" and title.
-   - "plan_day" & "clean_overdue": These are NOT action types. Provide detailed planning advice, breakdown, and prioritization in the conversational Markdown "message", and put concrete proposed card creations or updates (e.g. a daily checklist or rescheduled overdue tasks) into the "actions" array.
-   - Batch / Multi-Card Requests: If the user asks to create multiple cards (e.g. from a pasted list or multi-goal prompt), reschedule multiple overdue cards, or batch-update trackers, return EACH individual action in the "actions" array.
-   - Deadline rules for deadline:
-     * A day starts at midnight 12:00:00 AM (00:00:00) and ends at midnight 11:59:59 PM (23:59:59).
-     * If the user mentions a target date or day without an explicit hour/minute (e.g. "this saturday", "by tomorrow", "by Friday", "by next Monday", "by Nov 20"):
-       Calculate that date and set the deadline to the LAST MOMENT of that date: 11:59:59 PM (23:59:59) in the user's local timezone offset: "YYYY-MM-DDT23:59:59${userTzOffset || ''}". Never set it to 00:00:00, 09:00:00, or 12:00:00.
-     * If the user mentions only a time without a date (e.g. "by 5pm", "by 18:00", "at 9pm"):
-       It refers to TODAY (${userLocalDate || 'current date'}) at that time: "${userLocalDate || 'YYYY-MM-DD'}THH:MM:00${userTzOffset || ''}".
-     * If both date and time are specified (e.g. "tomorrow at 5pm", "this saturday by 3:30 PM"):
-       Set the deadline to that exact date and time with offset: "YYYY-MM-DDTHH:MM:00${userTzOffset || ''}".
-     * If no deadline is specified, set "deadline" to "".
-5. If the user asks to break down or edit a card but did NOT specify which one and it's ambiguous:
-   - Ask them politely in "message" which of their cards they want to focus on (mentioning their card titles), and set "hasAction": false, "actions": [].
-6. For numeric goals/habits ("cardType": "goal"):
-   - "preset": Select the best preset type: 'Time' (for habits/trackers measured in minutes or hours), 'Pages', 'Chapters', 'Lectures', 'Videos', 'Problems', 'Tasks', 'Books', or 'Custom'.
-   - "unit": MUST BE A SHORT CONCISE WORD (e.g. 'mins', 'hours', 'pages', 'chapters', 'tasks', 'problems', '%'). NEVER put internal reasoning, sentences, or thoughts in "unit".
-   - "target": Target goal number (e.g. 30).
-   - "currentProgress": Starting progress amount (default 0).
-7. Provide a concise rationale in explanation for each action if suggested.`;
+   - "plan_day" & "clean_overdue": These are NOT action types. Provide detailed planning advice in Markdown "message", and put concrete proposed card creations or updates into the "actions" array.
+   - Batch / Multi-Card Requests: If user asks for multiple cards, return EACH individual action in "actions".
+7. Strict Deadline Formatting:
+   - If the user mentions ANY deadline, target date, or timeframe in their prompt (e.g. "till 17 nov", "by 17 nov", "due Friday", "by tomorrow", "deadline 17 Nov"):
+     You MUST calculate and populate the "deadline" field in EVERY proposed action object in "actions"! NEVER mention a deadline in "message" while leaving "deadline" empty in "actions"!
+   - A day starts at midnight 12:00:00 AM (00:00:00) and ends at midnight 11:59:59 PM (23:59:59).
+   - If the user mentions a target date or day without an explicit hour/minute (e.g. "this saturday", "by tomorrow", "by Friday", "by next Monday", "by Nov 20", "17 nov", "till 17 nov"):
+     Calculate that date and set the deadline to the LAST MOMENT of that date: 11:59:59 PM (23:59:59) in the user's local timezone offset formatted strictly as ISO-8601: "YYYY-MM-DDT23:59:59${userTzOffset || ''}".
+   - If user mentions only a time without a date: "${userLocalDate || 'YYYY-MM-DD'}THH:MM:00${userTzOffset || ''}".
+   - If both date and time are specified: "YYYY-MM-DDTHH:MM:00${userTzOffset || ''}".
+   - If no deadline is specified, set "deadline" to "".
+   - NEVER format deadline as natural language or include the word "at". Machine fields must be ISO-8601 strings.
+8. Provide a concise explanation in "explanation" for each action.`;
 
       parts = [{ text: promptText }];
       if (payload?.image?.data && payload?.image?.mimeType) {
@@ -792,10 +1347,10 @@ Guidelines:
             items: {
               type: 'OBJECT',
               properties: {
-                type: { type: 'STRING' }, // create | update | delete
+                type: { type: 'STRING', enum: ['create', 'update', 'delete'] },
                 cardId: { type: 'STRING' },
                 title: { type: 'STRING' },
-                cardType: { type: 'STRING' }, // goal | checklist | note
+                cardType: { type: 'STRING', enum: ['goal', 'checklist', 'note'] },
                 preset: { type: 'STRING' },
                 unit: { type: 'STRING' },
                 target: { type: 'NUMBER' },
@@ -817,7 +1372,7 @@ Guidelines:
                 resetTime: { type: 'STRING' },
                 explanation: { type: 'STRING' },
               },
-              required: ['type'],
+              required: ['type', 'title', 'cardType'],
             },
           },
         },
@@ -912,20 +1467,21 @@ Instructions:
 
       geminiAttempts++;
 
-      const maxOutputTokens = task === 'daily_briefing' ? 1024 : 4096;
+      const maxOutputTokens = task === 'daily_briefing' ? 1024 : 8192;
       const generationConfig: Record<string, unknown> = {
         responseMimeType: 'application/json',
         responseSchema,
         maxOutputTokens,
       };
 
-      // Minimize or disable thinking
-      // Gemini 3.x, 4.x, and -latest models use thinkingLevel: "minimal"; 2.5 models use thinkingBudget: 0
+      // Minimize or disable thinking to preserve token budget for large payloads and eliminate latency
+      // Gemini 2.0, 2.5, flash-lite, and latest models use thinkingBudget: 0
+      // Gemini 3.x, 4.x models use thinkingLevel: "minimal"
       if (!omitThinking) {
-        if (activeModel.includes('2.5')) {
-          generationConfig.thinkingConfig = { thinkingBudget: 0 };
-        } else {
+        if (activeModel.includes('3.') || activeModel.includes('4.')) {
           generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+        } else {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
       }
 
@@ -1050,6 +1606,7 @@ Instructions:
           finishReason !== 'STOP';
 
         candidateText = candidate?.content?.parts?.[0]?.text ?? null;
+        console.log('[ai-proxy] Raw candidate response text:', candidateText ? candidateText.slice(0, 600) : 'null');
 
         if (!candidate || isBlocked || !candidateText) {
           console.warn(`[ai-proxy] Empty or blocked candidate. finishReason: ${finishReason}`);
@@ -1312,7 +1869,9 @@ Instructions:
             noteText:
               typeof act.noteText === 'string' && act.noteText.trim() ? act.noteText.slice(0, 500).trim() : undefined,
             deadline:
-              typeof act.deadline === 'string' && act.deadline.trim() ? act.deadline.slice(0, 40).trim() : undefined,
+              typeof act.deadline === 'string' && act.deadline.trim()
+                ? (parseDatePatternToIso(act.deadline, currentDateStr, userTzOffset) || act.deadline.slice(0, 40).trim())
+                : undefined,
             isRecurring: typeof act.isRecurring === 'boolean' ? act.isRecurring : undefined,
             resetTime:
               typeof act.resetTime === 'string' && act.resetTime.trim() ? act.resetTime.slice(0, 10).trim() : undefined,
@@ -1324,43 +1883,123 @@ Instructions:
           continue;
         }
 
-        // For create: apply defaults (empty title, cardType inference, target 100, currentProgress 0, items [{text:'Step 1'}])
-        const safeTitle =
+        // For create: intelligent cardType, target extraction, and deadline normalization
+        const rawTitleCandidate =
           typeof act.title === 'string' ? act.title.slice(0, 120).trim() : '';
+        const safeTitle = formatAcademicTitle(rawTitleCandidate, userMessage);
         const safeNoteText =
           typeof act.noteText === 'string' ? act.noteText.slice(0, 500).trim() : '';
         const safeExplanation =
           typeof act.explanation === 'string'
             ? act.explanation.slice(0, 300).trim()
             : '';
-        const safeUnit =
+        const rawUnit =
           typeof act.unit === 'string' ? act.unit.slice(0, 20).trim() : '';
-        const rawCardType = String(act.cardType || '').toLowerCase().trim();
-        const safeCardType = ['goal', 'checklist', 'note'].includes(rawCardType)
-          ? rawCardType
-          : (Array.isArray(act.items) ? 'checklist' : (act.noteText ? 'note' : 'goal'));
 
-        // Finite numbers check
-        const safeTarget =
-          typeof act.target === 'number' && Number.isFinite(act.target)
-            ? act.target
-            : (safeCardType === 'goal' ? 100 : undefined);
-        const safeCurrent =
-          typeof act.currentProgress === 'number' && Number.isFinite(act.currentProgress)
-            ? act.currentProgress
-            : (safeCardType === 'goal' ? 0 : undefined);
-
-        // Checklist items
-        let safeItems: Array<{ text: string; done: boolean }> | undefined = undefined;
+        // Checklist items extraction (support up to 50 items for syllabi / large lists)
+        let rawItems: Array<{ text: string; done: boolean }> | undefined = undefined;
         if (Array.isArray(act.items)) {
-          safeItems = act.items
+          rawItems = act.items
             .filter((it) => it && typeof it === 'object')
             .map((it: { text?: unknown; done?: unknown }) => ({
               text: typeof it.text === 'string' ? it.text.slice(0, 120).trim() : '',
               done: Boolean(it.done),
             }))
             .filter((it) => it.text.length > 0)
-            .slice(0, 20);
+            .slice(0, 50);
+        }
+
+        // Intelligent Card Type inference
+        const rawCardType = String(act.cardType || '').toLowerCase().trim();
+        let safeCardType: 'goal' | 'checklist' | 'note' = 'goal';
+
+        // High priority: user explicitly requested checklist format or AI reply confirmed checklist
+        if (
+          /\b(?:checklist|check\s*list|in\s+check\s*listype)\b/i.test(userMessage) ||
+          /\b(?:checklist|check\s*list)\b/i.test(String(pr.message || ''))
+        ) {
+          safeCardType = 'checklist';
+        } else if (['goal', 'checklist', 'note'].includes(rawCardType)) {
+          safeCardType = rawCardType as 'goal' | 'checklist' | 'note';
+        } else if (
+          /\b(?:todo|to-do|tasks?)\b/i.test(userMessage) ||
+          /\b(?:checklist|check\s*list|todo|task)\b/i.test(safeTitle) ||
+          (rawItems && rawItems.length > 0)
+        ) {
+          safeCardType = 'checklist';
+        } else if (safeNoteText && !rawUnit && typeof act.target !== 'number') {
+          safeCardType = 'note';
+        } else {
+          safeCardType = 'goal';
+        }
+
+        // If card is a checklist, ensure items are populated; if rawItems is empty but noteText has lines, extract lines
+        let safeItems: Array<{ text: string; done: boolean }> | undefined = undefined;
+        if (safeCardType === 'checklist') {
+          if ((!rawItems || rawItems.length === 0) && safeNoteText) {
+            const lines = safeNoteText
+              .split(/\r?\n/)
+              .map((l) => l.replace(/^[-*•\d.)\s]+/, '').trim())
+              .filter((l) => l.length > 0);
+            if (lines.length > 0) {
+              rawItems = lines.slice(0, 50).map((l) => ({ text: l.slice(0, 120), done: false }));
+            }
+          }
+
+          safeItems = extractDeliverableItems(rawItems, safeTitle, userMessage);
+        }
+
+        // Sanitize unit
+        let safeUnit = '';
+        if (safeCardType === 'goal' && typeof act.unit === 'string') {
+          let u = act.unit.trim().slice(0, 20);
+          if (u.includes('n/a') || u.includes('%n/a') || u.includes('/') || u.length > 15) {
+            u = '%';
+          }
+          safeUnit = u;
+        }
+
+        // Finite numbers check (NO arbitrary 100% blind default!)
+        let safeTarget: number | undefined = undefined;
+        let safeCurrent: number | undefined = undefined;
+        if (safeCardType === 'goal') {
+          if (typeof act.target === 'number' && Number.isFinite(act.target)) {
+            safeTarget = act.target;
+          } else if (safeItems && safeItems.length > 0) {
+            safeTarget = safeItems.length;
+          } else {
+            safeTarget = 100;
+          }
+          safeCurrent =
+            typeof act.currentProgress === 'number' && Number.isFinite(act.currentProgress)
+              ? act.currentProgress
+              : 0;
+        } else if (safeCardType === 'checklist') {
+          safeTarget = safeItems ? safeItems.length : 1;
+          safeCurrent = 0;
+        }
+
+        // Deadline normalization & extraction
+        let safeDeadline: string | undefined = undefined;
+        if (typeof act.deadline === 'string' && act.deadline.trim()) {
+          safeDeadline =
+            parseDatePatternToIso(act.deadline, currentDateStr, userTzOffset) ||
+            act.deadline.slice(0, 40).trim();
+        }
+
+        // Proactive extraction: if model omitted deadline from action, extract from AI message or user message
+        if (!safeDeadline) {
+          const extractedFromAiReply = parseDatePatternToIso(
+            String(pr.message || ''),
+            currentDateStr,
+            userTzOffset
+          );
+          const extractedFromUserMsg = parseDatePatternToIso(
+            userMessage,
+            currentDateStr,
+            userTzOffset
+          );
+          safeDeadline = extractedFromAiReply || extractedFromUserMsg || undefined;
         }
 
         const validItem: Record<string, unknown> = {
@@ -1368,22 +2007,29 @@ Instructions:
           cardId: undefined,
           title: safeTitle,
           cardType: safeCardType,
-          preset: typeof act.preset === 'string' && act.preset.trim() ? act.preset.slice(0, 30).trim() : undefined,
-          unit: safeUnit,
-          target: safeTarget,
-          currentProgress: safeCurrent,
-          items:
-            safeItems && safeItems.length > 0
-              ? safeItems
-              : (safeCardType === 'checklist' ? [{ text: 'Step 1', done: false }] : undefined),
-          noteText: safeNoteText,
-          deadline:
-            typeof act.deadline === 'string' && act.deadline.trim() ? act.deadline.slice(0, 40).trim() : undefined,
+          preset: safeCardType === 'goal' && typeof act.preset === 'string' && act.preset.trim() ? act.preset.slice(0, 30).trim() : undefined,
+          unit: safeCardType === 'goal' ? safeUnit : undefined,
+          target: safeCardType === 'goal' ? safeTarget : undefined,
+          currentProgress: safeCardType === 'goal' ? safeCurrent : undefined,
+          items: safeCardType === 'checklist' ? safeItems : undefined,
+          noteText: safeCardType === 'note' ? safeNoteText : undefined,
+          deadline: safeDeadline,
           isRecurring: Boolean(act.isRecurring),
           resetTime:
             typeof act.resetTime === 'string' && act.resetTime.trim() ? act.resetTime.slice(0, 10).trim() : undefined,
           explanation: safeExplanation,
         };
+
+        // Smoothly update conversational message to reference polished title
+        if (
+          typeof pr.message === 'string' &&
+          safeTitle &&
+          rawTitleCandidate &&
+          rawTitleCandidate.toLowerCase() !== safeTitle.toLowerCase()
+        ) {
+          const escRegex = rawTitleCandidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          pr.message = pr.message.replace(new RegExp(`\\b${escRegex}\\b`, 'gi'), `**${safeTitle}**`);
+        }
 
         validatedActions.push(validItem);
       }
@@ -1405,6 +2051,48 @@ Instructions:
         },
         { onConflict: 'user_id,window_start' }
       );
+
+    // If request was executed under free trial, increment usage counter in user_ai_trials
+    if (isTrialRequest && trialRecord) {
+      const isBriefing = task === 'daily_briefing';
+      const newChatUsed = isBriefing ? trialRecord.chat_requests_used : trialRecord.chat_requests_used + 1;
+      const newBriefingUsed = isBriefing ? trialRecord.briefing_requests_used + 1 : trialRecord.briefing_requests_used;
+
+      await supabaseAdmin
+        .from('user_ai_trials')
+        .update({
+          chat_requests_used: newChatUsed,
+          briefing_requests_used: newBriefingUsed,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+
+      // Attach trial status to response object if it is an object
+      if (parsedResult && typeof parsedResult === 'object') {
+        (parsedResult as any)._trial = {
+          isTrial: true,
+          chatRemaining: Math.max(0, MAX_TRIAL_CHAT_REQUESTS - newChatUsed),
+          chatTotal: MAX_TRIAL_CHAT_REQUESTS,
+          briefingRemaining: Math.max(0, MAX_TRIAL_BRIEFING_REQUESTS - newBriefingUsed),
+          briefingTotal: MAX_TRIAL_BRIEFING_REQUESTS,
+          chatUsed: newChatUsed,
+          briefingUsed: newBriefingUsed,
+        };
+      }
+    }
+
+    // Format title and deliverables for create_tracker
+    if (task === 'create_tracker' && parsedResult && typeof parsedResult === 'object') {
+      const pr = parsedResult as Record<string, unknown>;
+      const userInput = String(payload?.input || payload?.text || payload?.prompt || '');
+      if (typeof pr.title === 'string') {
+        pr.title = formatAcademicTitle(pr.title, userInput);
+      }
+      if (pr.type === 'checklist') {
+        const rawItems = Array.isArray(pr.items) ? (pr.items as Array<{ text: string; done: boolean }>) : [];
+        pr.items = extractDeliverableItems(rawItems, String(pr.title || ''), userInput);
+      }
+    }
 
     return jsonResponse(parsedResult, 200);
   }

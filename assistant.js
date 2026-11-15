@@ -5,14 +5,35 @@
  */
 
 import { isGuestMode, exitGuestMode, loginWithGoogle } from "./auth.js?v=3.3";
-import { aiStatus, aiSaveKey, aiRemoveKey, aiGenerate } from "./ai.js?v=4.0";
+import { aiStatus, aiSaveKey, aiRemoveKey, aiGenerate, aiActivateTrial } from "./ai.js?v=4.0";
 
 export let isAssistantPanelOpen = false;
 export function isAssistantOpen() {
   return isAssistantPanelOpen;
 }
 
-let currentAiStatus = null;
+export const STORAGE_KEY_CACHED_AI_STATUS = 'ps_cached_ai_status';
+
+export function getCachedAiStatus() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CACHED_AI_STATUS);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function setCachedAiStatus(status) {
+  try {
+    if (status) {
+      localStorage.setItem(STORAGE_KEY_CACHED_AI_STATUS, JSON.stringify(status));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_CACHED_AI_STATUS);
+    }
+  } catch (_) {}
+}
+
+let currentAiStatus = getCachedAiStatus();
 let isGenerating = false;
 let attachedImage = null; // { name: string, mimeType: string, data: string, dataUrl: string } | null
 let threadHtml = ''; // Preserves conversation history while panel is open
@@ -128,8 +149,19 @@ function formatRelativeTime(ts) {
 
 export function normalizeAiDeadline(deadlineStr) {
   if (!deadlineStr || typeof deadlineStr !== 'string') return null;
-  const trimmed = deadlineStr.trim();
+  let trimmed = deadlineStr.trim();
   if (!trimmed) return null;
+
+  // Clean conversational English phrasing like ", at ", " at ", or prefixes like "till", "by", "due"
+  // e.g. "till 17 nov", "by 17 nov", "November 17, 2026, at 11:59:59 PM"
+  trimmed = trimmed
+    .replace(/^(?:till|by|due|before|on|deadline(?:\s+is|\s+set\s+for)?)\s+/i, '')
+    .replace(/,\s*at\s+/i, ' ')
+    .replace(/\s+at\s+/i, ' ')
+    .trim();
+
+  // Strip ordinal suffixes: 17th -> 17, 1st -> 1, 2nd -> 2, 3rd -> 3
+  trimmed = trimmed.replace(/\b(\d{1,2})(?:st|nd|rd|th)\b/gi, '$1');
 
   // Case A: Pure date string "YYYY-MM-DD" -> defaults to 11:59:59 PM (end of that date)
   const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -158,13 +190,40 @@ export function normalizeAiDeadline(deadlineStr) {
     return localD.getTime();
   }
 
-  // Case D: Standard ISO string or timestamp with specific time
+  // Case D: Month & Day without year (e.g. "17 nov", "nov 17", "17 november") -> current year at 11:59:59 PM
+  const monthDayMatch = trimmed.match(/^(\d{1,2})\s+([a-zA-Z]+)$/) || trimmed.match(/^([a-zA-Z]+)\s+(\d{1,2})$/);
+  if (monthDayMatch) {
+    const currentYear = new Date().getFullYear();
+    const withYear = `${trimmed} ${currentYear} 23:59:59`;
+    const parsedWithYear = new Date(withYear).getTime();
+    if (!isNaN(parsedWithYear) && parsedWithYear > 0) {
+      return parsedWithYear;
+    }
+  }
+
+  // Case E: Standard ISO string, RFC2822, or timestamp with specific time
   const parsed = new Date(trimmed).getTime();
   if (!isNaN(parsed)) {
     return parsed;
   }
 
   return null;
+}
+
+export function getActiveUserId() {
+  try {
+    if (typeof deps.getUserId === 'function') {
+      const uid = deps.getUserId();
+      if (uid) return uid;
+    }
+  } catch (_) {}
+  try {
+    const raw = localStorage.getItem('ps_cached_user');
+    const u = raw ? JSON.parse(raw) : null;
+    return u?.uid || u?.id || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 let deps = {
@@ -176,7 +235,7 @@ let deps = {
   handleEditBarFromAi: async () => {},
   handleDeleteBarFromAi: async () => {},
   getLiveBars: () => [],
-  getUserId: () => null,
+  getUserId: () => getActiveUserId(),
   getUserFirstName: () => '',
   updateUserSettings: async () => {},
   getUserSettings: async () => ({}),
@@ -200,6 +259,19 @@ function getActiveUserFirstName() {
     const cleaned = clean(fn);
     if (cleaned) return cleaned;
   }
+  try {
+    const raw = localStorage.getItem('ps_cached_user');
+    const u = raw ? JSON.parse(raw) : null;
+    if (u) {
+      const candidate =
+        clean(u.displayName) ||
+        clean(u.user_metadata?.full_name) ||
+        clean(u.user_metadata?.name) ||
+        clean(u.user_metadata?.first_name) ||
+        clean(u.email);
+      if (candidate) return candidate;
+    }
+  } catch (_) {}
   const profileEl = document.getElementById('profile-name');
   if (profileEl && profileEl.textContent) {
     const fromEl = clean(profileEl.textContent);
@@ -556,11 +628,68 @@ function getBriefingBadgeClass(badge) {
   return 'badge-default';
 }
 
+function renderFocusTrialMeterHtml(trial) {
+  if (!trial) return '';
+  const remaining = typeof trial.briefingRemaining === 'number' ? trial.briefingRemaining : 50;
+  const total = trial.briefingTotal || 50;
+  const percent = Math.max(0, Math.min(100, (remaining / total) * 100));
+  const isZero = remaining <= 0;
+
+  return `
+    <div class="home-briefing-trial-meter" title="${remaining} of ${total} free Today's Focus updates remaining">
+      <div class="home-briefing-trial-row">
+        <span class="home-briefing-trial-label"><span class="trial-sparkle">✦</span> Free Trial</span>
+        <span class="briefing-trial-count">${remaining}/${total} updates left</span>
+      </div>
+      <div class="home-briefing-trial-track">
+        <div class="briefing-trial-fill" style="width: ${percent}%;"></div>
+      </div>
+      ${isZero ? `
+        <div class="briefing-trial-exhausted-note">
+          <span>Focus trial completed (50/50).</span>
+          <button type="button" class="btn-trial-upgrade-link" onclick="event.stopPropagation(); if (typeof window.openAiSettingsModal === 'function') window.openAiSettingsModal();">Connect Gemini Key</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+export function updateTrialMetersInDom() {
+  if (!currentAiStatus || !currentAiStatus.isTrial || !currentAiStatus.trial) return;
+  const trial = currentAiStatus.trial;
+  const chatRemaining = typeof trial.chatRemaining === 'number' ? trial.chatRemaining : 25;
+  const chatTotal = trial.chatTotal || 25;
+  const chatPercent = Math.max(0, Math.min(100, (chatRemaining / chatTotal) * 100));
+
+  const briefingRemaining = typeof trial.briefingRemaining === 'number' ? trial.briefingRemaining : 50;
+  const briefingTotal = trial.briefingTotal || 50;
+  const briefingPercent = Math.max(0, Math.min(100, (briefingRemaining / briefingTotal) * 100));
+
+  // Update in Chat Drawer
+  const chatMeterVal = document.getElementById('assistant-chat-trial-meter-val');
+  const chatMeterFill = document.getElementById('assistant-chat-trial-meter-fill');
+  if (chatMeterVal) chatMeterVal.textContent = `${chatRemaining} / ${chatTotal} left`;
+  if (chatMeterFill) chatMeterFill.style.width = `${chatPercent}%`;
+
+  // Update in Today's Focus Card (both Home and Drawer)
+  document.querySelectorAll('.briefing-trial-count').forEach(el => {
+    el.textContent = `${briefingRemaining}/${briefingTotal} updates left`;
+  });
+  document.querySelectorAll('.briefing-trial-fill').forEach(el => {
+    el.style.width = `${briefingPercent}%`;
+  });
+
+  updateAssistantControlsState();
+}
+
 function renderBriefingFullCardMarkup(data, updatedAt) {
   const timeStr = formatBriefingTime(updatedAt);
   const headline = getPersonalizedGreetingHeadline(data.headline);
   const priorities = Array.isArray(data.priorities) ? data.priorities : [];
   const pills = Array.isArray(data.actionPills) ? data.actionPills : [];
+  const trialMeterHtml = currentAiStatus && currentAiStatus.isTrial && currentAiStatus.trial
+    ? renderFocusTrialMeterHtml(currentAiStatus.trial)
+    : '';
 
   let prioritiesHtml = '';
   if (priorities.length > 0) {
@@ -613,6 +742,7 @@ function renderBriefingFullCardMarkup(data, updatedAt) {
           </svg>
         </button>
       </div>
+      ${trialMeterHtml}
       <p class="briefing-headline">${escapeHtml(headline)}</p>
       ${prioritiesHtml}
       ${pillsHtml}
@@ -799,6 +929,17 @@ export async function fetchAndRenderDailyBriefing(forceRefresh = false) {
       userFirstName: activeFirstName || undefined
     });
 
+    if (result && result._trial) {
+      if (currentAiStatus && currentAiStatus.isTrial) {
+        currentAiStatus.trial = {
+          ...currentAiStatus.trial,
+          ...result._trial,
+        };
+        setCachedAiStatus(currentAiStatus);
+        updateTrialMetersInDom();
+      }
+    }
+
     if (result && (result.headline || Array.isArray(result.priorities))) {
       const cacheObj = {
         date: getTodayLocalDateStr(),
@@ -869,9 +1010,11 @@ export function getHomeBriefingCardElement() {
   }
 
   // -------------------------------------------------------------
-  // STATE 1: Guest User (not signed in / guest mode)
+  // STATE 1: Guest User (explicit guest mode)
   // -------------------------------------------------------------
-  const isGuest = isGuestMode() || !deps.getUserId || !deps.getUserId();
+  const isGuest = isGuestMode();
+  const activeUserId = getActiveUserId();
+
   if (isGuest) {
     if (isGuestAiCardDismissed()) {
       if (el.parentNode) el.remove();
@@ -934,9 +1077,30 @@ export function getHomeBriefingCardElement() {
   }
 
   // -------------------------------------------------------------
-  // STATE 2: Logged-in user without Gemini API key
+  // If NOT guest mode, but activeUserId is still null, auth is in-flight:
+  // Render neutral skeleton placeholder (NEVER show "Sign in with Google")
   // -------------------------------------------------------------
-  const isAiConnected = !!(currentAiStatus && currentAiStatus.connected);
+  if (!activeUserId) {
+    el.className = 'card-progress card-home-briefing card-home-briefing-skeleton';
+    el.innerHTML = renderBriefingSkeletonMarkup();
+    return el;
+  }
+
+  // -------------------------------------------------------------
+  // Logged-in user: Check AI connection status
+  // -------------------------------------------------------------
+  if (currentAiStatus === null) {
+    // AI status is being verified asynchronously from database/edge function
+    el.className = 'card-progress card-home-briefing card-home-briefing-skeleton';
+    el.innerHTML = renderBriefingSkeletonMarkup();
+    return el;
+  }
+
+  const isAiConnected = Boolean(currentAiStatus && currentAiStatus.connected);
+
+  // -------------------------------------------------------------
+  // STATE 2: Logged-in user without Gemini API key or active trial
+  // -------------------------------------------------------------
   if (!isAiConnected) {
     if (isUnconfiguredAiCardDismissed()) {
       if (el.parentNode) el.remove();
@@ -946,11 +1110,11 @@ export function getHomeBriefingCardElement() {
     el.className = 'card-progress card-home-briefing card-home-ai-unconfigured';
     el.innerHTML = `
       <div class="home-briefing-header">
-        <div class="home-briefing-title-wrap" role="button" tabindex="0" title="Connect Gemini Key">
+        <div class="home-briefing-title-wrap" role="button" tabindex="0" title="Activate Free Trial">
           <svg class="briefing-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
           </svg>
-          <span class="briefing-title">Activate AI Companion</span>
+          <span class="briefing-title">Try AI Free Trial</span>
         </div>
         <button type="button" class="btn-home-briefing-hide" title="Dismiss card" aria-label="Dismiss card">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -959,10 +1123,14 @@ export function getHomeBriefingCardElement() {
           </svg>
         </button>
       </div>
-      <p class="briefing-headline">Connect your free Gemini API key to activate daily focus breakdowns, habit tracking, and goal planning.</p>
+      <p class="briefing-headline">Get 25 free AI chat requests and 50 daily focus breakdowns with zero setup.</p>
       <div class="home-briefing-cta-footer">
-        <button type="button" class="btn btn-primary btn-sm btn-home-connect-key">
-          <span>Connect Gemini Key</span>
+        <button type="button" class="btn btn-primary btn-sm btn-home-activate-trial">
+          <svg class="briefing-sparkle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          <span>Start Zero-Setup Free Trial</span>
+        </button>
+        <button type="button" class="btn-home-link-connect-key" title="Connect your own Gemini API key">
+          <span>Or connect custom key</span>
         </button>
       </div>
     `;
@@ -980,7 +1148,29 @@ export function getHomeBriefingCardElement() {
       };
     }
 
-    const connectBtn = el.querySelector('.btn-home-connect-key');
+    const trialBtn = el.querySelector('.btn-home-activate-trial');
+    if (trialBtn) {
+      trialBtn.onclick = async (e) => {
+        e.stopPropagation();
+        try {
+          trialBtn.disabled = true;
+          trialBtn.innerHTML = '<span>Activating trial...</span>';
+          const newStatus = await aiActivateTrial();
+          currentAiStatus = newStatus;
+          setCachedAiStatus(newStatus);
+          showToast('Free trial activated! 25 chats and 50 focus updates unlocked.', 'success');
+          renderAssistantState(newStatus);
+          getHomeBriefingCardElement();
+          fetchAndRenderDailyBriefing(true);
+        } catch (err) {
+          showToast(err.message || 'Failed to activate free trial', 'error');
+          trialBtn.disabled = false;
+          trialBtn.innerHTML = '<span>Start Zero-Setup Free Trial</span>';
+        }
+      };
+    }
+
+    const connectBtn = el.querySelector('.btn-home-link-connect-key');
     const titleWrap = el.querySelector('.home-briefing-title-wrap');
     const handleConnect = (e) => {
       e.stopPropagation();
@@ -1002,30 +1192,29 @@ export function getHomeBriefingCardElement() {
 
   const cached = getCachedBriefing();
   const currentBars = typeof deps.getLiveBars === 'function' ? deps.getLiveBars() : [];
+  const isValid = cached && isBriefingValid(cached, currentBars);
 
-  if (!cached || !isBriefingValid(cached, currentBars)) {
-    if (!isFetchingBriefing) {
-      const hasLoaded = typeof deps.hasInitialBarsLoaded !== 'function' || deps.hasInitialBarsLoaded();
-      if (hasLoaded) {
-        setTimeout(() => {
-          fetchAndRenderDailyBriefing(false);
-        }, 50);
-      }
+  // If invalid or outdated, trigger silent background revalidation
+  if (!isValid && !isFetchingBriefing) {
+    const hasLoaded = typeof deps.hasInitialBarsLoaded !== 'function' || deps.hasInitialBarsLoaded();
+    if (hasLoaded) {
+      setTimeout(() => {
+        fetchAndRenderDailyBriefing(false);
+      }, 50);
     }
   }
 
-  if (isFetchingBriefing && (!cached || !cached.data)) {
+  // If we have no cached data at all, render skeleton while first briefing is generated
+  if (!cached || !cached.data) {
     el.className = 'card-progress card-home-briefing card-home-briefing-skeleton';
     el.innerHTML = renderBriefingSkeletonMarkup();
     return el;
   }
 
-  const data = cached && cached.data ? cached.data : {
-    headline: "Keep track of your active goals and daily habits right here.",
-    priorities: [],
-    actionPills: ["Plan my day", "Clean up overdue", "Break down a goal"]
-  };
+  // Seamless Stale-While-Revalidate: render cached briefing immediately
+  const data = cached.data;
   const timeStr = formatBriefingTime(cached ? cached.updatedAt : null);
+  const isRefreshing = isFetchingBriefing || !isValid;
 
   el.className = 'card-progress card-home-briefing card-home-briefing-active';
   const priorities = Array.isArray(data.priorities) ? data.priorities : [];
@@ -1088,7 +1277,7 @@ export function getHomeBriefingCardElement() {
         </span>
       </div>
       <div class="home-briefing-actions">
-        <button type="button" class="btn-briefing-refresh ${isFetchingBriefing ? 'spinning' : ''}" title="Refresh Today's Focus">
+        <button type="button" class="btn-briefing-refresh ${isRefreshing ? 'spinning' : ''}" title="Refresh Today's Focus">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
@@ -1101,6 +1290,7 @@ export function getHomeBriefingCardElement() {
         </button>
       </div>
     </div>
+    ${currentAiStatus && currentAiStatus.isTrial && currentAiStatus.trial ? renderFocusTrialMeterHtml(currentAiStatus.trial) : ''}
     <div class="home-briefing-body">
       <div class="home-briefing-main-col">
         <p class="briefing-headline">${escapeHtml(getPersonalizedGreetingHeadline(data.headline))}</p>
@@ -1159,6 +1349,14 @@ export function getHomeBriefingCardElement() {
  */
 function updateAssistantControlsState() {
   const isConnected = !!(currentAiStatus && currentAiStatus.connected && !isGuestMode());
+  const isTrialExhausted = Boolean(
+    currentAiStatus &&
+    currentAiStatus.isTrial &&
+    currentAiStatus.trial &&
+    currentAiStatus.trial.chatRemaining <= 0
+  );
+  const canUseChat = isConnected && !isTrialExhausted;
+
   const chipPlan = document.getElementById('chip-plan-day');
   const chipClean = document.getElementById('chip-cleanup-overdue');
   const chipBreakdown = document.getElementById('chip-breakdown-goal');
@@ -1171,18 +1369,30 @@ function updateAssistantControlsState() {
   const hasAttachment = attachedImage !== null;
   const hasCardContext = activeCardContext !== null;
 
-  if (chipPlan) chipPlan.disabled = !isConnected || isGenerating;
-  if (chipClean) chipClean.disabled = !isConnected || isGenerating;
-  if (chipBreakdown) chipBreakdown.disabled = !isConnected || isGenerating;
-  if (chipMention) chipMention.disabled = !isConnected || isGenerating;
-  if (btnAttach) btnAttach.disabled = !isConnected || isGenerating;
+  if (chipPlan) chipPlan.disabled = !canUseChat || isGenerating;
+  if (chipClean) chipClean.disabled = !canUseChat || isGenerating;
+  if (chipBreakdown) chipBreakdown.disabled = !canUseChat || isGenerating;
+  if (chipMention) chipMention.disabled = !canUseChat || isGenerating;
+  if (btnAttach) btnAttach.disabled = !canUseChat || isGenerating;
   if (btnSend) {
-    btnSend.disabled = !isConnected || isGenerating || (!hasInput && !hasAttachment && !hasCardContext);
+    btnSend.disabled = !canUseChat || isGenerating || (!hasInput && !hasAttachment && !hasCardContext);
+  }
+  if (textarea) {
+    if (isTrialExhausted) {
+      textarea.disabled = true;
+      textarea.placeholder = "Trial completed (25/25 chats). Connect your Gemini key to continue.";
+    } else {
+      textarea.disabled = false;
+      if (textarea.placeholder.startsWith("Trial completed")) {
+        textarea.placeholder = "Ask anything about your goals or habits...";
+      }
+    }
   }
 }
 
 export async function renderAssistantState(status) {
   currentAiStatus = status;
+  setCachedAiStatus(status);
   const container = document.getElementById('assistant-content');
   if (!container) return;
 
@@ -1226,10 +1436,17 @@ export async function renderAssistantState(status) {
     container.innerHTML = `
       <div class="assistant-state-panel assistant-connected-view">
         <div class="assistant-connected-header">
-          <div class="assistant-connected-badge">
-            <span class="assistant-connected-dot"></span>
-            <span>Connected</span>
-          </div>
+          ${status.isTrial ? `
+            <div class="assistant-trial-badge" title="Zero-Setup AI Free Trial Active">
+              <span class="assistant-trial-sparkle">✦</span>
+              <span>Free Trial</span>
+            </div>
+          ` : `
+            <div class="assistant-connected-badge">
+              <span class="assistant-connected-dot"></span>
+              <span>Connected</span>
+            </div>
+          `}
           <button type="button" id="btn-assistant-open-settings" class="assistant-settings-link-btn" title="Open AI Settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
@@ -1238,6 +1455,24 @@ export async function renderAssistantState(status) {
             <span>Settings</span>
           </button>
         </div>
+
+        ${status.isTrial && status.trial ? `
+          <div class="assistant-chat-trial-meter-card" id="assistant-chat-trial-meter">
+            <div class="assistant-chat-trial-row">
+              <span class="assistant-chat-trial-label"><span class="trial-sparkle">✦</span> AI Chat Quota</span>
+              <span class="assistant-chat-trial-val" id="assistant-chat-trial-meter-val">${status.trial.chatRemaining} / ${status.trial.chatTotal || 25} left</span>
+            </div>
+            <div class="assistant-chat-trial-track">
+              <div class="assistant-chat-trial-fill" id="assistant-chat-trial-meter-fill" style="width: ${Math.max(0, Math.min(100, (status.trial.chatRemaining / (status.trial.chatTotal || 25)) * 100))}%;"></div>
+            </div>
+            ${status.trial.chatRemaining <= 0 ? `
+              <div class="assistant-chat-trial-exhausted-box">
+                <p>You've used all 25 trial AI chat requests. Connect your free personal Gemini key to continue unlimited chatting.</p>
+                <button type="button" class="btn btn-primary btn-xs btn-open-settings-from-meter">Set Up API Key</button>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
 
         <div id="assistant-daily-briefing-wrap" class="assistant-daily-briefing-wrap"></div>
 
@@ -1252,6 +1487,13 @@ export async function renderAssistantState(status) {
       });
     }
 
+    const meterUpgradeBtn = container.querySelector('.btn-open-settings-from-meter');
+    if (meterUpgradeBtn) {
+      meterUpgradeBtn.addEventListener('click', () => {
+        openAiSettingsModal();
+      });
+    }
+
     fetchAndRenderDailyBriefing(false);
     attachThreadCardListeners();
     return;
@@ -1261,14 +1503,26 @@ export async function renderAssistantState(status) {
   updateAssistantControlsState();
   container.innerHTML = `
     <div class="assistant-state-panel assistant-connect-card">
-      <div class="assistant-connect-header">
-        <div class="assistant-connect-icon-box">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-          </svg>
+      <div class="assistant-trial-cta-banner">
+        <div class="assistant-trial-cta-header">
+          <svg class="briefing-sparkle-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          <h3 style="margin: 0; font-size: 1.05rem;">Start Zero-Setup Free Trial</h3>
         </div>
-        <h3 class="assistant-connect-title">Connect Gemini</h3>
-        <p class="assistant-connect-desc">Enter your Google Gemini API key to activate the assistant.</p>
+        <p style="margin: 8px 0 12px; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;">
+          Get 25 free AI chat requests and 50 daily focus breakdowns with one click — no API key needed.
+        </p>
+        <button type="button" id="btn-assistant-activate-trial" class="btn btn-primary assistant-cta-btn" style="width: 100%;">
+          <span>✦ Activate Free Trial</span>
+        </button>
+      </div>
+
+      <div class="assistant-connect-divider">
+        <span>OR CONNECT YOUR OWN KEY</span>
+      </div>
+
+      <div class="assistant-connect-header" style="margin-top: 4px;">
+        <h4 class="assistant-connect-title" style="margin-top: 0; font-size: 0.95rem;">Use Personal Gemini Key</h4>
+        <p class="assistant-connect-desc">Enter your Google Gemini API key to activate unlimited access.</p>
       </div>
 
       <form id="assistant-connect-form" class="assistant-connect-form">
@@ -1313,6 +1567,28 @@ export async function renderAssistantState(status) {
     });
   }
 
+  // 1-Click Zero-Setup Free Trial activation
+  const trialActivateBtn = document.getElementById('btn-assistant-activate-trial');
+  if (trialActivateBtn) {
+    trialActivateBtn.addEventListener('click', async () => {
+      try {
+        trialActivateBtn.disabled = true;
+        trialActivateBtn.innerHTML = '<span>Activating trial...</span>';
+        const newStatus = await aiActivateTrial();
+        currentAiStatus = newStatus;
+        setCachedAiStatus(newStatus);
+        showToast('Free trial activated! 25 chats and 50 focus updates unlocked.', 'success');
+        renderAssistantState(newStatus);
+        getHomeBriefingCardElement();
+        fetchAndRenderDailyBriefing(true);
+      } catch (err) {
+        showToast(err.message || 'Failed to activate trial', 'error');
+        trialActivateBtn.disabled = false;
+        trialActivateBtn.innerHTML = '<span>✦ Activate Free Trial</span>';
+      }
+    });
+  }
+
   // Connect form submission
   const form = document.getElementById('assistant-connect-form');
   const errorBox = document.getElementById('assistant-connect-error');
@@ -1339,7 +1615,11 @@ export async function renderAssistantState(status) {
       try {
         const saved = await aiSaveKey(keyVal);
         currentAiStatus = saved;
+        setCachedAiStatus(saved);
         await renderAssistantState(saved);
+        if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+          deps.onHomeBriefingVisibilityChanged();
+        }
         showToast('Gemini API key connected successfully', 'success');
       } catch (err) {
         if (errorBox) {
@@ -1410,6 +1690,10 @@ export function openAssistantPanel() {
   isAssistantPanelOpen = true;
   closeAllMenus();
 
+  // Block background page from responding to any kind of scroll
+  document.body.classList.add('assistant-open');
+  document.documentElement.classList.add('assistant-open');
+
   const backdrop = document.getElementById('assistant-backdrop');
   const btn = document.getElementById('btn-assistant');
   const fabAi = document.getElementById('btn-fab-ai');
@@ -1427,6 +1711,10 @@ export function closeAssistantPanel() {
   if (!isAssistantPanelOpen && panel && panel.classList.contains('hidden')) return;
   isAssistantPanelOpen = false;
 
+  // Restore background page scrolling
+  document.body.classList.remove('assistant-open');
+  document.documentElement.classList.remove('assistant-open');
+
   closeHistoryPane();
 
   const backdrop = document.getElementById('assistant-backdrop');
@@ -1434,7 +1722,10 @@ export function closeAssistantPanel() {
   const fabAi = document.getElementById('btn-fab-ai');
 
   if (backdrop) backdrop.classList.add('hidden');
-  if (panel) panel.classList.add('hidden');
+  if (panel) {
+    panel.classList.add('hidden');
+    panel.classList.remove('fullscreen');
+  }
   if (btn) btn.classList.remove('active');
   if (fabAi) fabAi.classList.remove('active');
 }
@@ -2095,6 +2386,17 @@ async function handleAssistantPrompt(userText, options = {}) {
   try {
     const result = await aiGenerate('chat', payload);
 
+    if (result && result._trial) {
+      if (currentAiStatus && currentAiStatus.isTrial) {
+        currentAiStatus.trial = {
+          ...currentAiStatus.trial,
+          ...result._trial,
+        };
+        setCachedAiStatus(currentAiStatus);
+        updateTrialMetersInDom();
+      }
+    }
+
     // Remove thinking indicator
     const thinkingEl = document.getElementById(thinkingId);
     if (thinkingEl) thinkingEl.remove();
@@ -2133,6 +2435,13 @@ async function handleAssistantPrompt(userText, options = {}) {
     syncActiveSessionThread();
   } catch (err) {
     console.error('[Assistant] Prompt error:', err);
+    if (err && typeof err.message === 'string' && (err.message.includes('Trial limit reached') || err.message.includes('TRIAL_EXHAUSTED'))) {
+      if (currentAiStatus && currentAiStatus.isTrial && currentAiStatus.trial) {
+        currentAiStatus.trial.chatRemaining = 0;
+        setCachedAiStatus(currentAiStatus);
+        updateTrialMetersInDom();
+      }
+    }
     const thinkingEl = document.getElementById(thinkingId);
     if (thinkingEl) thinkingEl.remove();
 
@@ -2182,8 +2491,8 @@ const CONFIRM_PRESETS = [
 function sanitizeUnit(rawUnit) {
   if (!rawUnit || typeof rawUnit !== 'string') return '%';
   let clean = rawUnit.trim();
-  // Strip any HTML or multiline text or long monologue
-  if (clean.includes('<') || clean.includes('\n') || clean.length > 20) {
+  // Strip any HTML, multiline text, long monologue, or repetitive garbage like %n/a
+  if (clean.includes('<') || clean.includes('\n') || clean.includes('n/a') || clean.includes('/') || clean.length > 20) {
     const match = clean.match(/\b(mins?|minutes?|hours?|hrs?|pages?|chapters?|tasks?|problems?|books?|lectures?|videos?|%|km|miles?|steps?)\b/i);
     clean = match ? match[1].toLowerCase() : '%';
   }
@@ -2341,7 +2650,9 @@ export function renderActionConfirmSheet(actionsOrAction, parentMsgId) {
     const badgeText = isCreate ? 'Create' : (isDelete ? 'Delete' : (isReschedule ? 'Reschedule' : 'Update'));
 
     const rawCardType = (act.cardType || existingCard?.type || 'goal').toLowerCase();
-    const cardType = rawCardType === 'checklist' ? 'checklist' : (rawCardType === 'note' ? 'note' : 'goal');
+    const cardType = (rawCardType === 'checklist' || (Array.isArray(act.items) && act.items.length > 0 && rawCardType !== 'note'))
+      ? 'checklist'
+      : (rawCardType === 'note' ? 'note' : 'goal');
 
     // Fields markup
     let typeFieldsHtml = '';
@@ -2354,13 +2665,38 @@ export function renderActionConfirmSheet(actionsOrAction, parentMsgId) {
         </div>
       `;
 
-      if (cardType === 'goal') {
-        const targetVal = typeof act.target === 'number' ? act.target : (existingCard?.targetSmallest || 100);
-        const currentVal = typeof act.currentProgress === 'number' ? act.currentProgress : (existingCard?.currentSmallest || 0);
-        const unitVal = sanitizeUnit(act.unit || existingCard?.levels?.[0]?.name);
-        const detectedPreset = detectPreset(act.preset || existingCard?.preset, unitVal);
-
+      // Card Type Selector for creation
+      if (isCreate) {
         typeFieldsHtml += `
+          <div class="confirm-field-group">
+            <label class="confirm-field-label">Tracker Type</label>
+            <div class="tracker-type-selector proposal-tracker-type-selector">
+              <input type="radio" id="proposal-type-goal-${sheetId}-${idx}" name="proposal-tracker-type-${sheetId}-${idx}" value="goal" ${cardType === 'goal' ? 'checked' : ''}>
+              <label for="proposal-type-goal-${sheetId}-${idx}" class="type-tab">Progress Goal</label>
+              
+              <input type="radio" id="proposal-type-checklist-${sheetId}-${idx}" name="proposal-tracker-type-${sheetId}-${idx}" value="checklist" ${cardType === 'checklist' ? 'checked' : ''}>
+              <label for="proposal-type-checklist-${sheetId}-${idx}" class="type-tab">Task Checklist</label>
+              
+              <input type="radio" id="proposal-type-note-${sheetId}-${idx}" name="proposal-tracker-type-${sheetId}-${idx}" value="note" ${cardType === 'note' ? 'checked' : ''}>
+              <label for="proposal-type-note-${sheetId}-${idx}" class="type-tab">Quick Note</label>
+            </div>
+            <select class="confirm-input proposal-card-type-select" style="display: none;">
+              <option value="goal" ${cardType === 'goal' ? 'selected' : ''}>Progress Goal</option>
+              <option value="checklist" ${cardType === 'checklist' ? 'selected' : ''}>Task Checklist</option>
+              <option value="note" ${cardType === 'note' ? 'selected' : ''}>Quick Note</option>
+            </select>
+          </div>
+        `;
+      }
+
+      // Goal section
+      const targetVal = typeof act.target === 'number' ? act.target : (Array.isArray(act.items) && act.items.length ? act.items.length : (existingCard?.targetSmallest || 100));
+      const currentVal = typeof act.currentProgress === 'number' ? act.currentProgress : (existingCard?.currentSmallest || 0);
+      const unitVal = sanitizeUnit(act.unit || existingCard?.levels?.[0]?.name || (Array.isArray(act.items) ? 'tasks' : '%'));
+      const detectedPreset = detectPreset(act.preset || existingCard?.preset, unitVal);
+
+      const goalFieldsHtml = `
+        <div class="proposal-type-section proposal-type-section-goal" style="${cardType === 'goal' ? '' : 'display: none;'}">
           <div class="confirm-field-group">
             <label class="confirm-field-label">Preset Unit</label>
             <select class="confirm-input proposal-preset-select">
@@ -2389,34 +2725,53 @@ export function renderActionConfirmSheet(actionsOrAction, parentMsgId) {
             <label class="confirm-field-label">Unit</label>
             <input type="text" class="confirm-input proposal-unit-input" value="${escapeHtml(unitVal)}" placeholder="e.g. mins, pages, %">
           </div>
-        `;
-      } else if (cardType === 'checklist') {
-        const items = Array.isArray(act.items) && act.items.length
-          ? act.items
-          : (existingCard?.items || [{ text: 'Step 1' }]);
-        const itemsListHtml = items.map((it, iIdx) => `
-          <div class="confirm-item-row" data-idx="${iIdx}">
-            <input type="checkbox" class="confirm-item-checkbox" checked title="Include item">
-            <input type="text" class="confirm-item-text" value="${escapeHtml(it.text || '')}">
-          </div>
-        `).join('');
+        </div>
+      `;
 
-        typeFieldsHtml += `
+      // Checklist section
+      const items = Array.isArray(act.items) && act.items.length
+        ? act.items
+        : (existingCard?.items || [{ text: 'Step 1' }]);
+      const itemsListHtml = items.map((it, iIdx) => `
+        <div class="checklist-builder-item confirm-item-row" data-idx="${iIdx}">
+          <input type="checkbox" class="confirm-item-checkbox" checked title="Include item">
+          <input type="text" class="item-text-input confirm-item-text" value="${escapeHtml(it.text || '')}" placeholder="Item description">
+          <button type="button" class="btn-remove-item btn-proposal-remove-item" title="Remove item">&times;</button>
+        </div>
+      `).join('');
+
+      const checklistFieldsHtml = `
+        <div class="proposal-type-section proposal-type-section-checklist" style="${cardType === 'checklist' ? '' : 'display: none;'}">
           <div class="confirm-field-group">
-            <label class="confirm-field-label">Checklist Items (${items.length})</label>
-            <div class="confirm-items-list proposal-items-list">
+            <label class="confirm-field-label proposal-checklist-count-label">Checklist Items (${items.length})</label>
+            <div class="checklist-builder-input-group">
+              <input type="text" class="confirm-input proposal-new-item-input" placeholder="Add new item...">
+              <button type="button" class="btn btn-secondary btn-proposal-add-item">Add</button>
+            </div>
+            <div class="checklist-builder-list confirm-items-list proposal-items-list">
               ${itemsListHtml}
             </div>
           </div>
-        `;
-      } else if (cardType === 'note') {
-        const noteText = act.noteText || existingCard?.text || '';
-        typeFieldsHtml += `
+        </div>
+      `;
+
+      // Note section
+      const noteText = act.noteText || existingCard?.text || '';
+      const noteFieldsHtml = `
+        <div class="proposal-type-section proposal-type-section-note" style="${cardType === 'note' ? '' : 'display: none;'}">
           <div class="confirm-field-group">
             <label class="confirm-field-label">Note Content</label>
             <textarea class="confirm-input proposal-note-textarea" rows="3">${escapeHtml(noteText)}</textarea>
           </div>
-        `;
+        </div>
+      `;
+
+      if (isCreate) {
+        typeFieldsHtml += goalFieldsHtml + checklistFieldsHtml + noteFieldsHtml;
+      } else {
+        if (cardType === 'goal') typeFieldsHtml += goalFieldsHtml;
+        else if (cardType === 'checklist') typeFieldsHtml += checklistFieldsHtml;
+        else if (cardType === 'note') typeFieldsHtml += noteFieldsHtml;
       }
 
       // Editable Deadline with calendar picker & Clear button
@@ -2560,6 +2915,108 @@ function attachProposalsSheetListeners(sheet, rawList) {
 
   // Preset changes & Clear deadline buttons inside items
   sheet.querySelectorAll('.proposal-item').forEach(item => {
+    const cardTypeSelect = item.querySelector('.proposal-card-type-select');
+
+    // Tracker Type Selector tabs (matching Create Modal)
+    const typeRadios = item.querySelectorAll('.proposal-tracker-type-selector input[type="radio"]');
+    typeRadios.forEach(r => {
+      r.addEventListener('change', () => {
+        if (r.checked) {
+          const newType = r.value;
+          item.dataset.cardType = newType;
+          if (cardTypeSelect) cardTypeSelect.value = newType;
+          const gSec = item.querySelector('.proposal-type-section-goal');
+          const cSec = item.querySelector('.proposal-type-section-checklist');
+          const nSec = item.querySelector('.proposal-type-section-note');
+          if (gSec) gSec.style.display = newType === 'goal' ? '' : 'none';
+          if (cSec) cSec.style.display = newType === 'checklist' ? '' : 'none';
+          if (nSec) nSec.style.display = newType === 'note' ? '' : 'none';
+        }
+      });
+    });
+
+    if (cardTypeSelect) {
+      cardTypeSelect.addEventListener('change', () => {
+        const newType = cardTypeSelect.value;
+        item.dataset.cardType = newType;
+        const matchingRadio = item.querySelector(`.proposal-tracker-type-selector input[value="${newType}"]`);
+        if (matchingRadio) matchingRadio.checked = true;
+        const gSec = item.querySelector('.proposal-type-section-goal');
+        const cSec = item.querySelector('.proposal-type-section-checklist');
+        const nSec = item.querySelector('.proposal-type-section-note');
+        if (gSec) gSec.style.display = newType === 'goal' ? '' : 'none';
+        if (cSec) cSec.style.display = newType === 'checklist' ? '' : 'none';
+        if (nSec) nSec.style.display = newType === 'note' ? '' : 'none';
+      });
+    }
+
+    // Checklist Item Counter & Management (Add / Remove)
+    function updateChecklistCount() {
+      const list = item.querySelector('.proposal-items-list');
+      const countLabel = item.querySelector('.proposal-checklist-count-label');
+      if (list && countLabel) {
+        const rows = list.querySelectorAll('.confirm-item-row');
+        countLabel.textContent = `Checklist Items (${rows.length})`;
+      }
+    }
+
+    function bindRemoveItemBtn(btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const row = btn.closest('.confirm-item-row');
+        if (row) {
+          row.remove();
+          updateChecklistCount();
+        }
+      });
+    }
+
+    item.querySelectorAll('.btn-proposal-remove-item').forEach(bindRemoveItemBtn);
+
+    const newItemInput = item.querySelector('.proposal-new-item-input');
+    const addItemBtn = item.querySelector('.btn-proposal-add-item');
+
+    function addNewChecklistItem() {
+      if (!newItemInput) return;
+      const text = newItemInput.value.trim();
+      if (!text) return;
+      const list = item.querySelector('.proposal-items-list');
+      if (!list) return;
+
+      const newRow = document.createElement('div');
+      newRow.className = 'checklist-builder-item confirm-item-row';
+      newRow.dataset.idx = String(list.children.length);
+      newRow.innerHTML = `
+        <input type="checkbox" class="confirm-item-checkbox" checked title="Include item">
+        <input type="text" class="item-text-input confirm-item-text" value="${escapeHtml(text)}" placeholder="Item description">
+        <button type="button" class="btn-remove-item btn-proposal-remove-item" title="Remove item">&times;</button>
+      `;
+
+      const rmBtn = newRow.querySelector('.btn-proposal-remove-item');
+      if (rmBtn) bindRemoveItemBtn(rmBtn);
+
+      list.appendChild(newRow);
+      newItemInput.value = '';
+      updateChecklistCount();
+      newItemInput.focus();
+    }
+
+    if (addItemBtn) {
+      addItemBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        addNewChecklistItem();
+      });
+    }
+
+    if (newItemInput) {
+      newItemInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addNewChecklistItem();
+        }
+      });
+    }
+
     const presetSelect = item.querySelector('.proposal-preset-select');
     const unitInput = item.querySelector('.proposal-unit-input');
     if (presetSelect && unitInput) {
@@ -3451,12 +3908,144 @@ export function renderAiSettingsModalBody(status) {
   const body = document.getElementById('ai-settings-modal-body');
   if (!body) return;
 
+  // Case 1: Free Trial is active
+  if (status && status.connected && status.isTrial) {
+    const trial = status.trial || {};
+    const chatRemaining = typeof trial.chatRemaining === 'number' ? trial.chatRemaining : 25;
+    const chatTotal = trial.chatTotal || 25;
+    const chatPercent = Math.max(0, Math.min(100, (chatRemaining / chatTotal) * 100));
+
+    const briefingRemaining = typeof trial.briefingRemaining === 'number' ? trial.briefingRemaining : 50;
+    const briefingTotal = trial.briefingTotal || 50;
+    const briefingPercent = Math.max(0, Math.min(100, (briefingRemaining / briefingTotal) * 100));
+
+    body.innerHTML = `
+      <div class="ai-settings-item">
+        <div class="ai-settings-trial-banner">
+          <div class="trial-banner-header">
+            <span class="assistant-trial-sparkle">✦</span>
+            <strong>Zero-Setup AI Free Trial Active</strong>
+          </div>
+          <p class="trial-banner-desc">You are using ProgressShelf's shared trial. Quotas update automatically.</p>
+          
+          <div class="trial-meters-box">
+            <div class="trial-meter-card">
+              <div class="trial-meter-info">
+                <span class="trial-meter-title">AI Assistant Chat</span>
+                <span class="trial-meter-numbers">${chatRemaining} / ${chatTotal} left</span>
+              </div>
+              <div class="trial-meter-bar-track">
+                <div class="trial-meter-bar-fill" style="width: ${chatPercent}%;"></div>
+              </div>
+            </div>
+
+            <div class="trial-meter-card">
+              <div class="trial-meter-info">
+                <span class="trial-meter-title">Today's Focus Updates</span>
+                <span class="trial-meter-numbers">${briefingRemaining} / ${briefingTotal} left</span>
+              </div>
+              <div class="trial-meter-bar-track">
+                <div class="trial-meter-bar-fill" style="width: ${briefingPercent}%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ai-settings-divider-label">
+          <span>CONNECT PERSONAL GEMINI KEY (UNLIMITED)</span>
+        </div>
+        <p class="assistant-notice" style="margin-top: 0; margin-bottom: 12px;">
+          Add your free personal Gemini key from Google AI Studio anytime to unlock unlimited usage without trial limits.
+        </p>
+
+        <form id="ai-settings-upgrade-form" class="assistant-connect-form">
+          <div class="assistant-key-field-wrap">
+            <input type="password" id="ai-settings-upgrade-input" class="assistant-key-input" placeholder="Enter personal Gemini API key" autocomplete="off" spellcheck="false" required>
+            <button type="button" id="btn-ai-settings-upgrade-toggle-key" class="assistant-key-eye-btn" title="Show or hide key" aria-label="Toggle key visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="assistant-key-link" style="margin-bottom: 8px;">
+            <span>Get a free API key from Google AI Studio</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </a>
+          <div id="ai-settings-upgrade-error" class="assistant-connect-error hidden" role="alert"></div>
+          <button type="submit" id="btn-ai-settings-upgrade-save" class="btn btn-primary">Upgrade &amp; Save Key</button>
+        </form>
+
+        ${getAiHistorySectionHtml()}
+      </div>
+    `;
+
+    attachHistorySettingsListeners();
+
+    const upgradeInput = document.getElementById('ai-settings-upgrade-input');
+    const upgradeEye = document.getElementById('btn-ai-settings-upgrade-toggle-key');
+    if (upgradeEye && upgradeInput) {
+      upgradeEye.addEventListener('click', () => {
+        upgradeInput.type = upgradeInput.type === 'password' ? 'text' : 'password';
+      });
+    }
+
+    const upgradeForm = document.getElementById('ai-settings-upgrade-form');
+    const upgradeErr = document.getElementById('ai-settings-upgrade-error');
+    const upgradeBtn = document.getElementById('btn-ai-settings-upgrade-save');
+    if (upgradeForm) {
+      upgradeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const keyVal = upgradeInput ? upgradeInput.value.trim() : '';
+        if (!keyVal) return;
+        if (upgradeErr) upgradeErr.classList.add('hidden');
+        if (upgradeBtn) {
+          upgradeBtn.disabled = true;
+          upgradeBtn.textContent = 'Testing & saving...';
+        }
+        try {
+          const res = await aiSaveKey(keyVal);
+          currentAiStatus = res;
+          setCachedAiStatus(res);
+          renderAiSettingsModalBody(res);
+          renderAssistantState(res);
+          getHomeBriefingCardElement();
+          showToast('Personal Gemini key connected! Unlimited usage active.', 'success');
+        } catch (err) {
+          if (upgradeErr) {
+            upgradeErr.textContent = formatAiErrorMessage(err);
+            upgradeErr.classList.remove('hidden');
+          }
+        } finally {
+          if (upgradeBtn) {
+            upgradeBtn.disabled = false;
+            upgradeBtn.textContent = 'Upgrade & Save Key';
+          }
+        }
+      });
+    }
+    return;
+  }
+
+  // Case 2: Not connected and no trial
   if (!status || !status.connected) {
     body.innerHTML = `
       <div class="ai-settings-item">
-        <div class="ai-settings-status-row">
-          <span class="ai-settings-status-text">No Gemini API key connected</span>
+        <div class="ai-settings-trial-promo">
+          <div class="trial-promo-header">
+            <span class="assistant-trial-sparkle">✦</span>
+            <h4>Start Zero-Setup Free Trial</h4>
+          </div>
+          <p class="trial-promo-desc">Get 25 free AI chat requests and 50 daily focus breakdowns with one click — no API key needed.</p>
+          <button type="button" id="btn-ai-settings-activate-trial" class="btn btn-primary" style="width: 100%;">
+            <span>✦ Start Free Trial</span>
+          </button>
         </div>
+
+        <div class="ai-settings-divider-label">
+          <span>OR CONNECT PERSONAL GEMINI KEY</span>
+        </div>
+
         <form id="ai-settings-connect-form" class="assistant-connect-form">
           <div class="assistant-key-field-wrap">
             <input type="password" id="ai-settings-key-input" class="assistant-key-input" placeholder="Enter Gemini API key" autocomplete="off" spellcheck="false" required>
@@ -3467,6 +4056,10 @@ export function renderAiSettingsModalBody(status) {
               </svg>
             </button>
           </div>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="assistant-key-link" style="margin-bottom: 8px;">
+            <span>Get an API key from Google AI Studio</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </a>
           <div id="ai-settings-connect-error" class="assistant-connect-error hidden" role="alert"></div>
           <button type="submit" id="btn-ai-settings-save-key" class="btn btn-primary">Save &amp; test</button>
         </form>
@@ -3476,6 +4069,28 @@ export function renderAiSettingsModalBody(status) {
     `;
 
     attachHistorySettingsListeners();
+
+    const trialBtn = document.getElementById('btn-ai-settings-activate-trial');
+    if (trialBtn) {
+      trialBtn.addEventListener('click', async () => {
+        try {
+          trialBtn.disabled = true;
+          trialBtn.innerHTML = '<span>Activating trial...</span>';
+          const newStatus = await aiActivateTrial();
+          currentAiStatus = newStatus;
+          setCachedAiStatus(newStatus);
+          showToast('Free trial activated! 25 chats and 50 focus updates unlocked.', 'success');
+          renderAiSettingsModalBody(newStatus);
+          renderAssistantState(newStatus);
+          getHomeBriefingCardElement();
+          fetchAndRenderDailyBriefing(true);
+        } catch (err) {
+          showToast(err.message || 'Failed to activate trial', 'error');
+          trialBtn.disabled = false;
+          trialBtn.innerHTML = '<span>✦ Start Free Trial</span>';
+        }
+      });
+    }
 
     const keyInput = document.getElementById('ai-settings-key-input');
     const eyeBtn = document.getElementById('btn-ai-settings-toggle-key');
@@ -3501,8 +4116,12 @@ export function renderAiSettingsModalBody(status) {
         try {
           const res = await aiSaveKey(keyVal);
           currentAiStatus = res;
+          setCachedAiStatus(res);
           renderAiSettingsModalBody(res);
           renderAssistantState(res);
+          if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+            deps.onHomeBriefingVisibilityChanged();
+          }
           showToast('Gemini API key connected successfully', 'success');
         } catch (err) {
           if (errBox) {
@@ -3519,6 +4138,8 @@ export function renderAiSettingsModalBody(status) {
     }
     return;
   }
+
+  // Case 3: Personal key connected
 
   // Connected state in settings modal
   body.innerHTML = `
@@ -3602,8 +4223,12 @@ export function renderAiSettingsModalBody(status) {
       try {
         const res = await aiSaveKey(val);
         currentAiStatus = res;
+        setCachedAiStatus(res);
         renderAiSettingsModalBody(res);
         renderAssistantState(res);
+        if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+          deps.onHomeBriefingVisibilityChanged();
+        }
         showToast('Gemini API key updated', 'success');
       } catch (err) {
         if (replaceErr) {
@@ -3639,8 +4264,12 @@ export function renderAiSettingsModalBody(status) {
       try {
         await aiRemoveKey();
         currentAiStatus = { connected: false, last4: null };
+        setCachedAiStatus(currentAiStatus);
         renderAiSettingsModalBody(currentAiStatus);
         renderAssistantState(currentAiStatus);
+        if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+          deps.onHomeBriefingVisibilityChanged();
+        }
         showToast('Gemini API key removed', 'info');
       } catch (err) {
         showToast(err.message || 'Failed to remove key', 'error');
@@ -3653,10 +4282,12 @@ export function setupAssistantModule(injectedDeps = {}) {
   deps = { ...deps, ...injectedDeps };
 
   // Background check for AI status to power the home dashboard briefing card immediately
-  if (!isGuestMode() && !currentAiStatus) {
+  if (!isGuestMode()) {
     aiStatus().then(status => {
+      const prevConnected = currentAiStatus ? Boolean(currentAiStatus.connected) : null;
       currentAiStatus = status;
-      if (typeof deps.onHomeBriefingVisibilityChanged === 'function') {
+      setCachedAiStatus(status);
+      if (prevConnected !== Boolean(status?.connected) && typeof deps.onHomeBriefingVisibilityChanged === 'function') {
         deps.onHomeBriefingVisibilityChanged();
       }
     }).catch(e => {
@@ -3701,6 +4332,43 @@ export function setupAssistantModule(injectedDeps = {}) {
   if (btnClose) {
     btnClose.addEventListener('click', closeAssistantPanel);
   }
+
+  // Pill bar drag handle / full-screen toggle for mobile
+  const pillBar = document.getElementById('assistant-pill-bar');
+  const assistantPanelEl = document.getElementById('assistant-panel');
+  if (pillBar && assistantPanelEl) {
+    pillBar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      assistantPanelEl.classList.toggle('fullscreen');
+    });
+
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    pillBar.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+      }
+    }, { passive: true });
+
+    pillBar.addEventListener('touchend', (e) => {
+      if (e.changedTouches && e.changedTouches.length === 1) {
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        // Swipe UP -> expand to fullscreen
+        if (deltaY < -35) {
+          assistantPanelEl.classList.add('fullscreen');
+        }
+        // Swipe DOWN -> collapse from fullscreen or close sheet
+        else if (deltaY > 35) {
+          if (assistantPanelEl.classList.contains('fullscreen')) {
+            assistantPanelEl.classList.remove('fullscreen');
+          } else {
+            closeAssistantPanel();
+          }
+        }
+      }
+    }, { passive: true });
+  }
   if (btnHistory) {
     btnHistory.addEventListener('click', toggleHistoryPane);
   }
@@ -3715,6 +4383,8 @@ export function setupAssistantModule(injectedDeps = {}) {
   }
   if (backdrop) {
     backdrop.addEventListener('click', closeAssistantPanel);
+    backdrop.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+    backdrop.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
   }
   if (btnProfileAi) {
     btnProfileAi.addEventListener('click', openAiSettingsModal);

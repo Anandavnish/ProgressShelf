@@ -84,12 +84,12 @@ async function extractErrorMessage(error, defaultMsg = 'AI service request faile
 }
 
 /**
- * Checks whether an AI key is configured for the active user.
- * @returns {Promise<{ connected: boolean, last4: string | null }>}
+ * Checks whether an AI key or active free trial is configured for the active user.
+ * @returns {Promise<{ connected: boolean, last4: string | null, isTrial: boolean, trial: any | null }>}
  */
 export async function aiStatus() {
   if (!isConfigured || !supabase || isGuestMode()) {
-    return { connected: false, last4: null };
+    return { connected: false, last4: null, isTrial: false, trial: null };
   }
 
   const { data, error } = await supabase.functions.invoke('ai-proxy', {
@@ -103,7 +103,35 @@ export async function aiStatus() {
 
   return {
     connected: Boolean(data?.connected),
-    last4: data?.last4 || null
+    last4: data?.last4 || null,
+    isTrial: Boolean(data?.isTrial),
+    trial: data?.trial || null
+  };
+}
+
+/**
+ * Activates zero-setup AI free trial for the logged-in user.
+ * @returns {Promise<{ connected: boolean, last4: string | null, isTrial: boolean, trial: any | null }>}
+ */
+export async function aiActivateTrial() {
+  if (!isConfigured || !supabase || isGuestMode()) {
+    throw new Error('Please sign in to activate the free AI trial. Guest accounts are not supported.');
+  }
+
+  const { data, error } = await supabase.functions.invoke('ai-proxy', {
+    body: { action: 'activate_trial' }
+  });
+
+  if (error) {
+    const message = await extractErrorMessage(error, 'Failed to activate AI free trial');
+    throw new Error(message);
+  }
+
+  return {
+    connected: Boolean(data?.connected),
+    last4: data?.last4 || null,
+    isTrial: Boolean(data?.isTrial),
+    trial: data?.trial || null
   };
 }
 

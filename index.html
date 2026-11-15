@@ -7,7 +7,7 @@
   <title>ProgressShelf - Track everything. One bar at a time.</title>
   <meta name="description" content="ProgressShelf is your personal progress tracking dashboard. Track your habits, courses, readings, or custom goals, one animated progress bar at a time.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="index.css?v=7.0">
+  <link rel="stylesheet" href="index.css?v=8.0">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0D1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,8 +15,17 @@
   <link rel="apple-touch-icon" href="logo.svg">
   <script>
     (function() {
-      if (typeof window !== 'undefined' && (window.location.protocol === 'https:' && window.location.hostname === 'localhost' || window.location.protocol === 'capacitor:' || !!window.Capacitor)) {
+      // Only enable is-native-app in genuine native Capacitor APK environment, NEVER in desktop browsers
+      const isNative = typeof window !== 'undefined' && (
+        !!window.IS_NATIVE_APP ||
+        window.location.protocol === 'capacitor:' ||
+        (!!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+        (!!window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() !== 'web')
+      );
+      if (isNative) {
         document.documentElement.classList.add('is-native-app');
+      } else {
+        document.documentElement.classList.remove('is-native-app');
       }
 
       const theme = localStorage.getItem('app-theme') || 'system';

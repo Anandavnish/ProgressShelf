@@ -1,4 +1,4 @@
-const CACHE_NAME = 'progressshelf-cache-v210';
+const CACHE_NAME = 'progressshelf-cache-v214';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -71,28 +71,39 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       const isNavigate = event.request.mode === 'navigate';
-      return cache.match(event.request, { ignoreSearch: isNavigate }).then((cachedResponse) => {
-        // Fetch new version from network in parallel
+      
+      // For page navigations (HTML), use Network-First to immediately deliver fresh UI updates
+      if (isNavigate) {
+        return fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => {
+            // Offline fallback
+            const reqUrl = event.request.url || "";
+            if (reqUrl.includes("dashboard.html")) {
+              return cache.match("dashboard.html", { ignoreSearch: true }).then(r => r || cache.match("./", { ignoreSearch: true }));
+            }
+            return cache.match(event.request, { ignoreSearch: true })
+              .then(r => r || cache.match("dashboard.html", { ignoreSearch: true }))
+              .then(r => r || cache.match("./", { ignoreSearch: true }));
+          });
+      }
+
+      // For static assets, use Stale-While-Revalidate
+      return cache.match(event.request, { ignoreSearch: false }).then((cachedResponse) => {
         const fetchPromise = fetch(event.request).then((networkResponse) => {
           if (networkResponse.status === 200 && url.startsWith(self.location.origin)) {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         }).catch((err) => {
-          // If offline and navigate request fails, return cached page (prioritizing dashboard.html if target)
-          if (event.request.mode === 'navigate') {
-            const reqUrl = event.request.url || "";
-            if (reqUrl.includes("dashboard.html")) {
-              return caches.match("dashboard.html", { ignoreSearch: true }).then(r => r || caches.match("./", { ignoreSearch: true }));
-            }
-            return caches.match(event.request, { ignoreSearch: true })
-              .then(r => r || caches.match("dashboard.html", { ignoreSearch: true }))
-              .then(r => r || caches.match("./", { ignoreSearch: true }));
-          }
           console.warn('[Service Worker] Fetch failed, using cache:', err);
         });
 
-        // Serve cached version immediately if available, otherwise wait for network
         return cachedResponse || fetchPromise;
       });
     })

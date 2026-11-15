@@ -47,8 +47,11 @@ for (const file of filesToCopy) {
   if (fs.existsSync(src)) {
     if (file.endsWith('.html')) {
       let content = fs.readFileSync(src, 'utf8');
-      // Inject supabase.js and capacitor.js into native build if not already present
+      // Inject native app flags, supabase.js and capacitor.js into native build if not already present
       let injected = '';
+      if (!content.includes('IS_NATIVE_APP')) {
+        injected += '  <script>window.IS_NATIVE_APP = true; document.documentElement.classList.add("is-native-app");</script>\n';
+      }
       if (!content.includes('supabase.js')) {
         injected += '  <script src="supabase.js"></script>\n';
       }

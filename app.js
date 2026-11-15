@@ -1,7 +1,18 @@
-import { isConfigured } from "./supabase-config.js?v=3.3";
-import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.3";
-import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, updateUserSettings, subscribeToUserSettings } from "./db.js?v=3.3";
+import { isConfigured } from "./supabase-config.js?v=3.4";
+import { logout, initAuthProtection, isGuestMode, exitGuestMode, loginWithGoogle, deleteCurrentUserAccount, updateUserPreferredSort, updateUserThemePreference, updateUserFontPreference, setupDeepLinkListener } from "./auth.js?v=3.4";
+import { subscribeToBars, createBar, updateBarProgress, deleteBar, getLocalBars, editBar, deleteUserData, saveFCMToken, deleteFCMToken, checkFCMTokenExists, deleteMultipleBars, getUserSettings, updateUserSettings, subscribeToUserSettings, isBarPendingSync, processSyncQueue, getSyncQueue } from "./db.js?v=3.4";
 import { setupAssistantModule, openAssistantPanel, closeAssistantPanel, toggleAssistantPanel, isAssistantPanelOpen, setCachedBriefingFromSupabase, getHomeBriefingCardElement, isHomeBriefingHidden, setHomeBriefingHidden, setHomeBriefingHiddenFromRemote } from "./assistant.js?v=4.0";
+// Clean up any stale native app class in browser
+const isGenuineNativeEnv = typeof window !== 'undefined' && (
+  !!window.IS_NATIVE_APP ||
+  window.location.protocol === 'capacitor:' ||
+  (!!window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+  (!!window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() !== 'web')
+);
+if (!isGenuineNativeEnv && typeof document !== 'undefined') {
+  document.documentElement.classList.remove('is-native-app');
+}
+
 // Initialize Firebase FCM if configured (lazy, non-blocking on web, disabled on native)
 const firebaseConfig = window.firebaseConfig || {};
 
@@ -1607,22 +1618,22 @@ function updateOverallStats(bars) {
   const divCompleted = document.getElementById("div-stat-completed");
   const divFlexible = document.getElementById("div-stat-flexible");
 
-  // Helper to toggle visibility of button and its preceding divider
+  // Helper to toggle visibility of button and its preceding divider (show only if !== 0)
   function toggleBtn(btn, div, count) {
     if (!btn) return;
     if (count > 0) {
       btn.classList.remove("hidden");
-      btn.style.display = "";
+      btn.style.removeProperty("display");
       if (div) {
         div.classList.remove("hidden");
-        div.style.display = "";
+        div.style.removeProperty("display");
       }
     } else {
       btn.classList.add("hidden");
-      btn.style.display = "none";
+      btn.style.setProperty("display", "none", "important");
       if (div) {
         div.classList.add("hidden");
-        div.style.display = "none";
+        div.style.setProperty("display", "none", "important");
       }
     }
   }
@@ -1631,10 +1642,10 @@ function updateOverallStats(bars) {
   if (btnAll) {
     if (total > 0) {
       btnAll.classList.remove("hidden");
-      btnAll.style.display = "";
+      btnAll.style.removeProperty("display");
     } else {
       btnAll.classList.add("hidden");
-      btnAll.style.display = "none";
+      btnAll.style.setProperty("display", "none", "important");
     }
   }
 
@@ -1936,6 +1947,53 @@ function updateCardElement(card, bar) {
     card.classList.add("selected");
   } else {
     card.classList.remove("selected");
+  }
+
+  // Update sync status indicator
+  let syncBtn = card.querySelector(".btn-card-sync-status");
+  const isPending = isBarPendingSync(bar.id);
+  if (!syncBtn) {
+    const cardActions = card.querySelector(".card-actions");
+    const btnDelete = card.querySelector(".btn-card-delete");
+    if (cardActions && btnDelete) {
+      syncBtn = document.createElement("button");
+      syncBtn.className = `btn-card-sync-status${isPending ? ' pending' : ' hidden'}`;
+      syncBtn.title = isPending ? 'Changes saved locally. Pending sync...' : 'Synced';
+      syncBtn.innerHTML = `
+        <svg class="sync-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+          <line x1="1" y1="1" x2="23" y2="23"/>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+          <line x1="12" y1="20" x2="12.01" y2="20"/>
+        </svg>
+      `;
+      cardActions.insertBefore(syncBtn, btnDelete);
+      syncBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          showToast("Card saved locally. Will sync automatically once reconnected.", "info");
+        } else {
+          syncBtn.classList.add('syncing');
+          showToast("Syncing card with cloud...", "info");
+          const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+          if (uid) {
+            processSyncQueue(uid);
+          }
+        }
+      });
+    }
+  } else {
+    if (isPending) {
+      syncBtn.classList.remove("hidden", "synced");
+      syncBtn.classList.add("pending");
+      syncBtn.setAttribute("title", "Changes saved locally. Pending sync...");
+    } else if (!syncBtn.classList.contains("synced")) {
+      syncBtn.classList.add("hidden");
+      syncBtn.classList.remove("pending", "syncing");
+    }
   }
 
   // Re-bind action button click listeners with latest bar data
@@ -2359,9 +2417,21 @@ function createCardElement(bar) {
   }
 
   const isCompleted = isTrackerCompleted(bar);
+  const isPending = isBarPendingSync(bar.id);
 
   card.innerHTML = `
     <div class="card-actions">
+      <button class="btn-card-sync-status${isPending ? ' pending' : ' hidden'}" title="${isPending ? 'Changes saved locally. Pending sync...' : 'Synced'}">
+        <svg class="sync-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none;">
+          <line x1="1" y1="1" x2="23" y2="23"/>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+          <line x1="12" y1="20" x2="12.01" y2="20"/>
+        </svg>
+      </button>
       <button class="btn-card-delete" title="Delete">
         <svg width="16" height="16" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" stroke-width="2"
@@ -2481,6 +2551,23 @@ function createCardElement(bar) {
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openEditModal(card._barData);
+    });
+  }
+
+  const syncBtn = card.querySelector('.btn-card-sync-status');
+  if (syncBtn) {
+    syncBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        showToast("Card saved locally. Will sync automatically once reconnected.", "info");
+      } else {
+        syncBtn.classList.add('syncing');
+        showToast("Syncing card with cloud...", "info");
+        const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+        if (uid) {
+          processSyncQueue(uid);
+        }
+      }
     });
   }
 
@@ -2813,6 +2900,11 @@ function renderDashboard(bars) {
         if ((pendingLocalWrites.get(bar.id) || 0) > 0) {
           // Our own optimistic UI is already correct; skip the realtime-triggered rebuild.
           expectedElements.push(oldCard);
+          const syncBtn = oldCard.querySelector(".btn-card-sync-status");
+          if (syncBtn && isBarPendingSync(bar.id)) {
+            syncBtn.classList.remove("hidden", "synced");
+            syncBtn.classList.add("pending");
+          }
         } else {
           let updated = false;
           try {
@@ -2853,6 +2945,9 @@ function renderDashboard(bars) {
     syncRowHeights();
     syncFabVisibility();
     evaluateDemoBannerAndDropdownState();
+    if (typeof updateNetworkStatus === 'function') {
+      updateNetworkStatus();
+    }
 
     if (typeof renderOrbitDashboard === "function" && currentViewMode === "orbit") {
       renderOrbitDashboard(bars);
@@ -3648,14 +3743,6 @@ function syncRowHeights() {
 }
 
 window.addEventListener("resize", syncRowHeights);
-
-window.addEventListener('offline', () => {
-  showToast("You're offline. Changes won't be saved until you're back online.", "error");
-});
-
-window.addEventListener('online', () => {
-  showToast("Back online. Your changes will now sync.", "success");
-});
 
 // Close active modals and dropdowns on Escape key press
 document.addEventListener("keydown", (e) => {
@@ -5538,71 +5625,22 @@ function adjustSearchLayout() {
     }
   });
 
-  // In native APK: Always keep toolbar elements in navbar, keep subbar permanently hidden
-  if (isNative) {
-    transferItems.forEach(item => {
-      if (item.parentElement !== toolbar) {
-        if (profileBadge) {
-          toolbar.insertBefore(item, profileBadge);
-        } else {
-          toolbar.appendChild(item);
-        }
+  // Ensure all toolbar items remain in the main navbar toolbar; mobile subbar is permanently retired
+  // since mobile users access secondary options via the smooth Left Side Drawer
+  transferItems.forEach(item => {
+    if (item.parentElement !== toolbar) {
+      if (profileBadge) {
+        toolbar.insertBefore(item, profileBadge);
+      } else {
+        toolbar.appendChild(item);
       }
-    });
-    subbarEl.style.display = "none";
-    window.updateStickyOffsets?.();
-    return;
-  }
-
-  const isCurrentlyInMobileDOM = transferItems.length > 0 && transferItems[0].parentElement === subbarContainer;
-
-  // Cache toolbar width when in desktop mode so we don't do layout thrashing on resize
-  if (!isCurrentlyInMobileDOM && toolbar.clientWidth > 0) {
-    cachedToolbarWidth = toolbar.getBoundingClientRect().width;
-  }
-
-  // Fallback if not cached yet: calculate based on active transfer items (approx 40px per item)
-  const toolbarWidth = cachedToolbarWidth || (transferItems.length * 40);
-
-  // Calculate dynamic spacing
-  const navWidth = navContainer.clientWidth;
-  const logoWidth = logo.getBoundingClientRect().width || 170;
-  const profileWidth = profileBadge ? profileBadge.getBoundingClientRect().width : 32;
-  const searchMinWidth = 240; // Increased to prevent search bar from squishing too much
-
-  // Total required width: Logo + Min Search Pill Width + Profile Badge + Toolbar width + 50px buffer
-  const totalRequiredWidth = logoWidth + searchMinWidth + profileWidth + toolbarWidth + 50;
-  const shouldMoveToSubbar = navWidth < totalRequiredWidth;
-
-  document.body.classList.toggle("is-mobile-layout", shouldMoveToSubbar);
-
-  if (shouldMoveToSubbar) {
-    if (!isCurrentlyInMobileDOM) {
-      // Mobile layout: move elements to mobile subbar
-      transferItems.forEach(item => {
-        if (item.parentElement !== subbarContainer) {
-          subbarContainer.appendChild(item);
-        }
-      });
-      subbarEl.style.display = "flex"; // Show subbar
-      window.updateStickyOffsets?.();
     }
-  } else {
-    if (isCurrentlyInMobileDOM) {
-      // Desktop layout: move elements back to navbar (before profile badge)
-      transferItems.forEach(item => {
-        if (item.parentElement !== toolbar) {
-          if (profileBadge) {
-            toolbar.insertBefore(item, profileBadge);
-          } else {
-            toolbar.appendChild(item);
-          }
-        }
-      });
-      subbarEl.style.display = "none"; // Hide subbar
-      window.updateStickyOffsets?.();
-    }
-  }
+  });
+  subbarEl.style.display = "none";
+
+  const shouldBeMobileLayout = isNative || window.innerWidth < 600;
+  document.body.classList.toggle("is-mobile-layout", shouldBeMobileLayout);
+  window.updateStickyOffsets?.();
 }
 
 function activateSearch() {
@@ -5765,19 +5803,22 @@ btnProfileBadge?.addEventListener("click", (e) => {
   if (profileDropdown) {
     const wasActive = profileDropdown.classList.contains("active");
     if (!wasActive) {
-      // Position dropdown dynamically relative to the badge to avoid nested backdrop-filter bug
-      const rect = btnProfileBadge.getBoundingClientRect();
-      const dropdownWidth = profileDropdown.offsetWidth || 260;
-      const viewportWidth = window.innerWidth;
-      const padding = 12;
+      if (window.innerWidth >= 600 && !document.documentElement.classList.contains('is-native-app')) {
+        // Desktop / Tablet floating dropdown anchored below profile badge
+        const rect = btnProfileBadge.getBoundingClientRect();
+        const rightOffset = Math.max(16, window.innerWidth - rect.right);
 
-      let left = rect.right + window.scrollX - dropdownWidth;
-      const minLeft = window.scrollX + padding;
-      const maxLeft = window.scrollX + viewportWidth - dropdownWidth - padding;
-      left = Math.max(minLeft, Math.min(left, maxLeft));
-
-      profileDropdown.style.top = `${rect.bottom + window.scrollY + 10}px`;
-      profileDropdown.style.left = `${left}px`;
+        profileDropdown.style.setProperty("top", `${rect.bottom + 8}px`, "important");
+        profileDropdown.style.setProperty("right", `${rightOffset}px`, "important");
+        profileDropdown.style.removeProperty("left");
+        profileDropdown.style.removeProperty("bottom");
+      } else {
+        // Mobile / Left Slider mode: clear inline coordinates so CSS handles slide drawer
+        profileDropdown.style.removeProperty("top");
+        profileDropdown.style.removeProperty("left");
+        profileDropdown.style.removeProperty("right");
+        profileDropdown.style.removeProperty("bottom");
+      }
 
       profileDropdown.classList.add("active");
       if (typeof showBackdrop === 'function') showBackdrop();
@@ -5787,6 +5828,10 @@ btnProfileBadge?.addEventListener("click", (e) => {
         closeAllMenus();
       } else {
         profileDropdown.classList.remove("active");
+        profileDropdown.style.removeProperty("top");
+        profileDropdown.style.removeProperty("right");
+        profileDropdown.style.removeProperty("left");
+        profileDropdown.style.removeProperty("bottom");
       }
       if (history.state && history.state.profileDropdown) {
         profileClosedViaPopState = true;
@@ -5794,6 +5839,64 @@ btnProfileBadge?.addEventListener("click", (e) => {
       }
     }
   }
+});
+
+// Mobile Left Drawer Toggle (Hamburger / Avatar in mobile navbar)
+const btnNavDrawerToggle = document.getElementById("btn-nav-drawer-toggle");
+btnNavDrawerToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (profileDropdown) {
+    const wasActive = profileDropdown.classList.contains("active");
+    if (!wasActive) {
+      profileDropdown.style.removeProperty("top");
+      profileDropdown.style.removeProperty("left");
+      profileDropdown.style.removeProperty("right");
+      profileDropdown.style.removeProperty("bottom");
+      profileDropdown.classList.add("active");
+      if (typeof showBackdrop === 'function') showBackdrop();
+      history.pushState({ profileDropdown: true }, "");
+    } else {
+      closeAllMenus();
+      if (history.state && history.state.profileDropdown) {
+        profileClosedViaPopState = true;
+        history.back();
+      }
+    }
+  }
+});
+
+// Close button inside Drawer
+const btnCloseDrawer = document.getElementById("btn-close-drawer");
+btnCloseDrawer?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllMenus();
+  if (history.state && history.state.profileDropdown) {
+    profileClosedViaPopState = true;
+    history.back();
+  }
+});
+
+// Drawer Refresh App & Cache button
+const btnDrawerRefresh = document.getElementById("btn-drawer-refresh");
+btnDrawerRefresh?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllMenus();
+  document.getElementById("btn-refresh")?.click();
+});
+
+// Drawer Version Select
+const drawerVersionSelect = document.getElementById("drawer-version-select");
+drawerVersionSelect?.addEventListener("change", (e) => {
+  const val = e.target.value;
+  if (val) window.location.href = val;
+});
+
+// Drawer Download APK button
+const btnDrawerDownloadApk = document.getElementById("btn-drawer-download-apk");
+btnDrawerDownloadApk?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllMenus();
+  document.getElementById("btn-apk-download")?.click();
 });
 
 // Close profile/theme dropdowns and collapse cards when clicking outside (using capture phase to block click side effects)
@@ -5806,8 +5909,10 @@ window.addEventListener("click", (e) => {
 
   if (isProfileActive || isThemeActive || hasExpandedCard) {
     const btnProfileBadge = document.getElementById("btn-profile-badge");
+    const btnNavDrawerToggle = document.getElementById("btn-nav-drawer-toggle");
     const clickedInsideProfile = (profileDropdown && profileDropdown.contains(e.target)) || 
-                                 (btnProfileBadge && btnProfileBadge.contains(e.target));
+                                 (btnProfileBadge && btnProfileBadge.contains(e.target)) ||
+                                 (btnNavDrawerToggle && btnNavDrawerToggle.contains(e.target));
 
     const btnThemeToggle = document.getElementById("theme-toggle-btn");
     const clickedInsideTheme = (themeDropdown && themeDropdown.contains(e.target)) || 
@@ -5847,6 +5952,15 @@ btnLogout.addEventListener("click", async () => {
       exitGuestMode();
       window.location.href = "index.html";
     } else {
+      if (currentUser && currentUser.uid) {
+        const queue = getSyncQueue(currentUser.uid);
+        if (queue && queue.length > 0) {
+          const confirmSignOut = window.confirm(
+            `You have ${queue.length} unsynced change${queue.length > 1 ? 's' : ''} saved locally.\n\nSigning out now will clear local offline data on this device. Do you want to continue signing out?`
+          );
+          if (!confirmSignOut) return;
+        }
+      }
       const token = localStorage.getItem("ps_fcm_token");
       if (token && currentUser) {
         await deleteFCMToken(currentUser.uid, token);
@@ -5918,6 +6032,9 @@ function showNotificationBanner(uid) {
 
 // Initialize auth check
 initAuthProtection(async (user) => {
+  if (user) {
+    currentUser = user;
+  }
   // Sync Theme & Font Preferences from DB in background
   if (user && user.uid) {
     getUserSettings(user.uid).then((settings) => {
@@ -6171,6 +6288,9 @@ initAuthProtection(async (user) => {
 
   // Show application content, hide splash screen
   appContent.classList.remove("hidden");
+  if (typeof updateNetworkStatus === 'function') {
+    updateNetworkStatus();
+  }
 
   // Push base state on load to intercept back button from navigating back to external OAuth page
   if (window.history && window.history.pushState) {
@@ -6217,8 +6337,14 @@ initAuthProtection(async (user) => {
         }
         hideNativeSplashScreen();
       }
-      const errType = !navigator.onLine ? "network" : "server";
-      showToast(errType === "network" ? "You are currently offline." : "Error connecting to database.", "error");
+      const isOffline = !navigator.onLine;
+      const errType = isOffline ? "network" : "server";
+      if (isOffline) {
+        if (typeof updateNetworkStatus === 'function') updateNetworkStatus();
+        showToast("Working in offline mode.", "info");
+      } else {
+        showToast("Error connecting to database.", "error");
+      }
       if (cardsGrid.querySelectorAll(".card-skeleton").length > 0 || cardsGrid.children.length === 0) {
         renderErrorState(errType, error?.message || "");
       }
@@ -6403,26 +6529,150 @@ function renderErrorState(type, details = "") {
   `;
 }
 
-let isCurrentlyOffline = false;
+// Network & Offline Sync Status Management
+function updateNetworkStatus() {
+  const offlineBanner = document.getElementById("offline-banner");
+  const offlineText = document.getElementById("offline-banner-text");
+  const btnRetrySync = document.getElementById("btn-offline-retry-sync");
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+  const queue = uid ? getSyncQueue(uid) : [];
+  const hasPending = queue.length > 0;
+
+  if (offlineBanner) {
+    if (isOffline) {
+      offlineBanner.style.display = "flex";
+      if (offlineText) {
+        offlineText.textContent = "⚡ Offline Mode — Changes are saved locally and will sync when reconnected.";
+      }
+      if (btnRetrySync) {
+        btnRetrySync.style.display = "none";
+      }
+    } else if (hasPending) {
+      offlineBanner.style.display = "flex";
+      if (offlineText) {
+        offlineText.textContent = `☁️ Unsynced Changes — You have ${queue.length} offline update${queue.length > 1 ? 's' : ''} waiting to sync.`;
+      }
+      if (btnRetrySync) {
+        btnRetrySync.style.display = "inline-block";
+        btnRetrySync.textContent = "Sync Now";
+        btnRetrySync.disabled = false;
+      }
+    } else {
+      offlineBanner.style.display = "none";
+    }
+  }
+
+  // Update sync status indicator on each card in DOM
+  const cards = document.querySelectorAll(".card-progress");
+  cards.forEach(card => {
+    const barId = card.getAttribute("data-bar-id");
+    if (!barId) return;
+    const syncBtn = card.querySelector(".btn-card-sync-status");
+    if (syncBtn) {
+      const isPending = isBarPendingSync(barId);
+      if (isPending) {
+        syncBtn.classList.remove("hidden", "synced");
+        syncBtn.classList.add("pending");
+        syncBtn.setAttribute("title", "Changes saved locally. Pending sync...");
+      } else if (!syncBtn.classList.contains("synced")) {
+        syncBtn.classList.add("hidden");
+        syncBtn.classList.remove("pending", "syncing");
+      }
+    }
+  });
+}
+
+let isCurrentlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
 window.addEventListener("offline", () => {
   isCurrentlyOffline = true;
-  showToast("You are currently offline.", "warning");
+  updateNetworkStatus();
+  showToast("You are offline. Working in offline mode.", "info");
   const cardsGrid = document.getElementById("cards-grid");
-  if (cardsGrid && cardsGrid.querySelectorAll(".card-progress").length === 0) {
+  if (cardsGrid && cardsGrid.querySelectorAll(".card-progress").length === 0 && (!currentBars || currentBars.length === 0)) {
     renderErrorState("network");
   }
 });
 
-window.addEventListener("online", () => {
-  if (isCurrentlyOffline) {
-    isCurrentlyOffline = false;
-    showToast("Network restored! Reconnecting...", "success");
-    if (typeof renderDashboard === "function" && typeof currentBars !== "undefined" && currentBars) {
-      renderDashboard(currentBars);
-    }
+window.addEventListener("online", async () => {
+  isCurrentlyOffline = false;
+  updateNetworkStatus();
+  showToast("Back online! Syncing your changes...", "info");
+  const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+  if (uid) {
+    await processSyncQueue(uid);
+  }
+  if (typeof renderDashboard === "function" && typeof currentBars !== "undefined" && currentBars) {
+    renderDashboard(currentBars);
   }
 });
+
+window.addEventListener("ps-sync-started", () => {
+  const btnRetrySync = document.getElementById("btn-offline-retry-sync");
+  if (btnRetrySync) {
+    btnRetrySync.textContent = "Syncing...";
+    btnRetrySync.disabled = true;
+  }
+  document.querySelectorAll(".btn-card-sync-status.pending").forEach(btn => {
+    btn.classList.add("syncing");
+  });
+});
+
+window.addEventListener("ps-bar-synced", (e) => {
+  const barId = e.detail?.barId;
+  if (!barId) return;
+  const card = document.querySelector(`.card-progress[data-bar-id="${barId}"]`);
+  if (!card) return;
+  const syncBtn = card.querySelector(".btn-card-sync-status");
+  if (syncBtn) {
+    syncBtn.classList.remove("pending", "syncing");
+    syncBtn.classList.add("synced");
+    syncBtn.setAttribute("title", "Synced");
+    setTimeout(() => {
+      syncBtn.classList.add("hidden");
+      syncBtn.classList.remove("synced");
+    }, 400);
+  }
+});
+
+window.addEventListener("ps-sync-finished", (e) => {
+  const { syncedCount, remainingCount } = e.detail || {};
+  document.querySelectorAll(".btn-card-sync-status.syncing").forEach(btn => {
+    btn.classList.remove("syncing");
+  });
+  const btnRetrySync = document.getElementById("btn-offline-retry-sync");
+  if (btnRetrySync) {
+    btnRetrySync.textContent = "Sync Now";
+    btnRetrySync.disabled = false;
+  }
+  if (syncedCount > 0) {
+    showToast(remainingCount > 0 ? "Some changes synced. Remaining items will retry soon." : "All changes synced successfully.", "success");
+  }
+  updateNetworkStatus();
+});
+
+window.addEventListener("ps-sync-queue-changed", () => {
+  updateNetworkStatus();
+});
+
+// Setup Retry Sync button click handler
+const btnOfflineRetrySync = document.getElementById("btn-offline-retry-sync");
+if (btnOfflineRetrySync) {
+  btnOfflineRetrySync.addEventListener("click", async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      showToast("Cannot sync: device is currently offline.", "warning");
+      return;
+    }
+    const uid = isGuestMode() ? null : (currentUser ? currentUser.uid : null);
+    if (!uid) return;
+    btnOfflineRetrySync.textContent = "Syncing...";
+    btnOfflineRetrySync.disabled = true;
+    showToast("Syncing pending changes...", "info");
+    await processSyncQueue(uid);
+  });
+}
 
 // Setup mutual exclusion for deadline inputs (Create and Edit modals)
 function setupDeadlineMutualExclusion(prefix = "") {
@@ -7975,8 +8225,10 @@ function updateDeleteSelectedButton() {
 
   if (editModeActive) {
     // Hide original sort select elements
+    const icon = sortContainer.querySelector(".sort-icon");
     const label = sortContainer.querySelector(".sort-label");
     const select = sortContainer.querySelector("#sort-select");
+    if (icon) icon.style.display = "none";
     if (label) label.style.display = "none";
     if (select) select.style.display = "none";
 
@@ -8009,8 +8261,10 @@ function updateDeleteSelectedButton() {
     }
   } else {
     // Restore original sort select elements
+    const icon = sortContainer.querySelector(".sort-icon");
     const label = sortContainer.querySelector(".sort-label");
     const select = sortContainer.querySelector("#sort-select");
+    if (icon) icon.style.display = "";
     if (label) label.style.display = "";
     if (select) select.style.display = "";
 
@@ -8030,10 +8284,10 @@ function setupAPKButton() {
   if (!btn) return;
 
   const isNative = typeof window !== 'undefined' && (
-    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
-    (window.location.hostname === 'localhost' && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) ||
+    !!window.IS_NATIVE_APP ||
+    document.documentElement.classList.contains('is-native-app') ||
     window.location.protocol === 'capacitor:' ||
-    document.documentElement.classList.contains('is-native-app')
+    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform())
   );
 
   // Remove the android icon for the apk build only
@@ -8204,6 +8458,14 @@ function setupStaggeredHeaderScroll() {
   let navbarEl = document.querySelector(".navbar");
 
   function updateHeaderScroll() {
+    // On mobile screens (< 768px) and in native app, only navbar is sticky and
+    // elements scroll naturally without JS translateY manipulation, preventing jitter
+    if (window.innerWidth < 768 || document.documentElement.classList.contains('is-native-app')) {
+      resetHeaderScroll();
+      scrollTicking = false;
+      return;
+    }
+
     const currentScrollY = window.scrollY;
     const deltaY = currentScrollY - lastScrollY;
     lastScrollY = currentScrollY;
@@ -8307,7 +8569,7 @@ function setupStaggeredHeaderScroll() {
     document.documentElement.style.setProperty("--subbar-height", `${H_subbar}px`);
     document.documentElement.style.setProperty("--stats-height", `${H_stats}px`);
 
-    if (editModeActive) {
+    if (editModeActive || window.innerWidth < 768 || document.documentElement.classList.contains('is-native-app')) {
       resetHeaderScroll();
     } else {
       y_nav = Math.min(y_nav, H_nav);
@@ -9002,10 +9264,10 @@ function setupDownloadApk() {
   if (!btnDownload) return;
 
   const isNative = typeof window !== 'undefined' && (
-    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
-    (window.location.hostname === 'localhost' && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) ||
+    !!window.IS_NATIVE_APP ||
+    document.documentElement.classList.contains('is-native-app') ||
     window.location.protocol === 'capacitor:' ||
-    document.documentElement.classList.contains('is-native-app')
+    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform())
   );
 
   if (isNative) {
@@ -9668,7 +9930,13 @@ function closeAllMenus() {
   const accentMenu = document.getElementById('accent-dropdown-menu');
   const backdrop = document.getElementById('menu-backdrop');
   
-  if (profileDropdown) profileDropdown.classList.remove('active');
+  if (profileDropdown) {
+    profileDropdown.classList.remove('active');
+    profileDropdown.style.removeProperty("top");
+    profileDropdown.style.removeProperty("right");
+    profileDropdown.style.removeProperty("left");
+    profileDropdown.style.removeProperty("bottom");
+  }
   if (themeMenu) themeMenu.classList.remove('active');
   if (accentMenu) accentMenu.classList.remove('active');
   if (backdrop) backdrop.classList.add('hidden');
@@ -9686,20 +9954,25 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     closeAllMenus();
   } else {
-    // Original closing logic for clicks not on the backdrop (e.g. clicking the navbar itself)
+    // Closing logic for clicks outside open dropdowns
     const profileDropdown = document.getElementById('profile-dropdown');
-    const profileBtn = document.getElementById('profile-btn');
+    const profileBtn = document.getElementById('btn-profile-badge') || document.getElementById('profile-btn');
+    const navDrawerBtn = document.getElementById('btn-nav-drawer-toggle');
     const themeMenu = document.getElementById('theme-dropdown-menu');
     const themeBtn = document.getElementById('theme-toggle-btn');
     const accentMenu = document.getElementById('accent-dropdown-menu');
     const accentBtn = document.getElementById('accent-toggle-btn');
 
     let clickedOutside = true;
-    if (profileDropdown && profileDropdown.classList.contains('active') && (profileDropdown.contains(e.target) || (profileBtn && profileBtn.contains(e.target)))) clickedOutside = false;
+    if (profileDropdown && profileDropdown.classList.contains('active') && (
+      profileDropdown.contains(e.target) || 
+      (profileBtn && profileBtn.contains(e.target)) ||
+      (navDrawerBtn && navDrawerBtn.contains(e.target))
+    )) clickedOutside = false;
     if (themeMenu && themeMenu.classList.contains('active') && (themeMenu.contains(e.target) || (themeBtn && themeBtn.contains(e.target)))) clickedOutside = false;
     if (accentMenu && accentMenu.classList.contains('active') && (accentMenu.contains(e.target) || (accentBtn && accentBtn.contains(e.target)))) clickedOutside = false;
     
-    if (clickedOutside && !e.target.closest('.profile-dropdown, .theme-dropdown, .accent-dropdown-menu')) {
+    if (clickedOutside && !e.target.closest('.profile-dropdown, .theme-dropdown, .accent-dropdown-menu, .profile-badge-btn, .nav-drawer-toggle-btn')) {
       closeAllMenus();
     }
   }
@@ -10284,6 +10557,11 @@ function setViewMode(mode) {
       orbitElements.btnViewOrbit.setAttribute("aria-pressed", "true");
     }
 
+    const drawerBtnGrid = document.getElementById("btn-drawer-view-grid");
+    const drawerBtnOrbit = document.getElementById("btn-drawer-view-orbit");
+    if (drawerBtnGrid) drawerBtnGrid.classList.remove("active");
+    if (drawerBtnOrbit) drawerBtnOrbit.classList.add("active");
+
     renderOrbitDashboard(currentBars);
     if (!focusedOrbitBarId) {
       fitOrbitToScreen(false);
@@ -10307,6 +10585,11 @@ function setViewMode(mode) {
       orbitElements.btnViewGrid.classList.add("active");
       orbitElements.btnViewGrid.setAttribute("aria-pressed", "true");
     }
+
+    const drawerBtnGrid = document.getElementById("btn-drawer-view-grid");
+    const drawerBtnOrbit = document.getElementById("btn-drawer-view-orbit");
+    if (drawerBtnOrbit) drawerBtnOrbit.classList.remove("active");
+    if (drawerBtnGrid) drawerBtnGrid.classList.add("active");
 
     if (typeof syncRowHeights === "function") syncRowHeights();
   }
@@ -10553,6 +10836,22 @@ function setupOrbitGesturesAndControls() {
     });
   }
 
+  const drawerBtnGrid = document.getElementById("btn-drawer-view-grid");
+  if (drawerBtnGrid) {
+    drawerBtnGrid.addEventListener("click", () => {
+      setViewMode("grid");
+      if (typeof closeAllMenus === "function") closeAllMenus();
+    });
+  }
+
+  const drawerBtnOrbit = document.getElementById("btn-drawer-view-orbit");
+  if (drawerBtnOrbit) {
+    drawerBtnOrbit.addEventListener("click", () => {
+      setViewMode("orbit");
+      if (typeof closeAllMenus === "function") closeAllMenus();
+    });
+  }
+
   // Window resize: re-fit if in orbit view (debounced ~150ms, skipped if modal open)
   let resizeOrbitDebounceTimer = null;
   window.addEventListener("resize", () => {
@@ -10648,7 +10947,16 @@ setupAssistantModule({
   handleDeleteBarFromAi,
   getLiveBars,
   hasInitialBarsLoaded: () => isInitialBarsLoaded,
-  getUserId: () => (currentUser ? (currentUser.id || currentUser.uid) : null),
+  getUserId: () => {
+    if (currentUser) return currentUser.id || currentUser.uid || null;
+    try {
+      const raw = localStorage.getItem('ps_cached_user');
+      const u = raw ? JSON.parse(raw) : null;
+      return u?.uid || u?.id || null;
+    } catch (_) {
+      return null;
+    }
+  },
   getUserFirstName: () => {
     function cleanName(raw) {
       if (typeof raw !== 'string') return '';

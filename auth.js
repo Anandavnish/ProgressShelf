@@ -83,6 +83,8 @@ export async function signOut() {
   } finally {
     // Step 2: Always clear local state regardless of FCM cleanup result
     localStorage.removeItem('ps_cached_user');
+    localStorage.removeItem('ps_cached_ai_status');
+    localStorage.removeItem('ps_daily_briefing');
     localStorage.removeItem('ps_fcm_token');
     localStorage.removeItem('ps_guest_bars');
     localStorage.removeItem('ps_guest_mode');
@@ -104,6 +106,8 @@ export async function logout() {
   if (!isConfigured) {
     localStorage.removeItem("progress_shelf_demo");
     localStorage.removeItem("ps_cached_user");
+    localStorage.removeItem("ps_cached_ai_status");
+    localStorage.removeItem("ps_daily_briefing");
     localStorage.removeItem("ps_guest_mode");
     sessionStorage.removeItem("guest_mode");
     window.location.href = "index.html";
@@ -302,15 +306,23 @@ export function initAuthProtection(onUserActive) {
     return Promise.resolve(null);
   }
 
+  let sessionFetchFailed = false;
   return supabase.auth.getSession()
     .catch((err) => {
       console.warn('[Auth] getSession failed or timed out:', err);
+      sessionFetchFailed = true;
       return { data: { session: null } };
     })
     .then(({ data: { session } = {} }) => {
     let user = session ? mapSupabaseUser(session.user) : null;
+    const isOffline = (typeof navigator !== 'undefined' && !navigator.onLine) || sessionFetchFailed;
+
     if (user) {
       localStorage.setItem("ps_cached_user", JSON.stringify(user));
+    } else if (isOffline && cachedUser) {
+      // Retain offline user session when disconnected
+      user = cachedUser;
+      console.log('[Auth] Device is offline; retaining cached user session:', user.uid);
     } else if (!isGuest) {
       localStorage.removeItem("ps_cached_user");
     }
@@ -338,6 +350,20 @@ export function initAuthProtection(onUserActive) {
       if (isDashboard) {
         window.location.href = "index.html";
       }
+    }
+
+    // Attach online listener to re-validate session once connectivity is restored
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (supabase && supabase.auth && typeof supabase.auth.getSession === 'function') {
+          supabase.auth.getSession().then(({ data: { session: onlineSession } = {} }) => {
+            if (onlineSession?.user) {
+              const freshUser = mapSupabaseUser(onlineSession.user);
+              localStorage.setItem("ps_cached_user", JSON.stringify(freshUser));
+            }
+          }).catch(err => console.warn('[Auth] Online session revalidation notice:', err));
+        }
+      });
     }
 
     // Track auth changes only after initial session checks complete
